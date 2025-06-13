@@ -43,7 +43,7 @@ const globalCrudController = {
   update: (model) => async (req, res) => {
     try {
       const { id } = req.body;
-      const modelData = await updateDocument(model, _id, req.body);
+      const modelData = await updateDocument(model, id, req.body);
       if (modelData.statusCode === CONSTANTS.SUCCESS)
         return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, modelData.data);
 

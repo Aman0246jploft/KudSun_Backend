@@ -20,6 +20,34 @@ const { uploadImageCloudinary } = require('../../utils/cloudinary');
 
 
 
+const uploadfile = async (req, res) => {
+    try {
+
+        // ✅ Upload image if exists
+        if (req.file) {
+            const validImageTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
+
+            if (!validImageTypes.includes(req.file.mimetype)) {
+            } else {
+                const imageResult = await uploadImageCloudinary(req.file, 'profile-images');
+                if (!imageResult) {
+                    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Image upload failed");
+                }
+                profileImageUrl = imageResult;
+            }
+        }
+        return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, profileImageUrl);
+    } catch (error) {
+        return apiErrorRes(
+            HTTP_STATUS.INTERNAL_SERVER_ERROR,
+            res,
+            error.message,
+            error.message
+        );
+    }
+}
+
+
 const requestOtp = async (req, res) => {
     try {
         const { phoneNumber, language } = req.body;
@@ -288,6 +316,11 @@ const login = async (req, res) => {
     }
 };
 
+
+
+
+//upload api 
+router.post('/upload', upload.single('file'), uploadfile);
 
 // Registration Process
 router.post('/requestOtp', perApiLimiter(), upload.none(), validateRequest(mobileLoginSchema), requestOtp);

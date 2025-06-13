@@ -1,6 +1,7 @@
 const CONSTANTS = require('./constants');
 const moment = require("moment");
 const bcrypt = require('bcryptjs');
+const { default: mongoose } = require('mongoose');
 
 
 const resultDb = (statusCode, data = null) => {
@@ -61,13 +62,9 @@ async function verifyPassword(hash, password) {
 }
 
 const toObjectId = (id) => {
-    try {
-        return new mongoose.Types.ObjectId(id);
-    } catch (err) {
-        return null; // or throw, depending on how you want to handle invalid IDs
-    }
+    if (!mongoose.Types.ObjectId.isValid(id)) return null;
+    return new mongoose.Types.ObjectId(id);
 };
-
 
 
 module.exports = {
