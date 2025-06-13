@@ -1,31 +1,45 @@
 const mongoose = require("mongoose");
+const { isLowercase } = require("validator");
 // Each parameter value object
 const parameterValueSchema = new mongoose.Schema({
-    value: { type: String, required: true },
+    value: { type: String, required: true, trim: true, lowercase: true },
     isAddedByAdmin: { type: Boolean, default: true },
     addedByUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }
-}, { _id: false });
+});
 
 // Parameter Schema
 const parameterSchema = new mongoose.Schema({
-    key: { type: String, required: true },
+    key: { type: String, required: true, trim: true, lowercase: true },
     values: [parameterValueSchema]
-}, { _id: false });
+});
 
 // Subcategory Schema
 const subCategorySchema = new mongoose.Schema({
-    name: { type: String, required: true },
+    name: { type: String, required: true, trim: true, lowercase: true },
     slug: { type: Number, default: 0 },
     image: { type: String, default: null },
     parameters: [parameterSchema]
-}, { _id: false });
+});
 
 // Category Schema
 const categorySchema = new mongoose.Schema({
-    name: { type: String, required: true },
+    name: {
+        type: String, required: true, unique: true, trim: true,
+        lowercase: true,
+    },
     slug: { type: Number, default: 0 },
     image: { type: String, default: null },
-    subCategories: [subCategorySchema]
+    subCategories: [subCategorySchema],
+    isDisable: {
+        type: Boolean,
+        default: false
+    },
+    isDeleted: {
+        type: Boolean,
+        default: false
+    },
+
+
 }, {
     timestamps: true
 });
