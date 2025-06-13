@@ -1,0 +1,68 @@
+@token = Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlSWQiOjEwMCwidXNlck5hbWUiOiJ0ZXN0dXNlcnd3IiwidXNlcklkIjoiNjdkOTAxOTE0MWI4ZGIwODgxNzdkOTE2IiwiZGV2aWNlSWQiOiJjTjhnSDBPYVQ3YTFJcFVlTFBfSTR2OkFQQTkxYkVkVDEtTGtWNE5WVnYzTHBvN1NDNldaNWZTTm1EUHM0R3dseWFHRVVPcFFsNDB2V1VUMHIxeVQteFlGYmVYX3pCQWxHekpSeTY1OW9IUmZWTS1RcXVFSFNVblRRYnBOdTd4ZWtHc001bFpSckhFV1pvIiwiaWF0IjoxNzQzNDk4MjI2fQ.vg27yXXQaNwqIdjEgsQ-S9rSwhyiwzNZ0xEJBX771rY
+@url = http://localhost:8080
+
+
+###
+POST {{url}}/api/v1/user/create HTTP/1.1
+Content-type: application/json
+Authorization: {{token}}
+
+ {
+ "firstName": "testingPopulate",
+    "lastName": "Populate",
+    "email": "testingPopulate.brown@example.com",
+    "password": "hashedPassword505",
+    "phoneNumber": "+1555444555",
+    "isActive": false,
+    "isDeleted": false,
+    "appId":"67f9492636003949df36ee07"
+  }
+
+
+
+
+
+###
+POST {{url}}/api/v1/user/getList HTTP/1.1
+Content-type: application/json
+Authorization: {{token}}
+
+{
+  "pageNo": 1,
+  "size": 10,
+  "sortBy": "createdAt",
+  "sortOrder": "asc",
+  "keyWord": "",
+  "searchFields": ["firstName", "email","lastName"],
+  "query": {
+    # "isActive": true,
+    # "isDeleted":true
+  },
+  "populate": [
+    {
+      "path": "appId",
+      "select": "name key value"
+    }
+    # {
+    #   "path": "category",
+    #   "select": "title"
+    # }
+  ]
+  # "select": "firstName lastName email role phoneNumber isActive isDeleted"
+}
+# populate is not checked
+
+
+
+
+###
+POST {{url}}/api/v1/user/update HTTP/1.1
+Content-type: application/json
+Authorization: {{token}}
+
+{
+   "_id":"67f94de14a3873e1908c42b6",
+   "firstName":"aman",
+   "isActive":true
+}
+
