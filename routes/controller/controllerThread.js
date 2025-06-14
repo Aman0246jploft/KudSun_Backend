@@ -3,20 +3,12 @@ const express = require('express');
 const multer = require('multer');
 const upload = multer();
 const router = express.Router();
-const globalCrudController = require('./globalCrudController');
 const { Thread, ThreadComment } = require('../../db');
-const validateRequest = require('../../middlewares/validateRequest');
-const { moduleSchema } = require('../services/validations/moduleValidation');
-const { moduleSchemaForId } = require('../services/validations/globalCURDValidation');
 const perApiLimiter = require('../../middlewares/rateLimiter');
-const { addProductSchema } = require('../services/validations/productValidation');
 const { apiErrorRes, apiSuccessRes } = require('../../utils/globalFunction');
 const HTTP_STATUS = require('../../utils/statusCode');
 const { uploadImageCloudinary } = require('../../utils/cloudinary');
 const CONSTANTS_MSG = require('../../utils/constantsMessage');
-const { SALE_TYPE, DeliveryType } = require('../../utils/Role');
-const { addCommentSchema } = require('../services/validations/threadValidation');
-
 
 // Add a new thread
 const addThread = async (req, res) => {
@@ -31,31 +23,19 @@ const addThread = async (req, res) => {
             max,
             tags
         } = req.body;
-
-        // === Validate Required Fields ===
         if (!categoryId || !subCategoryId || !title) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Missing required fields.");
         }
-
-
-
-        let = [];
-
-
         let tagArray = [];
         if (tags) {
             const raw = Array.isArray(tags)
                 ? tags
                 : [tags];
             console.log("raw", raw)
-            // Clean array: remove empty strings or invalid ObjectId formats
             tagArray = raw
-                .map(id => id.trim?.()) // optional chaining for safety
-                .filter(id => id); // only valid Mongo ObjectIds
+                .map(id => id.trim?.())
+                .filter(id => id);
         }
-
-
-        // === Upload Photos to Cloudinary ===
         let photoUrls = [];
         if (req.files && req.files.length > 0) {
             for (const file of req.files) {
@@ -63,7 +43,6 @@ const addThread = async (req, res) => {
                 if (imageUrl) photoUrls.push(imageUrl);
             }
         }
-
         const threadData = {
             userId: req.user?.userId,
             categoryId,
@@ -78,10 +57,8 @@ const addThread = async (req, res) => {
             tags: tagArray,
             photos: photoUrls
         };
-
         const thread = new Thread(threadData);
         const saved = await thread.save();
-
         return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, saved);
     } catch (error) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
@@ -212,7 +189,6 @@ const addComment = async (req, res) => {
                 if (image) imageList.push(image);
             }
         }
-
         let productIds = [];
         if (value.associatedProducts) {
             const raw = Array.isArray(value.associatedProducts)
@@ -224,7 +200,6 @@ const addComment = async (req, res) => {
                 .map(id => id.trim?.()) // optional chaining for safety
                 .filter(id => id && /^[a-f\d]{24}$/i.test(id)); // only valid Mongo ObjectIds
         }
-
         const comment = new ThreadComment({
             content: value.content || '',
             thread: value.thread,
@@ -233,7 +208,6 @@ const addComment = async (req, res) => {
             photos: imageList,
             author: req.user?.userId
         });
-
         const saved = await comment.save();
         return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, saved);
     } catch (error) {
