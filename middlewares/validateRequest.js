@@ -3,7 +3,7 @@ const HTTP_STATUS = require("../utils/statusCode");
 
 
 const validateRequest = (schema) => (req, res, next) => {
-   console.log('Request Body:111', req.body);
+  //  console.log('Request Body:111', req.body);
   // const { error } = schema.validate(req.body, { abortEarly: true });
   // if (error) {
   //   // Remove quotes from field names in error message

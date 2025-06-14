@@ -298,14 +298,6 @@ router.get('/list', perApiLimiter(), listCategories);
 
 
 
-router.post('/getById', perApiLimiter(), upload.none(), validateRequest(moduleSchemaForId), globalCrudController.getById(Category));
-router.post('/harddelete', perApiLimiter(), hasPermission([roleId.SUPER_ADMIN]), upload.none(), validateRequest(moduleSchemaForId), globalCrudController.hardDelete(Category));
-router.post('/softDelete', perApiLimiter(), hasPermission([roleId.SUPER_ADMIN]), upload.none(), validateRequest(moduleSchemaForId), globalCrudController.softDelete(Category));
-
-
-
-
-
 
 
 

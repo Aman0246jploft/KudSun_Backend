@@ -102,8 +102,6 @@ UserSchema.pre('save', async function (next) {
 
 
 
-
-
 UserSchema.options.toJSON = {
     transform: function (doc, ret, options) {
         delete ret.__v;
