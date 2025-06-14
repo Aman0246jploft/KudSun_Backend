@@ -37,10 +37,23 @@ const addThread = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Missing required fields.");
         }
 
+
+
+        let = [];
+
+
         let tagArray = [];
-        if (tags && typeof tags === 'string') {
-            tagArray = tags.split(',').map(tag => tag.trim()).filter(Boolean);
+        if (tags) {
+            const raw = Array.isArray(tags)
+                ? tags
+                : [tags];
+            console.log("raw", raw)
+            // Clean array: remove empty strings or invalid ObjectId formats
+            tagArray = raw
+                .map(id => id.trim?.()) // optional chaining for safety
+                .filter(id => id); // only valid Mongo ObjectIds
         }
+
 
         // === Upload Photos to Cloudinary ===
         let photoUrls = [];

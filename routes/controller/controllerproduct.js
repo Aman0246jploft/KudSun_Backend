@@ -3,13 +3,8 @@ const express = require('express');
 const multer = require('multer');
 const upload = multer();
 const router = express.Router();
-const globalCrudController = require('./globalCrudController');
-const { Module, SellProduct } = require('../../db');
-const validateRequest = require('../../middlewares/validateRequest');
-const { moduleSchema } = require('../services/validations/moduleValidation');
-const { moduleSchemaForId } = require('../services/validations/globalCURDValidation');
+const { SellProduct } = require('../../db');
 const perApiLimiter = require('../../middlewares/rateLimiter');
-const { addProductSchema } = require('../services/validations/productValidation');
 const { apiErrorRes, apiSuccessRes } = require('../../utils/globalFunction');
 const HTTP_STATUS = require('../../utils/statusCode');
 const { uploadImageCloudinary } = require('../../utils/cloudinary');
@@ -47,21 +42,36 @@ const addSellerProduct = async (req, res) => {
         // Parse JSON fields from form-data
         try {
 
-
-
             if (req.body.specifics) {
-                specifics = typeof req.body.specifics === 'string'
-                    ? JSON.parse(req.body.specifics)
-                    : req.body.specifics;
+                const raw = Array.isArray(req.body.specifics)
+                    ? req.body.specifics
+                    : [req.body.specifics];
+
+                specifics = raw
+                    .map(item => {
+                        try {
+                            return JSON.parse(item);
+                        } catch {
+                            return null;
+                        }
+                    })
+                    .filter(item => item && typeof item === 'object');
             }
         } catch (e) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid 'specifics' JSON format.");
         }
 
-        let tags = [];
-        const tagArray = typeof req.body.tags === 'string'
-            ? req.body.tags.split(',').map(tag => tag.trim()).filter(Boolean)
-            : [];
+        let tagArray = [];
+        if (req.body.tags) {
+            const raw = Array.isArray(req.body.tags)
+                ? req.body.tags
+                : [req.body.tags];
+            console.log("raw", raw)
+            // Clean array: remove empty strings or invalid ObjectId formats
+            tagArray = raw
+                .map(id => id.trim?.()) // optional chaining for safety
+                .filter(id => id); // only valid Mongo ObjectIds
+        }
 
 
 
@@ -113,15 +123,31 @@ const addSellerProduct = async (req, res) => {
             auctionSettings.biddingIncrementPrice = Number(biddingIncrementPrice || 0);
         }
 
-        console.log("545454", auctionSettings)
-
-
 
 
         // === Validate required fields ===
-        if (!categoryId || !subCategoryId || !title || !condition || !saleType || !deliveryType || !Array.isArray(specifics) || specifics.length === 0) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Missing required fields.");
+        if (!categoryId) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Missing required field: categoryId.");
         }
+        if (!subCategoryId) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Missing required field: subCategoryId.");
+        }
+        if (!title) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Missing required field: title.");
+        }
+        if (!condition) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Missing required field: condition.");
+        }
+        if (!saleType) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Missing required field: saleType.");
+        }
+        if (!deliveryType) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Missing required field: deliveryType.");
+        }
+        if (!Array.isArray(specifics) || specifics.length === 0) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Missing or invalid field: specifics must be a non-empty array.");
+        }
+
 
         const validConditions = ['brand_new', 'like_new', 'good', 'fair', 'works'];
         if (!validConditions.includes(condition)) {
