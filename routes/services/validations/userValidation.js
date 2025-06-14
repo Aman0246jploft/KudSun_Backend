@@ -49,11 +49,23 @@ const saveEmailPasswords = Joi.object({
 });
 
 
+const followSchema = Joi.object({
+  userId: Joi.string().required(),
+});
+
+
+
+const threadLikeSchema = Joi.object({
+  threadId: Joi.string().required(),
+});
+
 module.exports = {
   loginSchema,
   mobileLoginSchema,
   otpVerification,
   categorySchema,
   completeRegistrationSchema,
-  saveEmailPasswords
+  saveEmailPasswords,
+  followSchema,
+  threadLikeSchema
 };

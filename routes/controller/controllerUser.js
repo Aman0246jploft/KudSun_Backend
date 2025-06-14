@@ -4,14 +4,14 @@ const multer = require('multer');
 const upload = multer();
 const router = express.Router();
 const globalCrudController = require('./globalCrudController');
-const { User } = require('../../db');
+const { User, Follow, ThreadLike } = require('../../db');
 const { getDocumentByQuery } = require('../services/serviceGlobalCURD');
 const CONSTANTS_MSG = require('../../utils/constantsMessage');
 const CONSTANTS = require('../../utils/constants')
 const HTTP_STATUS = require('../../utils/statusCode');
-const { apiErrorRes, verifyPassword, apiSuccessRes, generateOTP, generateKey } = require('../../utils/globalFunction');
+const { apiErrorRes, verifyPassword, apiSuccessRes, generateOTP, generateKey, toObjectId } = require('../../utils/globalFunction');
 const { signToken } = require('../../utils/jwtTokenUtils');
-const { loginSchema, mobileLoginSchema, otpVerification, categorySchema, completeRegistrationSchema, saveEmailPasswords } = require('../services/validations/userValidation');
+const { loginSchema, mobileLoginSchema, otpVerification, categorySchema, completeRegistrationSchema, saveEmailPasswords, followSchema, threadLikeSchema } = require('../services/validations/userValidation');
 const validateRequest = require('../../middlewares/validateRequest');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const { moduleSchemaForId } = require('../services/validations/globalCURDValidation');
@@ -316,6 +316,78 @@ const login = async (req, res) => {
     }
 };
 
+const follow = async (req, res) => {
+    try {
+        let followedBy = req.user.userId
+        let { userId } = req.body
+        let followData = await getDocumentByQuery(Follow, { followedBy: toObjectId(followedBy), userId: toObjectId(userId) })
+        if (followData.statusCode === CONSTANTS.SUCCESS) {
+            await Follow.findByIdAndDelete(followData.data._id);
+            return apiSuccessRes(
+                HTTP_STATUS.OK,
+                res,
+                "Unfollowed successfully",
+                null
+            );
+        }
+        const newFollow = new Follow({
+            followedBy: toObjectId(followedBy),
+            userId: toObjectId(userId)
+        });
+        await newFollow.save();
+        return apiSuccessRes(
+            HTTP_STATUS.CREATED,
+            res,
+            "Followed successfully",
+            newFollow
+        );
+
+    } catch (error) {
+        return apiErrorRes(
+            HTTP_STATUS.INTERNAL_SERVER_ERROR,
+            res,
+            error.message,
+            error.message
+        );
+    }
+}
+
+
+const threadlike = async (req, res) => {
+    try {
+        let likeBy = req.user.userId
+        let { threadId } = req.body
+        let threadData = await getDocumentByQuery(ThreadLike, { likeBy: toObjectId(likeBy), threadId: toObjectId(threadId) })
+        if (threadData.statusCode === CONSTANTS.SUCCESS) {
+            await ThreadLike.findByIdAndDelete(threadData.data._id);
+            return apiSuccessRes(
+                HTTP_STATUS.OK,
+                res,
+                "Thread DisLike successfully",
+                null
+            );
+        }
+        const newFollow = new ThreadLike({
+            likeBy: toObjectId(likeBy),
+            threadId: toObjectId(threadId)
+        });
+        await newFollow.save();
+        return apiSuccessRes(
+            HTTP_STATUS.CREATED,
+            res,
+            "Thread Like successfully",
+            newFollow
+        );
+
+    } catch (error) {
+        return apiErrorRes(
+            HTTP_STATUS.INTERNAL_SERVER_ERROR,
+            res,
+            error.message,
+            error.message
+        );
+    }
+}
 
 
 
@@ -331,12 +403,13 @@ router.post('/completeRegistration', perApiLimiter(), upload.single('file'), val
 //login 
 router.post('/login', perApiLimiter(), upload.none(), validateRequest(loginSchema), login);
 
+//Follow
+router.post('/follow', perApiLimiter(), upload.none(), validateRequest(followSchema), follow);
+router.post('/threadlike', perApiLimiter(), upload.none(), validateRequest(threadLikeSchema), threadlike);
 
 
-// router.post('/getById', perApiLimiter(), upload.none(), validateRequest(moduleSchemaForId), globalCrudController.getById(User));
-// router.post('/update', upload.none(), globalCrudController.update(User));
-// router.post('/harddelete', perApiLimiter(), upload.none(), validateRequest(moduleSchemaForId), globalCrudController.hardDelete(User));
-// router.post('/softDelete', perApiLimiter(), upload.none(), validateRequest(moduleSchemaForId), globalCrudController.softDelete(User));
-// router.post('/getList', globalCrudController.getList(User));
+
+
+
 
 module.exports = router;

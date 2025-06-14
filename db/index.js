@@ -15,8 +15,12 @@ mongoose.connect(DB_STRING)
 
 module.exports = {
     User: require("./models/User"),
-    Category:require('./models/Category'),
-    SellProduct:require('./models/SellProducts'),
+    Follow: require("./models/Follow"),
+    Category: require('./models/Category'),
+    SellProduct: require('./models/SellProducts'),
+    Thread: require("./models/thread/PostThread"),
+    ThreadLike: require("./models/thread/ThreadLike"),
+    ThreadComment: require("./models/thread/ThreadComment"),
     //rbac---->
     AppSetting: require('./models/AppSetting'),
     Module: require("./models/Rbac/Module"),
