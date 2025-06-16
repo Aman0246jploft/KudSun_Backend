@@ -10,22 +10,72 @@ const conditions = {
     fair: 'fair',
     works: 'works'
 }
-const SALE_TYPE={
+const SALE_TYPE = {
     FIXED: 'fixed',
     AUCTION: 'auction'
 }
 
-const DeliveryType={
+const DeliveryType = {
     FREE_SHIPPING: 'free_shipping',
     CHARGE_SHIPPING: 'charge_shipping'
 
 }
 
+const ORDER_STATUS = {
+    PENDING: 'pending',
+    CONFIRMED: 'confirmed',
+    SHIPPED: 'shipped',
+    DELIVERED: 'delivered',
+    CANCELLED: 'cancelled',
+    RETURNED: 'returned',
+    FAILED: 'failed'
+};
+
+const PAYMENT_STATUS = {
+    PENDING: 'pending',
+    COMPLETED: 'completed',
+    FAILED: 'failed',
+    REFUNDED: 'refunded'
+};
+
+const PAYMENT_METHOD = {
+    COD: 'cash_on_delivery',
+    ONLINE: 'online_payment'
+};
+
+const SHIPPING_STATUS = {
+    NOT_DISPATCHED: 'not_dispatched',
+    IN_TRANSIT: 'in_transit',
+    DELIVERED: 'delivered',
+    RETURNED: 'returned'
+};
 
 
-module.exports={
+
+const DEFAULT_AMOUNT = {
+    PLATFORM_FEE: 5,
+    SHIPPING_CHARGE: 5
+};
+
+const DISPUTE_STATUS = {
+    PENDING: 'pending',
+    UNDER_REVIEW: 'under_review',
+    RESOLVED: 'resolved',
+    REJECTED: 'rejected',
+    CLOSED: 'closed'
+};
+
+
+
+module.exports = {
     roleId,
     conditions,
     SALE_TYPE,
-    DeliveryType
+    DeliveryType,
+    ORDER_STATUS,
+    PAYMENT_STATUS,
+    PAYMENT_METHOD,
+    SHIPPING_STATUS,
+    DEFAULT_AMOUNT,
+    DISPUTE_STATUS
 }

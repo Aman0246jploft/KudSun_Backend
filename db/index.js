@@ -21,6 +21,12 @@ module.exports = {
     Thread: require("./models/thread/PostThread"),
     ThreadLike: require("./models/thread/ThreadLike"),
     ThreadComment: require("./models/thread/ThreadComment"),
+    UserAddress: require("./models/UserAddress"),
+    Carrier: require("./models/Carrier"),
+    Order: require("./models/Payment/Order"),
+    Shipping: require('./models/Payment/Shipping'),
+    Bid: require("./models/Bid"),
+    Dispute: require("./models/Dispute"),
     //rbac---->
     AppSetting: require('./models/AppSetting'),
     Module: require("./models/Rbac/Module"),

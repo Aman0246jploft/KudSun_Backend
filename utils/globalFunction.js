@@ -67,6 +67,63 @@ const toObjectId = (id) => {
 };
 
 
+
+// Helper: Fix broken JSON strings (add quotes around keys and values)
+function fixInvalidJsonString(str) {
+  // Add quotes around keys (e.g. productId:)
+  let fixed = str.replace(/(\w+):/g, '"$1":');
+  // Add quotes around unquoted hex string values (Mongo ObjectIds)
+  fixed = fixed.replace(/:"?([a-f0-9]{24})"?/gi, ':"$1"');
+  return fixed;
+}
+
+// Main parser function
+function parseItems(rawItems) {
+  if (!rawItems) return [];
+
+  // If already array of objects, just return
+  if (Array.isArray(rawItems)) {
+    // Check first item type
+    if (rawItems.length === 0) return [];
+    
+    if (typeof rawItems[0] === 'object' && rawItems[0] !== null) {
+      return rawItems;
+    }
+
+    // Else, assume array of strings to parse
+    return rawItems.map(itemStr => {
+      if (typeof itemStr !== 'string') {
+        throw new Error('Invalid item in array; expected string');
+      }
+      try {
+        const fixedStr = fixInvalidJsonString(itemStr);
+        return JSON.parse(fixedStr);
+      } catch (err) {
+        throw new Error(`Failed to parse item: ${itemStr}`);
+      }
+    });
+  }
+
+  // If single string, parse it as one object
+  if (typeof rawItems === 'string') {
+    try {
+      const fixedStr = fixInvalidJsonString(rawItems);
+      const obj = JSON.parse(fixedStr);
+      return [obj];
+    } catch (err) {
+      throw new Error('Failed to parse items string');
+    }
+  }
+
+  // If it's a single object, wrap in array
+  if (typeof rawItems === 'object') {
+    return [rawItems];
+  }
+
+  // Otherwise invalid format
+  throw new Error('Unsupported items format');
+}
+
 module.exports = {
     resultDb,
     generateOTP,
@@ -74,5 +131,6 @@ module.exports = {
     apiErrorRes,
     generateKey,
     verifyPassword,
-    toObjectId
+    toObjectId,
+    parseItems
 };
