@@ -17,8 +17,12 @@ const HTTP_STATUS = require('../../utils/statusCode');
 const globalCrudController = {
   create: (model) => async (req, res) => {
     try {
+      const payload = {
+        ...req.body,
+        userId: req.user?.userId // Safely add userId from auth middleware
+      };
 
-      const modelData = await createDocument(model, req.body);
+      const modelData = await createDocument(model, payload);
       if (modelData.statusCode === CONSTANTS.SUCCESS)
         return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, modelData.data);
       return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, modelData.data, modelData.data);

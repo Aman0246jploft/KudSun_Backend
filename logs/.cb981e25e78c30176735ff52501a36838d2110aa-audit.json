@@ -6,9 +6,9 @@
     "auditLog": "/home/jploft-php/Desktop/Kudsun/logs/.cb981e25e78c30176735ff52501a36838d2110aa-audit.json",
     "files": [
         {
-            "date": 1749875314044,
-            "name": "/home/jploft-php/Desktop/Kudsun/logs/2025-06-14.log",
-            "hash": "4c6782589f34d5199a4a89adc2f895ed06225e6801bd25d077f1c51b06c578f5"
+            "date": 1750050136661,
+            "name": "/home/jploft-php/Desktop/Kudsun/logs/2025-06-16.log",
+            "hash": "60838f11f3a5da65c900de95bb3f55ed836c56487608e6375137755809702cce"
         }
     ],
     "hashType": "sha256"

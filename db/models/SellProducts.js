@@ -1,5 +1,6 @@
 const { object } = require("joi");
 const mongoose = require("mongoose");
+const moment = require('moment')
 const { conditions, SALE_TYPE, DeliveryType } = require("../../utils/Role");
 const Schema = mongoose.Schema;
 
@@ -69,7 +70,9 @@ const SellProductsSchema = new Schema({
         biddingIncrementPrice: { type: Number },
         duration: { type: Number },
         endDate: { type: Date },
-        endTime: { type: String }
+        endTime: { type: String },
+        biddingEndsAt: { type: Date },
+        isBiddingOpen: { type: Boolean } // ✅ Add this
         // only required if saleType is 'auction'
     },
     deliveryType: {
@@ -109,6 +112,18 @@ SellProductsSchema.pre('save', function (next) {
             return next(new Error("Auction settings must include startingPrice, reservePrice, and either duration or endDate when saleType is 'auction'"));
         }
     }
+
+    const { endDate, endTime } = this.auctionSettings || {};
+    if (endDate && endTime) {
+        const fullEnd = moment(`${moment(endDate).format("YYYY-MM-DD")} ${endTime}`, "YYYY-MM-DD HH:mm");
+        if (!fullEnd.isValid()) {
+            return next(new Error("Invalid bidding end time format"));
+        }
+        this.auctionSettings.biddingEndsAt = fullEnd.toDate();
+        this.auctionSettings.isBiddingOpen = moment().isBefore(fullEnd);
+    }
+
+
 
     if (this.deliveryType === DeliveryType.CHARGE_SHIPPING && this.shippingCharge == null) {
         return next(new Error("Shipping charge is required when delivery type is 'shipping'"));

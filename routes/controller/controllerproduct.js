@@ -14,9 +14,6 @@ const { SALE_TYPE, DeliveryType } = require('../../utils/Role');
 
 
 
-
-
-
 const addSellerProduct = async (req, res) => {
     try {
         const {
@@ -213,12 +210,8 @@ const addSellerProduct = async (req, res) => {
 
 
 
-
-
-
-
-
 router.post('/addSellerProduct', perApiLimiter(), upload.array('files', 10), addSellerProduct);
+
 
 
 module.exports = router;
