@@ -5,39 +5,250 @@ const upload = multer();
 const router = express.Router();
 const globalCrudController = require('./globalCrudController');
 const { Category } = require('../../db');
-const validateRequest = require('../../middlewares/validateRequest');
 const perApiLimiter = require('../../middlewares/rateLimiter');
-const { createCategorySchema } = require('../services/validations/categoryValidation');
 const HTTP_STATUS = require('../../utils/statusCode');
 const { roleId } = require('../../utils/Role');
 const { apiSuccessRes, apiErrorRes } = require('../../utils/globalFunction');
 const { getDocumentById } = require('../services/serviceGlobalCURD');
 const CONSTANTS = require('../../utils/constants');
-const CONSTANTS_MSG = require('../../utils/constantsMessage');
-const { moduleSchemaForId } = require('../services/validations/globalCURDValidation');
 const { hasPermission } = require('../../middlewares/hasPermission');
+const { uploadImageCloudinary } = require('../../utils/cloudinary');
 
 
 
 
-
-const createCategory = async (req, res) => {
+const createOrUpdateCategory = async (req, res) => {
     try {
+        const { _id, name } = req.body;
+        const imageFile = req.file;
 
-        const category = new Category({
-            ...req.body,
-            isAddedByAdmin: req.user.roleId === roleId.SUPER_ADMIN,
-            addedByUserId: req.user.userId
-        });
+        if (_id) {
+            // Update existing category
+            const existingCategory = await Category.findOne({ _id, isDeleted: false });
+            if (!existingCategory) {
+                return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Category not found');
+            }
 
-        await category.save();
+            // If name provided, check for duplicate and update
+            if (name) {
+                const normalizedName = name.toLowerCase();
+                const duplicateCategory = await Category.findOne({
+                    name: normalizedName,
+                    isDeleted: false,
+                    _id: { $ne: _id }
+                });
+                if (duplicateCategory) {
+                    return apiErrorRes(HTTP_STATUS.CONFLICT, res, 'Category name already in use');
+                }
+                existingCategory.name = normalizedName;
+            }
 
-        return apiSuccessRes(HTTP_STATUS.CREATED, res, CONSTANTS_MSG.SUCCESS, category);
+            // Update image if new file sent
+            if (imageFile) {
+                const imageUrl = await uploadImageCloudinary(imageFile, 'category-images');
+                existingCategory.image = imageUrl;
+            }
+
+            await existingCategory.save();
+
+            return apiSuccessRes(HTTP_STATUS.OK, res, 'Category updated successfully', {
+                _id: existingCategory._id,
+                name: existingCategory.name,
+                image: existingCategory.image
+            });
+        } else {
+            // Create new category
+            if (!name) {
+                return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Category name is required');
+            }
+            const normalizedName = name.toLowerCase();
+
+            const existing = await Category.findOne({ name: normalizedName, isDeleted: false });
+            if (existing) {
+                return apiErrorRes(HTTP_STATUS.CONFLICT, res, 'Category already exists');
+            }
+
+            let imageUrl = null;
+            if (imageFile) {
+                imageUrl = await uploadImageCloudinary(imageFile, 'category-images');
+            }
+
+            const newCategory = new Category({ name: normalizedName, image: imageUrl });
+            await newCategory.save();
+
+            return apiSuccessRes(HTTP_STATUS.CREATED, res, 'Category created successfully', {
+                _id: newCategory._id,
+                name: newCategory.name,
+                image: newCategory.image
+            });
+        }
     } catch (error) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
+};
 
-}
+
+
+
+
+
+const addOrUpdateSubCategory = async (req, res) => {
+    try {
+        const { categoryId } = req.params;
+        const { name, subCategoryId } = req.body; // subCategoryId optional for update
+        const imageFile = req.file;
+
+        if (!name) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Subcategory name is required');
+        }
+
+        const category = await Category.findById(categoryId);
+        if (!category || category.isDeleted) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Category not found');
+        }
+
+        const lowerName = name.trim().toLowerCase();
+
+        let imageUrl = null;
+        if (imageFile) {
+            imageUrl = await uploadImageCloudinary(imageFile, 'subcategory-images');
+        }
+
+        if (subCategoryId) {
+            // Update flow
+            const subCategory = category.subCategories.id(subCategoryId);
+            if (!subCategory) {
+                return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
+            }
+
+            // Check if the new name is unique among other subcategories
+            const duplicate = category.subCategories.find(
+                sub => sub._id.toString() !== subCategoryId && sub.name.toLowerCase() === lowerName
+            );
+            if (duplicate) {
+                return apiErrorRes(HTTP_STATUS.CONFLICT, res, 'Another subcategory with this name already exists');
+            }
+
+            // Update only provided fields
+            subCategory.name = lowerName || subCategory.name;
+            if (imageUrl) subCategory.image = imageUrl;
+
+            await category.save();
+
+            return apiSuccessRes(HTTP_STATUS.OK, res, 'Subcategory updated successfully', {
+                _id: subCategory._id,
+                name: subCategory.name,
+                image: subCategory.image,
+                slug: subCategory.slug,
+            });
+        } else {
+            // Create flow: check duplicate name
+            const existingSubCategory = category.subCategories.find(
+                sub => sub.name.toLowerCase() === lowerName
+            );
+
+            if (existingSubCategory) {
+                return apiErrorRes(HTTP_STATUS.CONFLICT, res, 'Subcategory with this name already exists');
+            }
+
+            const slug = category.subCategories.length + 1;
+
+            category.subCategories.push({ name: lowerName, image: imageUrl, slug });
+            await category.save();
+
+            const newSubCat = category.subCategories[category.subCategories.length - 1];
+
+            return apiSuccessRes(HTTP_STATUS.CREATED, res, 'Subcategory added successfully', {
+                _id: newSubCat._id,
+                name: newSubCat.name,
+                image: newSubCat.image,
+                slug: newSubCat.slug,
+            });
+        }
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    }
+};
+
+
+
+
+const addParameterToSubCategory = async (req, res) => {
+    try {
+        const { subCategoryId } = req.params;
+        const { key } = req.body;
+        const valuesRaw = req.body.values || req.body.value; // handle singular/plural form
+        const userId = req.user?.userId;
+        const roleId = req.user?.roleId;
+
+        if (!key || !valuesRaw) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Key and values are required');
+        }
+
+        // Normalize values to array
+        const valuesArray = Array.isArray(valuesRaw) ? valuesRaw : [valuesRaw];
+
+        // Only admins can add/update parameters
+        if (roleId !== 1) {
+            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, 'Only admin can add/update parameters');
+        }
+
+        const category = await Category.findOne({ 'subCategories._id': subCategoryId, isDeleted: false });
+        if (!category) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
+        }
+
+        const subCategory = category.subCategories.id(subCategoryId);
+        const paramKey = key.trim().toLowerCase();
+
+        // Prepare values to add, all admin added so isAddedByAdmin: true, addedByUserId: null
+        const newValues = valuesArray.map(val => ({
+            value: val.trim().toLowerCase(),
+            isAddedByAdmin: true,
+            addedByUserId: null
+        }));
+
+        // Check if parameter already exists
+        const existingParam = subCategory.parameters.find(p => p.key === paramKey);
+
+        if (existingParam) {
+            // Filter out values that already exist
+            const existingValueSet = new Set(existingParam.values.map(v => v.value));
+            const uniqueValuesToAdd = newValues.filter(v => !existingValueSet.has(v.value));
+
+            if (uniqueValuesToAdd.length === 0) {
+                return apiSuccessRes(HTTP_STATUS.OK, res, 'Parameter already up to date');
+            }
+
+            existingParam.values.push(...uniqueValuesToAdd);
+        } else {
+            // Create new parameter
+            subCategory.parameters.push({
+                key: paramKey,
+                values: newValues
+            });
+        }
+
+        await category.save();
+
+        return apiSuccessRes(HTTP_STATUS.CREATED, res, 'Parameter added/updated successfully', {
+            key: paramKey,
+            addedValues: newValues.map(v => v.value)
+        });
+
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    }
+};
+
+
+
+
+
+
+
+
+
 
 
 const addParameterValue = async (req, res) => {
@@ -130,6 +341,36 @@ const deleteParameterValue = async (req, res) => {
 };
 
 
+const listCategoryNames = async (req, res) => {
+    try {
+        const { keyWord = '', pageNo = 1, size = 10 } = req.query;
+
+        const searchRegex = new RegExp(keyWord.trim(), 'i');
+        const skip = (parseInt(pageNo) - 1) * parseInt(size);
+        const limit = parseInt(size);
+
+        const query = {
+            isDeleted: false,
+            name: { $regex: searchRegex }
+        };
+
+        const [categories, total] = await Promise.all([
+            Category.find(query, { _id: 1, name: 1 })
+                .skip(skip)
+                .limit(limit),
+            Category.countDocuments(query)
+        ]);
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, 'Category names fetched successfully', {
+            total,
+            pageNo: parseInt(pageNo),
+            size: limit,
+            data: categories
+        });
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    }
+};
 
 
 
@@ -282,22 +523,232 @@ const approveParameterValueByAdmin = async (req, res) => {
     }
 };
 
+const getSubCategoriesByCategoryId = async (req, res) => {
+    try {
+        const { categoryId } = req.params;
+
+        if (!categoryId) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Category ID is required');
+        }
+
+        const category = await Category.findOne(
+            { _id: categoryId, isDeleted: false },
+            { subCategories: 1 } // Only project subCategories
+        );
+
+        if (!category) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Category not found');
+        }
+
+        // Map only required subcategory fields
+        const subCategories = category.subCategories.map(subCat => ({
+            _id: subCat._id,
+            name: subCat.name,
+            slug: subCat.slug,
+            image: subCat.image
+        }));
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, 'Subcategories fetched successfully', {
+            categoryId,
+            total: subCategories.length,
+            data: subCategories
+        });
+
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    }
+};
+
+const getParametersBySubCategoryId = async (req, res) => {
+    try {
+        const { subCategoryId } = req.params;
+        const userId = req.user?.userId;  // assuming userId is set in req.user after auth
+
+        if (!subCategoryId) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Subcategory ID is required');
+        }
+
+        // Find the category containing the subcategory
+        const category = await Category.findOne(
+            { 'subCategories._id': subCategoryId, isDeleted: false },
+            { 'subCategories.$': 1 }
+        );
+
+        if (!category || !category.subCategories.length) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
+        }
+
+        const subCategory = category.subCategories[0];
+
+        // Filter parameter values according to admin/user logic
+        const parameters = subCategory.parameters.map(param => {
+            const filteredValues = param.values.filter(val =>
+                val.isAddedByAdmin ||
+                (userId && val.addedByUserId?.toString() === userId)
+            );
+
+            return {
+                _id: param._id,
+                key: param.key,
+                values: filteredValues
+            };
+        }).filter(param => param.values.length > 0); // optionally exclude params with no visible values
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, 'Parameters fetched successfully', {
+            subCategoryId,
+            parameters
+        });
+
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    }
+};
+
+
+
+const addUserParameterValue = async (req, res) => {
+    try {
+        const { subCategoryId } = req.params;
+        const { key } = req.body;
+        const values = req.body.values;
+        const userId = req.user?.userId;
+
+        if (!key || !values) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Key and values are required');
+        }
+
+        const category = await Category.findOne({ 'subCategories._id': subCategoryId, isDeleted: false });
+        if (!category) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
+        }
+
+        const subCategory = category.subCategories.id(subCategoryId);
+        const paramKey = key.trim().toLowerCase();
+
+        // Normalize incoming values to array
+        const incomingValues = Array.isArray(values) ? values : [values];
+        const newValuesToAdd = incomingValues.map(val => val.trim().toLowerCase());
+
+        // Find existing parameter
+        const existingParam = subCategory.parameters.find(p => p.key === paramKey);
+        if (!existingParam) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Parameter key not found in this subcategory');
+        }
+
+        // Collect existing values added by this user
+        const userValuesSet = new Set(
+            existingParam.values
+                .filter(v => v.addedByUserId?.toString() === userId)
+                .map(v => v.value)
+        );
+
+        // Filter new values to avoid duplicates
+        const uniqueValuesToAdd = newValuesToAdd.filter(v => !userValuesSet.has(v));
+
+        if (uniqueValuesToAdd.length === 0) {
+            return apiSuccessRes(HTTP_STATUS.OK, res, 'No new values to add, all values already exist');
+        }
+
+        // Add new values with user info
+        uniqueValuesToAdd.forEach(value => {
+            existingParam.values.push({
+                value,
+                isAddedByAdmin: false,
+                addedByUserId: userId
+            });
+        });
+
+        await category.save();
+
+        return apiSuccessRes(HTTP_STATUS.CREATED, res, 'User values added successfully', {
+            key: paramKey,
+            addedValues: uniqueValuesToAdd
+        });
+
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    }
+};
+
+const acceptParameterValueByAdmin = async (req, res) => {
+    try {
+        console.log()
+        const { subCategoryId } = req.params;
+        const { key, value } = req.body;  // form-data fields are strings by default
+        const userId = req.user?.userId;
+        const roleId = req.user?.roleId;
+
+        if (roleId !== 1) {
+            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, 'Only admin can accept parameter values');
+        }
+
+        if (!key || !value) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Parameter key and value are required');
+        }
+
+        const category = await Category.findOne({ 'subCategories._id': subCategoryId, isDeleted: false });
+        if (!category) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
+        }
+
+        const subCategory = category.subCategories.id(subCategoryId);
+        const paramKey = key.trim().toLowerCase();
+        const targetValue = value.trim().toLowerCase();
+
+        const parameter = subCategory.parameters.find(p => p.key === paramKey);
+        if (!parameter) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Parameter key not found');
+        }
+
+        const paramValueObj = parameter.values.find(v => v.value === targetValue);
+        if (!paramValueObj) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Parameter value not found');
+        }
+
+        if (paramValueObj.isAddedByAdmin) {
+            return apiSuccessRes(HTTP_STATUS.OK, res, 'Parameter value is already accepted by admin');
+        }
+
+        // Update the value as accepted by admin
+        paramValueObj.isAddedByAdmin = true;
+        paramValueObj.addedByUserId = null;
+
+        await category.save();
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, 'Parameter value accepted by admin successfully', {
+            key: paramKey,
+            value: targetValue
+        });
+
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    }
+};
 
 
 
 //admin
-router.post('/create', perApiLimiter(), hasPermission([roleId.SUPER_ADMIN]), validateRequest(createCategorySchema), createCategory);
+router.post('/createCategory', perApiLimiter(), hasPermission([roleId.SUPER_ADMIN]), upload.single('file'), createOrUpdateCategory);
+router.post('/addSubCategory/:categoryId', perApiLimiter(), hasPermission([roleId.SUPER_ADMIN]), upload.single('file'), addOrUpdateSubCategory);
+router.post('/addParameterToSubCategory/:subCategoryId', perApiLimiter(), hasPermission([roleId.SUPER_ADMIN]), upload.none(), addParameterToSubCategory);
+router.post('/acceptParameterValueByAdmin/:subCategoryId', perApiLimiter(), hasPermission([roleId.SUPER_ADMIN]), upload.none(), acceptParameterValueByAdmin);
+
+router.post('/addUserParameterValue/:subCategoryId', perApiLimiter(), upload.none(), addUserParameterValue);
+
+router.get('/listCategoryNames', perApiLimiter(), listCategoryNames);
+router.get('/getSubCategoriesByCategoryId/:categoryId', perApiLimiter(), getSubCategoriesByCategoryId);
+router.get('/getParametersBySubCategoryId/:subCategoryId', perApiLimiter(), getParametersBySubCategoryId);
+
+
+
 router.post('/update', perApiLimiter(), hasPermission([roleId.SUPER_ADMIN]), upload.none(), globalCrudController.update(Category));
 router.get('/listCategoriesForAdmin', hasPermission([roleId.SUPER_ADMIN]), perApiLimiter(), listCategoriesForAdmin);
-router.post('/approveParameterValueByAdmin', hasPermission([roleId.SUPER_ADMIN]), perApiLimiter(), approveParameterValueByAdmin);
+// router.post('/approveParameterValueByAdmin', hasPermission([roleId.SUPER_ADMIN]), perApiLimiter(), approveParameterValueByAdmin);
 
 //for user update
-router.post('/addParameterValue', perApiLimiter(), upload.none(), addParameterValue);
+
 router.post('/deleteParameterValue', perApiLimiter(), upload.none(), deleteParameterValue);
 router.get('/list', perApiLimiter(), listCategories);
-
-
-
 
 
 

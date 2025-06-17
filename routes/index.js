@@ -8,6 +8,9 @@ module.exports = {
     bid: require("./controller/controllerBids"),
     order: require("./controller/contorllerOrder"),
     dispute: require("./controller/controllerDispute"),
+    bank: require("./controller/controllerBank"),
+    sellerVerification:require("./controller/controllerSellerVerification"),
+    productReview:require("./controller/controllerProductreview"),
 
 
 

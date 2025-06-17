@@ -70,7 +70,6 @@ const OrderSchema = new Schema({
 });
 
 // Indexes for performance
-OrderSchema.index({ orderId: 1 });
 OrderSchema.index({ userId: 1 });
 OrderSchema.index({ status: 1 });
 

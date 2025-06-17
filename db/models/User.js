@@ -73,6 +73,10 @@ const UserSchema = new Schema({
     lastLogin: {
         type: Date
     },
+    is_Verified_Seller: {
+        type: Boolean,
+        default: false
+    }
 
 }, {
     timestamps: true

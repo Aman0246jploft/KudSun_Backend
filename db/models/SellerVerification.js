@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { SELLER_PAYOUT_METHOD } = require('../../utils/Role');
 
 const Schema = mongoose.Schema;
 
@@ -13,13 +14,13 @@ const SellerVerificationSchema = new Schema({
 
     paymentPayoutMethod: {
         type: String,
-        enum: ['PromptPay', 'BankTransfer'],
+        enum: Object.values(SELLER_PAYOUT_METHOD),
         required: true,
     },
 
     // For Bank Transfer method
     bankDetails: {
-        bankName: { type: String },         // e.g. Bangkok Bank
+        bankName: { type: Schema.Types.ObjectId, ref: 'Bank' },         // e.g. Bangkok Bank
         accountNumber: { type: String },
         accountHolderName: { type: String },
         bankBookUrl: { type: String },      // URL for uploaded bank book image
@@ -27,8 +28,8 @@ const SellerVerificationSchema = new Schema({
 
     // For PromptPay method
     promptPayId: { type: String },        // Mobile number, Citizen ID, or Tax ID
-    linkedBankName: { type: String },     // e.g. Krungthai Bank
-    linkedBankLast4Digits: { type: String },  // e.g. '1234'
+    // linkedBankName: { type: String },     // e.g. Krungthai Bank
+    // linkedBankLast4Digits: { type: String },  // e.g. '1234'
 
     isAuthorized: { type: Boolean, required: true },  // checkbox to authorize access/verification
 

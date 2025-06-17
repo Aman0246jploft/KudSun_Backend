@@ -65,6 +65,10 @@ const DISPUTE_STATUS = {
     CLOSED: 'closed'
 };
 
+const SELLER_PAYOUT_METHOD = {
+    PROMPT_PAY: "PromptPay",
+    BANK_TRANSFER: "BankTransfer"
+}
 
 
 module.exports = {
@@ -77,5 +81,6 @@ module.exports = {
     PAYMENT_METHOD,
     SHIPPING_STATUS,
     DEFAULT_AMOUNT,
-    DISPUTE_STATUS
+    DISPUTE_STATUS,
+    SELLER_PAYOUT_METHOD
 }
