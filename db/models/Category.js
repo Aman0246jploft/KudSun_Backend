@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const { isLowercase } = require("validator");
+
 // Each parameter value object
 const parameterValueSchema = new mongoose.Schema({
     value: { type: String, required: true, trim: true, lowercase: true },
