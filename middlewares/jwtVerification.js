@@ -14,8 +14,9 @@ const publicRoutes = [
     '/api/v1/user/saveEmailPassword',
     '/api/v1/user/saveCategories',
     '/api/v1/user/completeRegistration',
-
-
+    '/api/v1/user/requestResetOtp',
+    '/api/v1/user/verifyResetOtp',
+    '/api/v1/user/resetPassword',
 ];
 
 function jwtVerification() {
