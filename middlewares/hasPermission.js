@@ -1,3 +1,4 @@
+const { apiErrorRes } = require("../utils/globalFunction");
 const HTTP_STATUS = require("../utils/statusCode");
 
 function hasPermission(requiredRoles) {
@@ -6,7 +7,7 @@ function hasPermission(requiredRoles) {
     if (requiredRoles.includes(roleId)) {
       next();
     } else {
-      return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, "Forbidden!", DATA_NULL, INVALID_TOKEN);
+      return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, "Forbidden!", null);
     }
   };
 }

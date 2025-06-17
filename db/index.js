@@ -27,6 +27,9 @@ module.exports = {
     Shipping: require('./models/Payment/Shipping'),
     Bid: require("./models/Bid"),
     Dispute: require("./models/Dispute"),
+    Bank: require("./models/Bank"),
+    SellerVerification: require("./models/SellerVerification"),
+    ProductReview:require("./models/ProductReview"),
     //rbac---->
     AppSetting: require('./models/AppSetting'),
     Module: require("./models/Rbac/Module"),
