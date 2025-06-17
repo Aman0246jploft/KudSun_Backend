@@ -20,6 +20,7 @@ module.exports = {
     SellProduct: require('./models/SellProducts'),
     Thread: require("./models/thread/PostThread"),
     ThreadLike: require("./models/thread/ThreadLike"),
+    ProductLike: require("./models/ProductLike"),
     ThreadComment: require("./models/thread/ThreadComment"),
     UserAddress: require("./models/UserAddress"),
     Carrier: require("./models/Carrier"),

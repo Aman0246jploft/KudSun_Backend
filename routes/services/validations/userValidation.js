@@ -59,6 +59,36 @@ const threadLikeSchema = Joi.object({
   threadId: Joi.string().required(),
 });
 
+
+const productLikeSchema = Joi.object({
+  productId: Joi.string().required(),
+});
+
+
+
+
+
+const requestResetOtpSchema = Joi.object({
+  phoneNumber: Joi.string().required(),
+});
+
+
+
+
+const verifyResetOtpSchema = Joi.object({
+  otp: Joi.string().required(),
+  resetToken: Joi.string().required(),
+
+});
+
+const resetPasswordSchema =Joi.object({
+  phoneNumber: Joi.string().required(),
+  newPassword: Joi.string().required(),
+  confirmPassword:Joi.string().required()
+
+});
+
+
 module.exports = {
   loginSchema,
   mobileLoginSchema,
@@ -67,5 +97,9 @@ module.exports = {
   completeRegistrationSchema,
   saveEmailPasswords,
   followSchema,
-  threadLikeSchema
+  threadLikeSchema,
+  productLikeSchema,
+  requestResetOtpSchema,
+  verifyResetOtpSchema,
+  resetPasswordSchema
 };

@@ -26,7 +26,7 @@ const { PAYMENT_STATUS, PAYMENT_METHOD, ORDER_STATUS, SALE_TYPE } = require("../
 const Schema = mongoose.Schema;
 
 const OrderSchema = new Schema({
-    orderId: { type: String, unique: true,  }, // could be custom like ORD123456
+    orderId: { type: String, unique: true, }, // could be custom like ORD123456
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
 
     addressId: { type: Schema.Types.ObjectId, ref: 'UserAddress', required: true }, // foreign key
@@ -76,7 +76,7 @@ OrderSchema.index({ status: 1 });
 OrderSchema.pre('save', function (next) {
     if (!this.orderId) {
         const hexId = this._id.toString();
-        const shortId = hexId.slice(-8).toUpperCase(); 
+        const shortId = hexId.slice(-8).toUpperCase();
         this.orderId = `ORD-${shortId}`;
     }
     next();

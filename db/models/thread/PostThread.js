@@ -24,7 +24,7 @@ const threadSchema = new Schema({
     description: {
         type: String,
         default: '',
-        trim: true
+        trim: true,
     },
     budgetFlexible: {
         type: Boolean,

@@ -1,6 +1,6 @@
 module.exports = Object.freeze({
     VERIFICATION_TOKEN_LENGTH: 40,
-    OTP_LENGTH: 4,
+    OTP_LENGTH: 6,
     NOT_FOUND: 1404,
     SERVER_ERROR: 1500,
     SUCCESS: 1200,

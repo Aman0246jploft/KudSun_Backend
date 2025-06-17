@@ -3,20 +3,19 @@ const express = require('express');
 const multer = require('multer');
 const upload = multer();
 const router = express.Router();
-const globalCrudController = require('./globalCrudController');
-const { User, Follow, ThreadLike } = require('../../db');
+const { User, Follow, ThreadLike, ProductLike, SellProduct, Thread } = require('../../db');
 const { getDocumentByQuery } = require('../services/serviceGlobalCURD');
 const CONSTANTS_MSG = require('../../utils/constantsMessage');
 const CONSTANTS = require('../../utils/constants')
 const HTTP_STATUS = require('../../utils/statusCode');
 const { apiErrorRes, verifyPassword, apiSuccessRes, generateOTP, generateKey, toObjectId } = require('../../utils/globalFunction');
 const { signToken } = require('../../utils/jwtTokenUtils');
-const { loginSchema, mobileLoginSchema, otpVerification, categorySchema, completeRegistrationSchema, saveEmailPasswords, followSchema, threadLikeSchema } = require('../services/validations/userValidation');
+const { loginSchema, mobileLoginSchema, otpVerification, categorySchema, completeRegistrationSchema, saveEmailPasswords, followSchema, threadLikeSchema, productLikeSchema, requestResetOtpSchema, verifyResetOtpSchema, resetPasswordSchema } = require('../services/validations/userValidation');
 const validateRequest = require('../../middlewares/validateRequest');
 const perApiLimiter = require('../../middlewares/rateLimiter');
-const { moduleSchemaForId } = require('../services/validations/globalCURDValidation');
 const { setKeyWithTime, setKeyNoTime, getKey, removeKey } = require('../services/serviceRedis');
 const { uploadImageCloudinary } = require('../../utils/cloudinary');
+const { SALE_TYPE } = require('../../utils/Role');
 
 
 
@@ -389,6 +388,347 @@ const threadlike = async (req, res) => {
     }
 }
 
+const productLike = async (req, res) => {
+    try {
+        let likeBy = req.user.userId
+        let { productId } = req.body
+        let threadData = await getDocumentByQuery(ProductLike, { likeBy: toObjectId(likeBy), productId: toObjectId(productId) })
+        if (threadData.statusCode === CONSTANTS.SUCCESS) {
+            await ProductLike.findByIdAndDelete(threadData.data._id);
+            return apiSuccessRes(
+                HTTP_STATUS.OK,
+                res,
+                "Product DisLike successfully",
+                null
+            );
+        }
+        const newFollow = new ProductLike({
+            likeBy: toObjectId(likeBy),
+            productId: toObjectId(productId)
+        });
+        await newFollow.save();
+        return apiSuccessRes(
+            HTTP_STATUS.CREATED,
+            res,
+            "Product Like successfully",
+            newFollow
+        );
+
+    } catch (error) {
+        return apiErrorRes(
+            HTTP_STATUS.INTERNAL_SERVER_ERROR,
+            res,
+            error.message,
+            error.message
+        );
+    }
+}
+
+
+const getLikedProducts = async (req, res) => {
+    try {
+        const userId = req.user.userId;
+
+        const page = parseInt(req.query.pageNo) || 1;
+        const limit = parseInt(req.query.size) || 10;
+        const skip = (page - 1) * limit;
+
+        const sortBy = req.query.sortBy === "fixedPrice" ? "fixedPrice" : "createdAt";
+        const sortOrder = req.query.sortOrder === "asc" ? 1 : -1;
+
+        // Get liked product IDs for the user
+        const likedDocs = await ProductLike.find({
+            likeBy: toObjectId(userId),
+            isDisable: false,
+            isDeleted: false,
+        }).select("productId");
+
+        const likedProductIds = likedDocs.map((doc) => doc.productId);
+
+        const query = {
+            _id: { $in: likedProductIds },
+            isDisable: false,
+            isDeleted: false,
+        };
+
+        const totalCount = await SellProduct.countDocuments(query);
+
+        const products = await SellProduct.find(query)
+            .sort({ [sortBy]: sortOrder })
+            .skip(skip)
+            .limit(limit)
+            .lean();
+
+        // For each product that is auction, fetch bid count
+        const productsWithBidCount = await Promise.all(
+            products.map(async (product) => {
+                if (product.saleType === SALE_TYPE.AUCTION) {
+                    const bidCount = await Bid.countDocuments({ productId: product._id });
+                    return { ...product, totalBids: bidCount };
+                }
+                return { ...product, totalBids: 0 };
+            })
+        );
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Liked products fetched successfully", {
+            products: productsWithBidCount,
+            total: totalCount,
+            pageNo: page,
+            size: limit
+        });
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error.message);
+    }
+};
+
+
+
+const getLikedThreads = async (req, res) => {
+    try {
+        const userId = req.user.userId;
+
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        const sortBy = req.query.sortBy === "commentCount" ? "commentCount" : "date";
+        const sortOrder = req.query.sortOrder === "asc" ? 1 : -1;
+
+        // 1. Find liked thread IDs
+        const likedThreadDocs = await ThreadLike.find({
+            likeBy: toObjectId(userId),
+            isDisable: false,
+            isDeleted: false,
+        }).select("threadId");
+
+        const likedThreadIds = likedThreadDocs.map(doc => doc.threadId);
+
+        const totalCount = likedThreadIds.length;
+        if (totalCount === 0) {
+            return apiSuccessRes(HTTP_STATUS.OK, res, "No liked threads found", {
+                threads: [],
+                pagination: { total: 0, page, limit, totalPages: 0 },
+            });
+        }
+
+        const pipeline = [
+            { $match: { _id: { $in: likedThreadIds } } },
+
+            // Lookup all comments for the thread
+            {
+                $lookup: {
+                    from: "threadcomments",
+                    localField: "_id",
+                    foreignField: "thread",
+                    as: "comments"
+                }
+            },
+
+            // Add commentCount field
+            {
+                $addFields: {
+                    commentCount: { $size: "$comments" }
+                }
+            },
+
+            // Unwind comments to get associatedProducts
+            { $unwind: { path: "$comments", preserveNullAndEmptyArrays: true } },
+
+            // Unwind associatedProducts from each comment
+            { $unwind: { path: "$comments.associatedProducts", preserveNullAndEmptyArrays: true } },
+
+            // Group back to thread level, keep entire thread doc as 'threadDoc'
+            {
+                $group: {
+                    _id: "$_id",
+                    threadDoc: { $first: "$$ROOT" },
+                    associatedProductsSet: { $addToSet: "$comments.associatedProducts" }
+                }
+            },
+
+            // Add associatedProductCount field
+            {
+                $addFields: {
+                    "threadDoc.associatedProductCount": {
+                        $size: {
+                            $filter: {
+                                input: "$associatedProductsSet",
+                                as: "prod",
+                                cond: { $ne: ["$$prod", null] }
+                            }
+                        }
+                    }
+                }
+            },
+
+            // Replace root to output full thread doc with added fields
+            { $replaceRoot: { newRoot: "$threadDoc" } }
+        ];
+
+        // Then add sorting, pagination as before
+        if (sortBy === "commentCount") {
+            pipeline.push({ $sort: { commentCount: sortOrder } });
+        } else {
+            pipeline.push({ $sort: { createdAt: sortOrder } });
+        }
+
+        pipeline.push({ $skip: skip });
+        pipeline.push({ $limit: limit });
+        const threads = await Thread.aggregate(pipeline);
+        let obj = {
+            threads,
+            total: totalCount,
+            pageNo: page,
+            size: limit
+        }
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Liked threads fetched successfully", obj);
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error.message);
+    }
+};
+
+
+
+
+
+
+const requestResetOtp = async (req, res) => {
+    try {
+        const { phoneNumber } = req.body;
+
+        // Check if user exists
+        const user = await User.findOne({ phoneNumber });
+        if (!user) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User with this phone number does not exist");
+        }
+
+        // Generate OTP & token
+        const otp = process.env.NODE_ENV !== 'production' ? '123456' : generateOTP();
+        const resetToken = generateKey();
+
+        const redisValue = JSON.stringify({ otp, phoneNumber });
+
+        // Save OTP + phoneNumber in Redis with 5 mins expiry
+        await setKeyWithTime(`reset:${resetToken}`, redisValue, 5);
+
+        // (Optionally send OTP via SMS here...)
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "OTP sent for password reset", { resetToken });
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    }
+};
+
+
+
+const verifyResetOtp = async (req, res) => {
+    try {
+        const { otp, resetToken } = req.body;
+
+        const redisData = await getKey(`reset:${resetToken}`);
+
+        if (redisData.statusCode !== CONSTANTS.SUCCESS) {
+            return apiErrorRes(
+                HTTP_STATUS.UNAUTHORIZED,
+                res,
+                "Reset token expired or invalid"
+            );
+        }
+
+        const { otp: storedOtp, phoneNumber } = JSON.parse(redisData.data);
+
+        if (otp !== storedOtp) {
+            return apiErrorRes(
+                HTTP_STATUS.UNAUTHORIZED,
+                res,
+                "Invalid OTP"
+            );
+        }
+
+        // ✅ Mark as verified for password reset
+        await setKeyWithTime(`reset-verified:${phoneNumber}`, 'true', 10 * 60); // 10 mins
+        await removeKey(`reset:${resetToken}`);
+
+        return apiSuccessRes(
+            HTTP_STATUS.OK,
+            res,
+            "OTP verified successfully",
+            { phoneNumber }
+        );
+    } catch (error) {
+        return apiErrorRes(
+            HTTP_STATUS.INTERNAL_SERVER_ERROR,
+            res,
+            error.message
+        );
+    }
+};
+
+
+
+const resetPassword = async (req, res) => {
+    try {
+        const { phoneNumber, newPassword, confirmPassword } = req.body;
+
+        // ✅ Check if phoneNumber was verified
+        const isVerified = await getKey(`reset-verified:${phoneNumber}`);
+        if (isVerified.statusCode !== CONSTANTS.SUCCESS) {
+            return apiErrorRes(
+                HTTP_STATUS.UNAUTHORIZED,
+                res,
+                "OTP not verified or session expired"
+            );
+        }
+
+        // ✅ Validate passwords
+        if (!newPassword || !confirmPassword || newPassword !== confirmPassword) {
+            return apiErrorRes(
+                HTTP_STATUS.BAD_REQUEST,
+                res,
+                "New password and confirm password must match"
+            );
+        }
+
+        // ✅ Update password
+        const user = await User.findOne({ phoneNumber });
+        if (!user) {
+            return apiErrorRes(
+                HTTP_STATUS.NOT_FOUND,
+                res,
+                "User not found"
+            );
+        }
+
+        user.password = newPassword;
+        await user.save(); // triggers pre('save') to hash
+
+        await removeKey(`reset-verified:${phoneNumber}`);
+
+        return apiSuccessRes(
+            HTTP_STATUS.OK,
+            res,
+            "Password has been reset successfully"
+        );
+    } catch (error) {
+        return apiErrorRes(
+            HTTP_STATUS.INTERNAL_SERVER_ERROR,
+            res,
+            error.message
+        );
+    }
+};
+
+
+
+
+
+
+
+
+
+
+
 
 
 //upload api 
@@ -403,13 +743,22 @@ router.post('/completeRegistration', perApiLimiter(), upload.single('file'), val
 //login 
 router.post('/login', perApiLimiter(), upload.none(), validateRequest(loginSchema), login);
 
-//Follow
+
+//RESET PASSWORD 
+router.post('/requestResetOtp', perApiLimiter(), upload.none(), validateRequest(requestResetOtpSchema), requestResetOtp);
+router.post('/verifyResetOtp', perApiLimiter(), upload.none(), validateRequest(verifyResetOtpSchema), verifyResetOtp);
+router.post('/resetPassword', perApiLimiter(), upload.none(), validateRequest(resetPasswordSchema), resetPassword);
+
+
+
+
+
+//Follow //Like
 router.post('/follow', perApiLimiter(), upload.none(), validateRequest(followSchema), follow);
 router.post('/threadlike', perApiLimiter(), upload.none(), validateRequest(threadLikeSchema), threadlike);
-
-
-
-
+router.post('/productLike', perApiLimiter(), upload.none(), validateRequest(productLikeSchema), productLike);
+router.get('/getLikedProducts', perApiLimiter(), upload.none(), getLikedProducts)
+router.get('/getLikedThreads', perApiLimiter(), upload.none(), getLikedThreads)
 
 
 module.exports = router;

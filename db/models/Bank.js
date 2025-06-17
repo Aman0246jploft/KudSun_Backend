@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const { trim } = require("validator");
+
 const Schema = mongoose.Schema;
 
 
