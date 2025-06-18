@@ -3,7 +3,7 @@ const express = require('express');
 const multer = require('multer');
 const upload = multer();
 const router = express.Router();
-const { Thread, ThreadComment, SellProduct, Bid } = require('../../db');
+const { Thread, ThreadComment, SellProduct, Bid, Follow, ThreadLike } = require('../../db');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const { apiErrorRes, apiSuccessRes, toObjectId } = require('../../utils/globalFunction');
 const HTTP_STATUS = require('../../utils/statusCode');
@@ -68,29 +68,6 @@ const addThread = async (req, res) => {
 };
 
 
-// Get all threads
-const getAllThreads = async (req, res) => {
-    try {
-        const threads = await Thread.find({ isDeleted: false }).sort({ createdAt: -1 });
-        return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, threads);
-    } catch (error) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
-    }
-};
-
-
-// Get single thread by ID
-const getThreadById = async (req, res) => {
-    try {
-        const thread = await Thread.findOne({ _id: req.params.id, isDeleted: false });
-        if (!thread) return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Thread not found");
-        return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, thread);
-    } catch (error) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
-    }
-};
-
-
 // Get my threads
 const getThreadByUserId = async (req, res) => {
     try {
@@ -149,85 +126,6 @@ const getThreadByUserId = async (req, res) => {
     }
 };
 
-
-
-
-// Update thread
-const updateThread = async (req, res) => {
-    try {
-        const thread = await Thread.findOne({ _id: req.params.id, userId: req.user.userId, isDeleted: false });
-        if (!thread) return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Thread not found");
-
-        const {
-            title,
-            description,
-            budgetFlexible,
-            min,
-            max,
-            tags
-        } = req.body;
-
-        if (title) thread.title = title;
-        if (description) thread.description = description;
-        if (budgetFlexible !== undefined) thread.budgetFlexible = budgetFlexible === 'true';
-        if (budgetFlexible !== 'true') {
-            thread.budgetRange = {
-                min: Number(min),
-                max: Number(max)
-            };
-        }
-
-        if (tags) {
-            thread.tags = tags.split(',').map(tag => tag.trim()).filter(Boolean);
-        }
-
-        if (req.files && req.files.length > 0) {
-            let photoUrls = [];
-            for (const file of req.files) {
-                const imageUrl = await uploadImageCloudinary(file, 'thread-photos');
-                if (imageUrl) photoUrls.push(imageUrl);
-            }
-            thread.photos = photoUrls;
-        }
-
-        const updated = await thread.save();
-        return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, updated);
-    } catch (error) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
-    }
-};
-
-
-// Close thread
-const closeThread = async (req, res) => {
-    try {
-        const thread = await Thread.findOne({ _id: req.params.id, userId: req.user.userId });
-        if (!thread) return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Thread not found");
-
-        thread.isClosed = true;
-        await thread.save();
-
-        return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, thread);
-    } catch (error) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
-    }
-};
-
-
-// Soft delete
-const deleteThread = async (req, res) => {
-    try {
-        const thread = await Thread.findOne({ _id: req.params.id, userId: req.user.userId });
-        if (!thread) return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Thread not found");
-
-        thread.isDeleted = true;
-        await thread.save();
-
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Thread deleted successfully", thread);
-    } catch (error) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
-    }
-};
 
 
 const addComment = async (req, res) => {
@@ -325,31 +223,37 @@ const associatedProductByThreadId = async (req, res) => {
 
 
 
-
-
 // GET /api/comments/:threadId
 const getThreadComments = async (req, res) => {
     try {
         const { threadId } = req.params;
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
+        const page = parseInt(req.query.pageNo) || 1;
+        const limit = parseInt(req.query.size) || 10;
         const skip = (page - 1) * limit;
 
-        // Fetch top-level comments (parent: null)
+        // Fetch top-level comments
         const comments = await ThreadComment.find({ thread: toObjectId(threadId), parent: null })
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit)
-            .populate('author', 'username profilePic') // You can add more user fields
+            .populate('author', 'username profilePic')
             .populate('associatedProducts')
             .lean();
 
         const commentIds = comments.map(comment => comment._id);
 
-        // Fetch 1 child reply for each top-level comment
+        // Aggregation for replies with associatedProducts populated
         const replies = await ThreadComment.aggregate([
             { $match: { parent: { $in: commentIds } } },
             { $sort: { createdAt: 1 } },
+            {
+                $lookup: {
+                    from: 'SellProduct', // make sure this is the correct collection name
+                    localField: 'associatedProducts',
+                    foreignField: '_id',
+                    as: 'associatedProducts'
+                }
+            },
             {
                 $group: {
                     _id: "$parent",
@@ -377,20 +281,17 @@ const getThreadComments = async (req, res) => {
             };
         });
 
-        return res.status(200).json({
-            success: true,
-            data: enrichedComments,
-            pagination: {
-                page,
-                limit,
-            },
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Comments fetched successfully", {
+            pageNo: page,
+            size: limit,
+            products: enrichedComments,
         });
     } catch (err) {
         console.error('Error fetching comments:', err);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
-
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
     }
 };
+
 
 
 
@@ -473,16 +374,139 @@ const getCommentByParentId = async (req, res) => {
 
 
 
+const getThreads = async (req, res) => {
+    try {
+        let {
+            pageNo = 1,
+            size = 10,
+            keyword = '',
+            categoryId,
+            subCategoryId
+        } = req.query;
+
+        let page = parseInt(pageNo);
+        let limit = parseInt(size);
+
+        const filters = { isDeleted: false };
+
+        if (categoryId && mongoose.Types.ObjectId.isValid(categoryId)) {
+            filters.categoryId = categoryId;
+        }
+
+        if (subCategoryId && mongoose.Types.ObjectId.isValid(subCategoryId)) {
+            filters.subCategoryId = subCategoryId;
+        }
+
+        if (keyword?.trim()) {
+            filters.title = { $regex: keyword.trim(), $options: 'i' };
+        }
+
+        const threads = await Thread.find(filters)
+            .populate('userId', 'userName profileImage isLive is_Id_verified')
+            .populate('categoryId', 'name') // populate but remove later
+            .populate('subCategoryId', 'name') // populate but remove later
+            .sort({ createdAt: -1 })
+            .skip((page - 1) * limit)
+            .limit(limit)
+            .select('-createdAt -updatedAt -__v')
+            .lean();
+
+        const threadIds = threads.map(t => t._id);
+        const userIds = [...new Set(threads.map(t => t.userId?._id?.toString()).filter(Boolean))];
+
+        const [followerCounts, commentCounts, likeCounts, productCounts] = await Promise.all([
+            Follow.aggregate([
+                { $match: { userId: { $in: userIds.map(id => toObjectId(id)) }, isDeleted: false, isDisable: false } },
+                { $group: { _id: '$userId', count: { $sum: 1 } } }
+            ]),
+            ThreadComment.aggregate([
+                { $match: { thread: { $in: threadIds }, parent: null } },
+                { $group: { _id: '$thread', count: { $sum: 1 } } }
+            ]),
+            ThreadLike.aggregate([
+                { $match: { threadId: { $in: threadIds }, isDeleted: false, isDisable: false } },
+                { $group: { _id: '$threadId', count: { $sum: 1 } } }
+            ]),
+            ThreadComment.aggregate([
+                { $match: { thread: { $in: threadIds }, associatedProducts: { $exists: true, $not: { $size: 0 } } } },
+                {
+                    $group: {
+                        _id: '$thread',
+                        productSet: { $addToSet: '$associatedProducts' }
+                    }
+                },
+                {
+                    $project: {
+                        count: {
+                            $size: {
+                                $reduce: {
+                                    input: '$productSet',
+                                    initialValue: [],
+                                    in: { $setUnion: ['$$value', '$$this'] }
+                                }
+                            }
+                        }
+                    }
+                }
+            ])
+        ]);
+
+        const followerMap = Object.fromEntries(followerCounts.map(f => [f._id.toString(), f.count]));
+        const commentMap = Object.fromEntries(commentCounts.map(c => [c._id.toString(), c.count]));
+        const likeMap = Object.fromEntries(likeCounts.map(l => [l._id.toString(), l.count]));
+        const productMap = Object.fromEntries(productCounts.map(p => [p._id.toString(), p.count]));
+
+        const enrichedThreads = threads.map(thread => {
+            const tid = thread._id.toString();
+            const uid = thread.userId?._id?.toString() || '';
+
+            // Remove populated category data
+            delete thread.categoryId;
+            delete thread.subCategoryId;
+
+            return {
+                ...thread,
+                totalFollowers: followerMap[uid] || 0,
+                totalComments: commentMap[tid] || 0,
+                totalLikes: likeMap[tid] || 0,
+                totalAssociatedProducts: productMap[tid] || 0
+            };
+        });
+
+        const total = await Thread.countDocuments(filters);
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Products fetched successfully", {
+            pageNo: page,
+            size: limit,
+            total: total,
+            products: enrichedThreads,
+        });
+
+    } catch (error) {
+        console.error('Error in getThreads:', error);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Something went wrong");
+
+    }
+};
+
 //thread
 router.post('/create', perApiLimiter(), upload.array('files', 10), addThread);
 router.post('/getThreadByUserId', perApiLimiter(), getThreadByUserId);
 
+
+//List api for the Home Screen // product controller
+router.get('/getThreads', perApiLimiter(), upload.none(), getThreads);
 
 //comment 
 router.post('/addComment', perApiLimiter(), upload.array('files', 2), addComment);
 router.post('/associatedProductByThreadId/:threadId', perApiLimiter(), upload.none(), associatedProductByThreadId);
 router.get('/getThreadComments/:threadId', perApiLimiter(), getThreadComments);
 router.get('/getCommentByParentId/:parentId', perApiLimiter(), upload.none(), getCommentByParentId);
+
+
+
+
+
 
 
 module.exports = router;
