@@ -14,7 +14,7 @@ app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 app.use(express.json());
 app.use(jwtVerification())
-app.use(requestLogger);
+// app.use(requestLogger);
 
 // Loop through the controllers and register routes
 for (const [route, controller] of Object.entries(controllers)) {
