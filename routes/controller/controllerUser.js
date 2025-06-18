@@ -163,8 +163,19 @@ const saveCategories = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Missing onboarding session");
         }
         const parsed = JSON.parse(data.data);
-        parsed.categories = categories;
 
+
+        let categoriesArray = [];
+        if (req.body.categories) {
+            const raw = Array.isArray(req.body.categories)
+                ? req.body.categories
+                : [req.body.categories];
+            // Clean array: remove empty strings or invalid ObjectId formats
+            categoriesArray = raw
+                .map(id => id.trim?.()) // optional chaining for safety
+        }
+
+        parsed.categories = categoriesArray;
         await setKeyNoTime(`onboard:${phoneNumber}`, JSON.stringify(parsed));
         return apiSuccessRes(HTTP_STATUS.OK, res, "Categories saved", { phoneNumber, categories });
     } catch (err) {
@@ -738,7 +749,7 @@ router.post('/upload', upload.single('file'), uploadfile);
 router.post('/requestOtp', perApiLimiter(), upload.none(), validateRequest(mobileLoginSchema), requestOtp);
 router.post('/verifyOtp', perApiLimiter(), upload.none(), validateRequest(otpVerification), verifyOtp);
 router.post('/saveEmailPassword', perApiLimiter(), upload.none(), validateRequest(saveEmailPasswords), saveEmailPassword);
-router.post('/saveCategories', perApiLimiter(), upload.none(), validateRequest(categorySchema), saveCategories);
+router.post('/saveCategories', perApiLimiter(), upload.none(), saveCategories);
 router.post('/completeRegistration', perApiLimiter(), upload.single('file'), validateRequest(completeRegistrationSchema), completeRegistration);
 //login 
 router.post('/login', perApiLimiter(), upload.none(), validateRequest(loginSchema), login);

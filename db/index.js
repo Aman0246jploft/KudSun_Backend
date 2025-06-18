@@ -30,7 +30,9 @@ module.exports = {
     Dispute: require("./models/Dispute"),
     Bank: require("./models/Bank"),
     SellerVerification: require("./models/SellerVerification"),
-    ProductReview:require("./models/ProductReview"),
+    ProductReview: require("./models/ProductReview"),
+    ContactUs: require("./models/ContactUs"),
+    AccountVerification: require("./models/AccountVerification"),
     //rbac---->
     AppSetting: require('./models/AppSetting'),
     Module: require("./models/Rbac/Module"),

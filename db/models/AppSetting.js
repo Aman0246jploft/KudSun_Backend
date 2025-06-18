@@ -10,7 +10,8 @@ let AppSettingSchema = new Schema({
     key: {
         type: String,
         unique: true,
-        require: true
+        require: true,
+        lowercase: true
     },
     value: {
         type: String,

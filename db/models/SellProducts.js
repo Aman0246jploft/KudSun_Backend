@@ -95,6 +95,12 @@ const SellProductsSchema = new Schema({
 }, {
     timestamps: true
 });
+
+SellProductsSchema.index({ saleType: 1, isDeleted: 1, isDisable: 1 });
+SellProductsSchema.index({ categoryId: 1, subCategoryId: 1 });
+SellProductsSchema.index({ "specifics.valueId": 1 });
+SellProductsSchema.index({ tags: 1 });
+SellProductsSchema.index({ title: "text", description: "text", tags: "text" });
 SellProductsSchema.pre('save', function (next) {
     if (this.saleType === SALE_TYPE.FIXED && !this.fixedPrice) {
         return next(new Error("Fixed price is required when saleType is 'fixed'"));

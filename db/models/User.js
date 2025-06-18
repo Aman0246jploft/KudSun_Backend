@@ -76,6 +76,10 @@ const UserSchema = new Schema({
     is_Verified_Seller: {
         type: Boolean,
         default: false
+    },
+    is_Id_verified: {
+        type: Boolean,
+        default: false
     }
 
 }, {
