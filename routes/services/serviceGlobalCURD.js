@@ -125,7 +125,7 @@ const updateFieldById = async (Model, id, fieldName, value) => {
 
 
 
-// Global utility for keyword search
+// Global utility for keyWord search
 const buildSearchQuery = (keyWord = '', searchFields = []) => {
     if (!keyWord || !Array.isArray(searchFields) || searchFields.length === 0) return null;
 

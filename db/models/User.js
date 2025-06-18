@@ -80,6 +80,10 @@ const UserSchema = new Schema({
     is_Id_verified: {
         type: Boolean,
         default: false
+    },
+    isLive: {
+        type: Boolean,
+        default: false
     }
 
 }, {

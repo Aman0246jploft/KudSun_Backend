@@ -1,5 +1,4 @@
 const CONSTANTS = require('./constants');
-const moment = require("moment");
 const bcrypt = require('bcryptjs');
 const { default: mongoose } = require('mongoose');
 
@@ -126,6 +125,35 @@ function parseItems(rawItems) {
   throw new Error('Unsupported items format');
 }
 
+
+// utils/timeUtils.js (example location)
+
+function formatTimeRemaining(ms) {
+  if (ms <= 0) return "0s";
+
+  const totalSeconds = Math.floor(ms / 1000);
+
+  const years = Math.floor(totalSeconds / (365 * 24 * 60 * 60));
+  const months = Math.floor((totalSeconds % (365 * 24 * 60 * 60)) / (30 * 24 * 60 * 60));
+  const days = Math.floor((totalSeconds % (30 * 24 * 60 * 60)) / (24 * 60 * 60));
+  const hours = Math.floor((totalSeconds % (24 * 60 * 60)) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  let timeStr = "";
+  if (years > 0) timeStr += `${years}y `;
+  if (months > 0) timeStr += `${months}mo `;
+  if (days > 0) timeStr += `${days}d `;
+  if (hours > 0) timeStr += `${hours}h `;
+  if (minutes > 0) timeStr += `${minutes}m `;
+  if (timeStr === "") timeStr += `${seconds}s`; // Only seconds left
+  else if (years === 0 && months === 0 && days === 0 && hours === 0 && minutes === 0)
+    timeStr += `${seconds}s`; // add seconds only when others are zero
+
+  return timeStr.trim();
+}
+
+
 module.exports = {
   resultDb,
   generateOTP,
@@ -134,5 +162,6 @@ module.exports = {
   generateKey,
   verifyPassword,
   toObjectId,
-  parseItems
+  parseItems,
+  formatTimeRemaining
 };
