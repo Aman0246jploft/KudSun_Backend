@@ -326,6 +326,7 @@ const showNormalProducts = async (req, res) => {
 };
 
 
+
 router.post('/addSellerProduct', perApiLimiter(), upload.array('files', 10), addSellerProduct);
 //List api
 router.get('/showNormalProducts', perApiLimiter(), showNormalProducts);
