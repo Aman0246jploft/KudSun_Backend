@@ -17,6 +17,13 @@ const publicRoutes = [
     '/api/v1/user/requestResetOtp',
     '/api/v1/user/verifyResetOtp',
     '/api/v1/user/resetPassword',
+    `/api/v1/appsetting/termAndPolicy`,
+    `/api/v1/appsetting/auctionRule`,
+    `/api/v1/appsetting/getFAQs`,
+    `/api/v1/contactUs/create`
+
+
+    
 ];
 
 function jwtVerification() {

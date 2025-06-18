@@ -9,8 +9,10 @@ module.exports = {
     order: require("./controller/contorllerOrder"),
     dispute: require("./controller/controllerDispute"),
     bank: require("./controller/controllerBank"),
-    sellerVerification:require("./controller/controllerSellerVerification"),
-    productReview:require("./controller/controllerProductreview"),
+    sellerVerification: require("./controller/controllerSellerVerification"),
+    productReview: require("./controller/controllerProductreview"),
+    contactUs: require("./controller/controllerContactUs"),
+    idVerifiy: require("./controller/controllerAccountVerification"),
 
 
 

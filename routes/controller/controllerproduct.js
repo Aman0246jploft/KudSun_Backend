@@ -11,9 +11,6 @@ const { uploadImageCloudinary } = require('../../utils/cloudinary');
 const CONSTANTS_MSG = require('../../utils/constantsMessage');
 const { SALE_TYPE, DeliveryType } = require('../../utils/Role');
 
-
-
-
 const addSellerProduct = async (req, res) => {
     try {
         const {
@@ -210,7 +207,68 @@ const addSellerProduct = async (req, res) => {
 
 
 
+
+
+
+
+
+
+
+
+
+
+const showNormalProducts = async (req, res) => {
+  try {
+    // Step 1: Find all ordered productIds from orders (exclude cancelled/returned/failed)
+    const orderedProductIds = await Order.aggregate([
+      {
+        $match: {
+          status: { $nin: ['CANCELLED', 'RETURNED', 'FAILED'] },
+          isDeleted: false
+        }
+      },
+      { $unwind: "$items" },
+      {
+        $group: {
+          _id: null,
+          productIds: { $addToSet: "$items.productId" }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          productIds: 1
+        }
+      }
+    ]);
+
+    const soldProductIds = orderedProductIds?.[0]?.productIds || [];
+
+    // Step 2: Fetch only available (unsold) fixed-price products that are not disabled/deleted
+    const products = await SellProduct.find({
+      saleType: 'fixed',
+      isDisable: false,
+      isDeleted: false,
+      _id: { $nin: soldProductIds }
+    })
+      .select("title description fixedPrice productImages condition categoryId userId createdAt")
+      .populate("categoryId", "name")
+      .populate("userId", "username avatar")
+      .sort({ createdAt: -1 })
+      .limit(50); // Optional limit
+
+    return apiSuccessRes(HTTP_STATUS.OK, res, "Unsold products listed", products);
+  } catch (error) {
+    console.error("Error listing normal products:", error);
+    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+  }
+};
+
+
 router.post('/addSellerProduct', perApiLimiter(), upload.array('files', 10), addSellerProduct);
+//List api
+
+
 
 
 
