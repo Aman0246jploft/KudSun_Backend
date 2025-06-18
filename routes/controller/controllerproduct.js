@@ -3,13 +3,13 @@ const express = require('express');
 const multer = require('multer');
 const upload = multer();
 const router = express.Router();
-const { SellProduct } = require('../../db');
+const { SellProduct, Order } = require('../../db');
 const perApiLimiter = require('../../middlewares/rateLimiter');
-const { apiErrorRes, apiSuccessRes } = require('../../utils/globalFunction');
+const { apiErrorRes, apiSuccessRes, toObjectId } = require('../../utils/globalFunction');
 const HTTP_STATUS = require('../../utils/statusCode');
 const { uploadImageCloudinary } = require('../../utils/cloudinary');
 const CONSTANTS_MSG = require('../../utils/constantsMessage');
-const { SALE_TYPE, DeliveryType } = require('../../utils/Role');
+const { SALE_TYPE, DeliveryType, ORDER_STATUS } = require('../../utils/Role');
 
 const addSellerProduct = async (req, res) => {
     try {
@@ -218,55 +218,120 @@ const addSellerProduct = async (req, res) => {
 
 
 const showNormalProducts = async (req, res) => {
-  try {
-    // Step 1: Find all ordered productIds from orders (exclude cancelled/returned/failed)
-    const orderedProductIds = await Order.aggregate([
-      {
-        $match: {
-          status: { $nin: ['CANCELLED', 'RETURNED', 'FAILED'] },
-          isDeleted: false
-        }
-      },
-      { $unwind: "$items" },
-      {
-        $group: {
-          _id: null,
-          productIds: { $addToSet: "$items.productId" }
-        }
-      },
-      {
-        $project: {
-          _id: 0,
-          productIds: 1
-        }
-      }
-    ]);
+    try {
+        const {
+            pageNo = 1,
+            size = 20,
+            keyword,
+            categoryId,
+            subCategoryId,
+            tags,
+            specifics
+        } = req.query;
 
-    const soldProductIds = orderedProductIds?.[0]?.productIds || [];
+        const page = parseInt(pageNo);
+        const limit = parseInt(size);
+        const skip = (page - 1) * limit;
 
-    // Step 2: Fetch only available (unsold) fixed-price products that are not disabled/deleted
-    const products = await SellProduct.find({
-      saleType: 'fixed',
-      isDisable: false,
-      isDeleted: false,
-      _id: { $nin: soldProductIds }
-    })
-      .select("title description fixedPrice productImages condition categoryId userId createdAt")
-      .populate("categoryId", "name")
-      .populate("userId", "username avatar")
-      .sort({ createdAt: -1 })
-      .limit(50); // Optional limit
+        // Step 1: Get sold product IDs (products part of confirmed/pending orders etc.)
+        const soldProductResult = await Order.aggregate([
+            {
+                $match: {
+                    status: {
+                        $in: [ORDER_STATUS.PENDING,
+                        ORDER_STATUS.CONFIRMED,
+                        ORDER_STATUS.SHIPPED,
+                        ORDER_STATUS.DELIVERED,
+                        ORDER_STATUS.RETURNED]
+                    },
+                    isDeleted: false,
+                },
+            },
+            { $unwind: "$items" },
+            {
+                $group: {
+                    _id: null,
+                    soldProductIds: { $addToSet: "$items.productId" },
+                },
+            },
+            {
+                $project: {
+                    _id: 0,
+                    soldProductIds: 1,
+                },
+            },
+        ]);
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Unsold products listed", products);
-  } catch (error) {
-    console.error("Error listing normal products:", error);
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
-  }
+        const soldProductIds = soldProductResult[0]?.soldProductIds || [];
+
+        // Step 2: Build the query filter
+        const filter = {
+            saleType: SALE_TYPE.FIXED,
+            isDeleted: false,
+            isDisable: false,
+            _id: { $nin: soldProductIds }
+        };
+
+        if (keyword) {
+            filter.$or = [
+                { title: { $regex: keyword, $options: "i" } },
+                { description: { $regex: keyword, $options: "i" } },
+                { tags: { $regex: keyword, $options: "i" } },
+            ];
+        }
+
+        if (categoryId && categoryId !== "") {
+            filter.categoryId = toObjectId(categoryId);
+        }
+
+        if (subCategoryId && subCategoryId !== "") {
+            filter.subCategoryId = toObjectId(subCategoryId);
+        }
+
+        if (tags) {
+            const tagArray = Array.isArray(tags) ? tags : tags.split(',');
+            filter.tags = { $in: tagArray };
+        }
+
+        if (specifics) {
+            const parsedSpecifics = Array.isArray(specifics) ? specifics : [specifics];
+            filter['specifics.valueId'] = { $all: parsedSpecifics.map(id => toObjectId(id)) };
+        }
+
+        // Step 3: Query with pagination, sorting, projection
+        const [products, total] = await Promise.all([
+            SellProduct.find(filter)
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .select("title fixedPrice productImages condition  userId  tags originPriceView originPrice")
+                .populate("categoryId", "name")
+                .populate("userId", "userName profileImage is_Id_verified")
+                .lean(),
+
+            SellProduct.countDocuments(filter)
+        ]);
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Products fetched successfully", {
+            pageNo: page,
+            size: limit,
+            total,
+            products
+        });
+
+    } catch (error) {
+        console.error("showNormalProducts error:", error);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Something went wrong");
+    }
 };
 
 
 router.post('/addSellerProduct', perApiLimiter(), upload.array('files', 10), addSellerProduct);
 //List api
+router.get('/showNormalProducts', perApiLimiter(), showNormalProducts);
+// router.get('/showAuctionProducts', perApiLimiter(), showAuctionProducts);
+
+
 
 
 
