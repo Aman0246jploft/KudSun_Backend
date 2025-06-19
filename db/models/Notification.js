@@ -1,67 +1,72 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
+const { NOTIFICATION_TYPES } = require('../../utils/Role');
+const { Schema } = mongoose;
 
-const notificationSchema = new mongoose.Schema(
-    {
-        recipient: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User',
-            required: true,
-        },
-        sender: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User',
-        },
-        key: {
-            type: String,
-            enum: [
-                'like',
-                'comment',
-                'reply',
-                'follow',
-                'mention',
-                'bid',
-                'dispute',
-                'verification',
-                'system',
-                'custom',
-            ],
-            required: true,
-        },
-        targetId: {
-            type: mongoose.Schema.Types.ObjectId,
-            required: false, // optional for system/custom messages
-        },
-        title: {
-            type: String,
-            default: '',
-        },
-        message: {
-            type: String,
-            required: true,
-        },
-        redirectUrl: {
-            type: String, // e.g., `/thread/${threadId}` or `/dispute/${disputeId}`
-            required: false,
-        },
-        image: {
-            type: String, // optional: for user avatar, item image, etc.
-        },
-        isRead: {
-            type: Boolean,
-            default: false,
-        },
-        isDeleted: {
-            type: Boolean,
-            default: false,
-        },
-        metadata: {
-            type: mongoose.Schema.Types.Mixed,
-            default: {},
-        },
+const NotificationSchema = new Schema({
+    // The recipient user of this notification
+    recipientId: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+        required: true,
+        index: true,
     },
-    {
-        timestamps: true,
-    }
-);
 
-export default mongoose.model('Notification', notificationSchema, "Notification");
+    // The category/type of the notification (user, chat, etc)
+    type: {
+        type: String,
+        required: true,
+        enum: Object.values(NOTIFICATION_TYPES)
+    },
+
+    // Conditional related fields depending on type
+    userId: {  // For type === 'user'
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+    },
+    chatId: {  // For type === 'chat'
+        type: Schema.Types.ObjectId,
+        ref: 'Chat',
+    },
+    orderId: { // For type === 'order'
+        type: Schema.Types.ObjectId,
+        ref: 'Order',
+    },
+
+    title: {
+        type: String,
+        required: true,
+    },
+    message: {
+        type: String,
+        required: true,
+    },
+
+    read: {
+        type: Boolean,
+        default: false,
+        index: true,
+    },
+
+    meta: {
+        type: Schema.Types.Mixed,
+    },
+
+    createdAt: {
+        type: Date,
+        default: Date.now,
+        index: true,
+    },
+
+    updatedAt: {
+        type: Date,
+        default: Date.now,
+    }
+});
+
+// Pre-save hook to update updatedAt
+NotificationSchema.pre('save', function (next) {
+    this.updatedAt = Date.now();
+    next();
+});
+
+module.exports = mongoose.model('Notification', NotificationSchema);
