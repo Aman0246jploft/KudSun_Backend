@@ -249,7 +249,24 @@ const completeRegistration = async (req, res) => {
         await removeKey(`onboard:${phoneNumber}`);
         await removeKey(`verified:${phoneNumber}`);
 
-        return apiSuccessRes(HTTP_STATUS.CREATED, res, "Registration completed", user);
+        const payload = {
+            email: user.email,
+            userId: user._id,
+            roleId: user.roleId,
+            role: user.role
+        };
+
+
+        const token = signToken(payload);
+        const output = {
+            token,
+            userId: user._id,
+            roleId: user.roleId,
+            role: user.role
+        };
+
+
+        return apiSuccessRes(HTTP_STATUS.CREATED, res, "Registration completed", output);
     } catch (err) {
         return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, err.message);
     }

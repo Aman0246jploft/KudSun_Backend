@@ -137,7 +137,7 @@ function setupSocket(server) {
             try {
                 const userId = socket.user.userId;
                 if (!roomId) return;
-console.log("userIduserId",userId)
+
                 // Update messages in this room that are not already seen by this user
                 const result = await ChatMessage.updateMany(
                     {
@@ -147,7 +147,7 @@ console.log("userIduserId",userId)
                     },
                     { $addToSet: { seenBy: toObjectId(userId) } }
                 );
-console.log("resultresultresult",result)
+                console.log("resultresultresult", result, roomId, userId)
 
                 if (result.modifiedCount > 0) {
                     // Notify all participants in the room that messages have been seen by this user
