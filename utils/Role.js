@@ -71,6 +71,16 @@ const SELLER_PAYOUT_METHOD = {
 }
 
 
+
+const NOTIFICATION_TYPES = {
+    USER: 'user',
+    CHAT: 'chat',
+    ORDER: 'order',
+    SYSTEM: 'system',
+};
+
+
+
 module.exports = {
     roleId,
     conditions,
@@ -82,5 +92,6 @@ module.exports = {
     SHIPPING_STATUS,
     DEFAULT_AMOUNT,
     DISPUTE_STATUS,
+    NOTIFICATION_TYPES,
     SELLER_PAYOUT_METHOD
 }

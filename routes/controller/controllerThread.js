@@ -403,11 +403,16 @@ const getThreads = async (req, res) => {
             size = 10,
             keyWord = '',
             categoryId,
-            subCategoryId
+            subCategoryId,
+            userId,
+            sortBy = 'createdAt', // 'createdAt' | 'budget' | 'comments'
+            sortOrder = 'desc'    // 'asc' | 'desc'
         } = req.query;
 
         let page = parseInt(pageNo);
         let limit = parseInt(size);
+        const sortDir = sortOrder === 'asc' ? 1 : -1;
+
 
         const filters = { isDeleted: false };
 
@@ -419,15 +424,25 @@ const getThreads = async (req, res) => {
             filters.subCategoryId = subCategoryId;
         }
 
+        if (userId && mongoose.Types.ObjectId.isValid(userId)) {
+            filters.userId = userId; // 👈 filter by userId
+        }
         if (keyWord?.trim()) {
             filters.title = { $regex: keyWord.trim(), $options: 'i' };
+        }
+
+        let sortStage = {};
+        if (sortBy === 'budget') {
+            sortStage = { 'budgetRange.min': sortDir };
+        } else {
+            sortStage = { createdAt: sortDir }; // default
         }
 
         const threads = await Thread.find(filters)
             .populate('userId', 'userName profileImage isLive is_Id_verified')
             .populate('categoryId', 'name') // populate but remove later
             .populate('subCategoryId', 'name') // populate but remove later
-            .sort({ createdAt: -1 })
+            .sort(sortStage)
             .skip((page - 1) * limit)
             .limit(limit)
             .select('-createdAt -updatedAt -__v')

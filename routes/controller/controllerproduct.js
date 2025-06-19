@@ -836,6 +836,126 @@ const fetchCombinedProducts = async (req, res) => {
 };
 
 
+
+const fetchUserProducts = async (req, res) => {
+    try {
+        const {
+            pageNo = 1,
+            size = 20,
+            userId,
+            sortBy = 'createdAt', // only allowed: 'createdAt', 'price'
+            sortOrder = 'desc',   // 'asc' or 'desc'
+        } = req.query;
+
+        const page = parseInt(pageNo);
+        const limit = parseInt(size);
+        const skip = (page - 1) * limit;
+
+        // Get logged-in user ID from auth (assumes middleware sets req.user._id)
+        const requesterId = req.user?._id?.toString();
+
+        const isSelfProfile = userId && requesterId && userId === requesterId;
+
+        // Base filter
+        let filter = {};
+
+        if (userId) {
+            filter.userId = toObjectId(userId);
+        }
+
+        // For other users, show all products even if sold, deleted, or disabled
+        if (isSelfProfile) {
+            filter.isDeleted = false;
+            filter.isDisable = false;
+        }
+
+        // Allowed sorting options
+        let sortConfig = {};
+        if (sortBy === 'price') {
+            // Sort by normalized price
+            sortConfig = { fixedPrice: sortOrder === 'desc' ? -1 : 1 };
+        } else {
+            // Default or createdAt
+            sortConfig = { createdAt: sortOrder === 'desc' ? -1 : 1 };
+        }
+
+        // Get sold product IDs
+        let soldProductIds = [];
+        const soldProductResult = await Order.aggregate([
+            {
+                $match: {
+                    status: {
+                        $in: [
+                            ORDER_STATUS.PENDING,
+                            ORDER_STATUS.CONFIRMED,
+                            ORDER_STATUS.SHIPPED,
+                            ORDER_STATUS.DELIVERED,
+                            ORDER_STATUS.RETURNED
+                        ],
+                    },
+                    isDeleted: false
+                }
+            },
+            { $unwind: "$items" },
+            {
+                $group: {
+                    _id: null,
+                    soldProductIds: { $addToSet: "$items.productId" }
+                }
+            },
+            {
+                $project: {
+                    _id: 0,
+                    soldProductIds: 1
+                }
+            }
+        ]);
+        soldProductIds = soldProductResult[0]?.soldProductIds || [];
+
+        // Fetch Products
+        const [products, total] = await Promise.all([
+            SellProduct.find(filter)
+                .select(`
+                    title 
+                    fixedPrice 
+                    saleType 
+                    condition 
+                    productImages 
+                    auctionSettings 
+                    createdAt
+                `)
+                .sort(sortConfig)
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+            SellProduct.countDocuments(filter)
+        ]);
+
+        // Enhance products with isSold flag
+        const finalProducts = products.map(product => {
+            const isSold = soldProductIds.some(id => id.toString() === product._id.toString());
+
+            return {
+                ...product,
+                isSold
+            };
+        });
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "User products fetched successfully", {
+            pageNo: page,
+            size: limit,
+            total,
+            products: finalProducts
+        });
+    } catch (error) {
+        console.error("fetchUserProducts error:", error);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Something went wrong");
+    }
+};
+
+
+
+
 router.post('/addSellerProduct', perApiLimiter(), upload.array('files', 10), addSellerProduct);
 //List api for the Home Screen // thread controller
 router.get('/showNormalProducts', perApiLimiter(), showNormalProducts);
@@ -843,6 +963,9 @@ router.get('/showAuctionProducts', perApiLimiter(), showAuctionProducts);
 //Category detail Page
 router.get('/limited-time', perApiLimiter(), getLimitedTimeDeals);
 router.get('/fetchCombinedProducts', perApiLimiter(), fetchCombinedProducts);
+// inside userProfile
+router.get('/fetchUserProducts', perApiLimiter(), fetchUserProducts);
+
 
 
 
