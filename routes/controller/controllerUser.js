@@ -253,7 +253,9 @@ const completeRegistration = async (req, res) => {
             email: user.email,
             userId: user._id,
             roleId: user.roleId,
-            role: user.role
+            role: user.role,
+            profileImage: user.profileImage,
+            userName: user.userName
         };
 
 
@@ -262,7 +264,9 @@ const completeRegistration = async (req, res) => {
             token,
             userId: user._id,
             roleId: user.roleId,
-            role: user.role
+            role: user.role,
+            profileImage: user.profileImage,
+            userName: user.userName
         };
 
 
@@ -312,7 +316,9 @@ const login = async (req, res) => {
                 email: userCheckEmail.data.email,
                 userId: userCheckEmail.data._id,
                 roleId: userCheckEmail.data.roleId,
-                role: userCheckEmail.data.role
+                role: userCheckEmail.data.role,
+                profileImage: userCheckEmail.data.profileImage,
+                userName: userCheckEmail.data.userName
             };
 
             const token = signToken(payload);
@@ -321,7 +327,9 @@ const login = async (req, res) => {
                 token,
                 userId: userCheckEmail.data._id,
                 roleId: userCheckEmail.data.roleId,
-                role: userCheckEmail.data.role
+                role: userCheckEmail.data.role,
+                profileImage: userCheckEmail.data.profileImage,
+                userName: userCheckEmail.data.userName
             };
 
             return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, output);
