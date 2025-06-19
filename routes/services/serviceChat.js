@@ -6,7 +6,7 @@ const { resultDb } = require("../../utils/globalFunction");
 async function findOrCreateOneOnOneRoom(userId1, userId2) {
     try {
         if (!userId1 || !userId2) throw new Error('Both user IDs are required');
-
+        let isNew = false;
         // Try find existing room with exactly these two participants
         let room = await ChatRoom.findOne({
             isGroup: false,
@@ -19,9 +19,10 @@ async function findOrCreateOneOnOneRoom(userId1, userId2) {
                 participants: [userId1, userId2],
                 isGroup: false
             });
+             isNew = true;
         }
 
-        return room;
+        return {room,isNew};
     } catch (err) {
         console.log(err.message)
         return resultDb(SERVER_ERROR, err.message);

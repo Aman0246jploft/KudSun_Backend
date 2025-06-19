@@ -294,7 +294,7 @@ const showNormalProducts = async (req, res) => {
                 .sort({ createdAt: -1 })
                 .skip(skip)
                 .limit(limit)
-                .select("title fixedPrice productImages condition  userId  tags originPriceView originPrice description")
+                .select("title fixedPrice productImages condition  userId  tags originPriceView originPrice description specifics")
                 .populate("categoryId", "name")
                 .populate("userId", "userName profileImage is_Id_verified isLive")
                 .lean(),
@@ -372,7 +372,7 @@ const showAuctionProducts = async (req, res) => {
                 .sort({ 'auctionSettings.biddingEndsAt': 1 }) // Ending soonest first
                 .skip(skip)
                 .limit(limit)
-                .select("title productImages condition auctionSettings tags description")
+                .select("title productImages condition auctionSettings tags description specifics")
                 .populate("categoryId", "name")
                 .populate("userId", "userName profileImage is_Id_verified isLive")
                 .lean(),

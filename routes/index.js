@@ -13,7 +13,7 @@ module.exports = {
     productReview: require("./controller/controllerProductreview"),
     contactUs: require("./controller/controllerContactUs"),
     idVerifiy: require("./controller/controllerAccountVerification"),
-
+    // chat: require("./controller/controllerChat"),
 
 
 

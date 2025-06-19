@@ -8,6 +8,7 @@ adminCreate = async () => {
         email: "superadmin@mailinator.com",
         password: "123456",
         phoneNumber: "1234567890",
+        profileImage: null,
         roleId: roleId.SUPER_ADMIN,
     }
     try {
