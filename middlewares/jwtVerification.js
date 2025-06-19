@@ -20,7 +20,8 @@ const publicRoutes = [
     `/api/v1/appsetting/termAndPolicy`,
     `/api/v1/appsetting/auctionRule`,
     `/api/v1/appsetting/getFAQs`,
-    `/api/v1/contactUs/create`
+    `/api/v1/contactUs/create`,
+    `/api/v1/category/listCategoryNames`
 
 
     
