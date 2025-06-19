@@ -355,7 +355,7 @@ const listCategoryNames = async (req, res) => {
         };
 
         const [categories, total] = await Promise.all([
-            Category.find(query, { _id: 1, name: 1 })
+            Category.find(query, { _id: 1, name: 1,image:1 })
                 .skip(skip)
                 .limit(limit),
             Category.countDocuments(query)
