@@ -318,8 +318,6 @@ const getThreadComments = async (req, res) => {
 
 
 
-
-
 const getCommentByParentId = async (req, res) => {
     try {
         const { parentId } = req.params;
@@ -479,7 +477,7 @@ const getThreads = async (req, res) => {
         const commentMap = Object.fromEntries(commentCounts.map(c => [c._id.toString(), c.count]));
         const likeMap = Object.fromEntries(likeCounts.map(l => [l._id.toString(), l.count]));
         const productMap = Object.fromEntries(productCounts.map(p => [p._id.toString(), p.count]));
-        
+
         const enrichedThreads = threads.map(thread => {
             const tid = thread._id.toString();
             const uid = thread.userId?._id?.toString() || '';
