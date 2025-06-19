@@ -27,7 +27,7 @@ const addSellerProduct = async (req, res) => {
             shippingCharge
         } = req.body;
 
-       
+
         let specifics = [];
         let auctionSettings = {};
 
@@ -174,6 +174,8 @@ const addSellerProduct = async (req, res) => {
                 if (imageUrl) productImages.push(imageUrl);
             }
         }
+
+
 
         const productData = {
             userId: req.user?.userId,
@@ -370,7 +372,7 @@ const showAuctionProducts = async (req, res) => {
                 .sort({ 'auctionSettings.biddingEndsAt': 1 }) // Ending soonest first
                 .skip(skip)
                 .limit(limit)
-                .select("title productImages condition auctionSettings.userId tags description")
+                .select("title productImages condition auctionSettings tags description")
                 .populate("categoryId", "name")
                 .populate("userId", "userName profileImage is_Id_verified isLive")
                 .lean(),
@@ -391,6 +393,10 @@ const showAuctionProducts = async (req, res) => {
 
         products.forEach(product => {
             product.totalBidsPlaced = bidsCountMap[product._id.toString()] || 0;
+            const nowTimestamp = new Date()
+            const endTime = new Date(product.auctionSettings.biddingEndsAt).getTime();
+            const timeLeftMs = endTime - nowTimestamp;
+            product.timeRemaining = timeLeftMs > 0 ? formatTimeRemaining(timeLeftMs) : 0;
         });
 
 

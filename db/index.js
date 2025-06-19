@@ -33,6 +33,8 @@ module.exports = {
     ProductReview: require("./models/ProductReview"),
     ContactUs: require("./models/ContactUs"),
     AccountVerification: require("./models/AccountVerification"),
+    ChatRoom:require("./models/Chat/ChatRoom"),
+    ChatMessage:require("./models/Chat/ChatMessage"),
     //rbac---->
     AppSetting: require('./models/AppSetting'),
     Module: require("./models/Rbac/Module"),
