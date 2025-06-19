@@ -128,6 +128,28 @@ const getThreadByUserId = async (req, res) => {
 
 
 
+const closeThread = async (req, res) => {
+    try {
+        let { threadId } = req.params
+        let { userId } = req.user
+        let thread = await Thread.findOne({
+            _id: toObjectId(threadId), userId: toObjectId(userId)
+        })
+        if (!thread) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, CONSTANTS_MSG.THREAD_NOT_FOUND, null)
+        }
+        thread.isClosed = true
+        await thread.save()
+        return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, thread)
+
+    } catch (error) {
+        console.error(error);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
+    }
+}
+
+
+
 const addComment = async (req, res) => {
     try {
         let value = req.body
@@ -230,6 +252,7 @@ const getThreadComments = async (req, res) => {
         const page = parseInt(req.query.pageNo) || 1;
         const limit = parseInt(req.query.size) || 10;
         const skip = (page - 1) * limit;
+        const totalCount = await ThreadComment.countDocuments({ thread: toObjectId(threadId), parent: null });
 
         // Fetch top-level comments
         const comments = await ThreadComment.find({ thread: toObjectId(threadId), parent: null })
@@ -284,7 +307,8 @@ const getThreadComments = async (req, res) => {
         return apiSuccessRes(HTTP_STATUS.OK, res, "Comments fetched successfully", {
             pageNo: page,
             size: limit,
-            products: enrichedComments,
+            total: totalCount,
+            commentList: enrichedComments,
         });
     } catch (err) {
         console.error('Error fetching comments:', err);
@@ -455,10 +479,11 @@ const getThreads = async (req, res) => {
         const commentMap = Object.fromEntries(commentCounts.map(c => [c._id.toString(), c.count]));
         const likeMap = Object.fromEntries(likeCounts.map(l => [l._id.toString(), l.count]));
         const productMap = Object.fromEntries(productCounts.map(p => [p._id.toString(), p.count]));
-
+        
         const enrichedThreads = threads.map(thread => {
             const tid = thread._id.toString();
             const uid = thread.userId?._id?.toString() || '';
+            const currentUserId = req.user?.userId?.toString();
 
             // Remove populated category data
             delete thread.categoryId;
@@ -469,7 +494,8 @@ const getThreads = async (req, res) => {
                 totalFollowers: followerMap[uid] || 0,
                 totalComments: commentMap[tid] || 0,
                 totalLikes: likeMap[tid] || 0,
-                totalAssociatedProducts: productMap[tid] || 0
+                totalAssociatedProducts: productMap[tid] || 0,
+                myThread: currentUserId && uid === currentUserId
             };
         });
 
@@ -492,6 +518,8 @@ const getThreads = async (req, res) => {
 //thread
 router.post('/create', perApiLimiter(), upload.array('files', 10), addThread);
 router.post('/getThreadByUserId', perApiLimiter(), getThreadByUserId);
+router.post('/closeThread/:threadId', perApiLimiter(), closeThread);
+
 
 
 //List api for the Home Screen // product controller
