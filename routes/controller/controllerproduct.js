@@ -394,8 +394,10 @@ const showAuctionProducts = async (req, res) => {
         products.forEach(product => {
             product.totalBidsPlaced = bidsCountMap[product._id.toString()] || 0;
             const nowTimestamp = new Date()
+            const offsetMinutes = nowTimestamp.getTimezoneOffset();
+            const localNow = new Date(nowTimestamp.getTime() - offsetMinutes * 60 * 1000);
             const endTime = new Date(product.auctionSettings.biddingEndsAt).getTime();
-            const timeLeftMs = endTime - nowTimestamp;
+            const timeLeftMs = endTime - localNow;
             product.timeRemaining = timeLeftMs > 0 ? formatTimeRemaining(timeLeftMs) : 0;
         });
 
