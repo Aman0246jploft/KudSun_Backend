@@ -401,7 +401,7 @@ const getThreads = async (req, res) => {
         let {
             pageNo = 1,
             size = 10,
-            keyword = '',
+            keyWord = '',
             categoryId,
             subCategoryId
         } = req.query;
@@ -419,8 +419,8 @@ const getThreads = async (req, res) => {
             filters.subCategoryId = subCategoryId;
         }
 
-        if (keyword?.trim()) {
-            filters.title = { $regex: keyword.trim(), $options: 'i' };
+        if (keyWord?.trim()) {
+            filters.title = { $regex: keyWord.trim(), $options: 'i' };
         }
 
         const threads = await Thread.find(filters)
