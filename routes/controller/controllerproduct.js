@@ -3,7 +3,7 @@ const express = require('express');
 const multer = require('multer');
 const upload = multer();
 const router = express.Router();
-const { SellProduct, Order, Bid } = require('../../db');
+const { SellProduct, Order, Bid, SearchHistory } = require('../../db');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const { apiErrorRes, apiSuccessRes, toObjectId, formatTimeRemaining } = require('../../utils/globalFunction');
 const HTTP_STATUS = require('../../utils/statusCode');
@@ -968,6 +968,111 @@ const fetchUserProducts = async (req, res) => {
 
 
 
+const createHistory = async (req, res) => {
+    const { searchQuery } = req.query
+    const { userId } = req.user
+
+
+    if (!searchQuery) {
+        return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Search query is required")
+    }
+
+    let obj = {
+        userId,
+        searchQuery
+    }
+    const existing = await SearchHistory.findOne(query);
+
+    if (existing) {
+        // Update isDeleted/isDisable to false if needed
+        if (existing.isDeleted || existing.isDisable) {
+            existing.isDeleted = false;
+            existing.isDisable = false;
+            await existing.save();
+        }
+        return apiSuccessRes(HTTP_STATUS.CREATED, res, 'History updated');
+    }
+
+    // Else, create new record
+    const history = new SearchHistory(query);
+    await history.save();
+
+    return apiSuccessRes(HTTP_STATUS.OK, res, 'History saved');
+}
+
+
+const clearAllHistory = async (req, res) => {
+    try {
+        const { userId } = req.user;
+
+        await SearchHistory.updateMany(
+            { userId, isDeleted: false },
+            { $set: { isDeleted: true } }
+        );
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "All search history cleared");
+    } catch (error) {
+        console.error("clearAllHistory error:", error);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Internal server error");
+    }
+};
+
+const clearOneHistory = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { userId } = req.user;
+
+        const result = await SearchHistory.findOneAndUpdate(
+            { _id: id, userId, isDeleted: false },
+            { $set: { isDeleted: true } }
+        );
+
+        if (!result) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "History not found or already deleted");
+        }
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Search history item deleted");
+    } catch (error) {
+        console.error("clearOneHistory error:", error);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Internal server error");
+    }
+};
+
+
+
+const getSearchHistory = async (req, res) => {
+    try {
+        const { userId } = req.user;
+        const { pageNo = 1, size = 10 } = req.query;
+
+        const skip = (parseInt(pageNo) - 1) * parseInt(size);
+        const limit = parseInt(size);
+
+        const [history, total] = await Promise.all([
+            SearchHistory.find({ userId, isDeleted: false })
+                .sort({ updatedAt: -1 }) // optional: newest first
+                .skip(skip)
+                .limit(limit),
+            SearchHistory.countDocuments({ userId, isDeleted: false })
+        ]);
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, {
+            pageNo: parseInt(pageNo),
+            size: parseInt(size),
+            total,
+            data: history
+        }, "Fetched search history");
+    } catch (error) {
+        console.error("getSearchHistory error:", error);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Internal server error");
+    }
+};
+
+
+
+
+
+
 router.post('/addSellerProduct', perApiLimiter(), upload.array('files', 10), addSellerProduct);
 //List api for the Home Screen // thread controller
 router.get('/showNormalProducts', perApiLimiter(), showNormalProducts);
@@ -977,8 +1082,14 @@ router.get('/limited-time', perApiLimiter(), getLimitedTimeDeals);
 router.get('/fetchCombinedProducts', perApiLimiter(), fetchCombinedProducts);
 // inside userProfile
 router.get('/fetchUserProducts', perApiLimiter(), fetchUserProducts);
+//Search Panel
 
-// router.get('/productList ', perApiLimiter(), productList);
+router.post('/createHistory', perApiLimiter(), createHistory);
+router.post('/clearAllHistory', perApiLimiter(), clearAllHistory);
+router.post('/clearOneHistory/:id', perApiLimiter(), clearOneHistory);
+router.get('/getSearchHistory', perApiLimiter(), getSearchHistory);
+
+
 
 
 

@@ -22,7 +22,7 @@ const ReviewSchema = new Schema({
     reviewImages: [{
         type: String // URL to Cloudinary or other storage
     }],
-    isDisabled: { type: Boolean, default: false },
+    isDisable: { type: Boolean, default: false },
     isDeleted: { type: Boolean, default: false }
 }, {
     timestamps: true

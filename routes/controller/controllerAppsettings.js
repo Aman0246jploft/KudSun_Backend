@@ -43,7 +43,7 @@ const getFAQs = async (req, res) => {
         $match: {
           key: { $regex: /^faq\d+$/, $options: 'i' }, // match faq followed by digits
           isDeleted: false,
-          isDisabled: false,
+          isDisable: false,
         },
       },
       {
