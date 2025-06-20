@@ -26,7 +26,9 @@ const publicRoutes = [
     `/api/v1/user/loginStepTwo`,
     `/api/v1/user/loginStepThree`,
     `/api/v1/user/resendLoginOtp`,
-    `/api/v1/user/resendResetOtp`
+    `/api/v1/user/resendResetOtp`,
+    `/api/v1/user/resendOtp`,
+
 
 
 

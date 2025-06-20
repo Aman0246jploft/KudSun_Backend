@@ -3,19 +3,20 @@ const express = require('express');
 const multer = require('multer');
 const upload = multer();
 const router = express.Router();
-const { User, Follow, ThreadLike, ProductLike, SellProduct, Thread } = require('../../db');
+const { User, Follow, ThreadLike, ProductLike, SellProduct, Thread, Order } = require('../../db');
 const { getDocumentByQuery } = require('../services/serviceGlobalCURD');
 const CONSTANTS_MSG = require('../../utils/constantsMessage');
 const CONSTANTS = require('../../utils/constants')
 const HTTP_STATUS = require('../../utils/statusCode');
 const { apiErrorRes, verifyPassword, apiSuccessRes, generateOTP, generateKey, toObjectId } = require('../../utils/globalFunction');
 const { signToken } = require('../../utils/jwtTokenUtils');
-const { loginSchema, mobileLoginSchema, otpVerification, categorySchema, completeRegistrationSchema, saveEmailPasswords, followSchema, threadLikeSchema, productLikeSchema, requestResetOtpSchema, verifyResetOtpSchema, resetPasswordSchema, loginStepOneSchema, loginStepTwoSchema, loginStepThreeSchema, otpTokenSchema, resendResetOtpSchema } = require('../services/validations/userValidation');
+const { loginSchema, mobileLoginSchema, otpVerification, categorySchema, completeRegistrationSchema, saveEmailPasswords, followSchema, threadLikeSchema, productLikeSchema, requestResetOtpSchema, verifyResetOtpSchema, resetPasswordSchema, loginStepOneSchema, loginStepTwoSchema, loginStepThreeSchema, otpTokenSchema, resendResetOtpSchema, resendOtpSchema } = require('../services/validations/userValidation');
 const validateRequest = require('../../middlewares/validateRequest');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const { setKeyWithTime, setKeyNoTime, getKey, removeKey } = require('../services/serviceRedis');
 const { uploadImageCloudinary } = require('../../utils/cloudinary');
 const { SALE_TYPE } = require('../../utils/Role');
+const SellProducts = require('../../db/models/SellProducts');
 
 
 
@@ -68,7 +69,7 @@ const requestOtp = async (req, res) => {
         const redisValue = JSON.stringify({ otp, phoneNumber, language });
 
         // Store OTP + phoneNumber under the token key
-        await setKeyWithTime(`verify:${verifyToken}`, redisValue, 5); // Expires in 5 mins
+        await setKeyWithTime(`verify:${verifyToken}`, redisValue, 500); // Expires in 5 mins
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "OTP sent", { verifyToken });
     } catch (error) {
@@ -126,6 +127,39 @@ const verifyOtp = async (req, res) => {
     }
 };
 
+const resendOtp = async (req, res) => {
+    try {
+        const { verifyToken } = req.body;
+
+        // Get existing data from Redis by token
+        const redisData = await getKey(`verify:${verifyToken}`);
+
+        if (redisData.statusCode !== CONSTANTS.SUCCESS) {
+            return apiErrorRes(
+                HTTP_STATUS.UNAUTHORIZED,
+                res,
+                "Verification token expired or invalid",
+                null
+            );
+        }
+
+        const existingData = JSON.parse(redisData.data);
+        const { phoneNumber, language } = existingData;
+
+        // Generate new OTP
+        const newOtp = process.env.NODE_ENV !== 'production' ? '123457' : generateOTP();
+
+        // Update Redis with new OTP and same phoneNumber, language, reset expiry to 5 mins again
+        const newRedisValue = JSON.stringify({ otp: newOtp, phoneNumber, language });
+        await setKeyWithTime(`verify:${verifyToken}`, newRedisValue, 500); // 5 minutes TTL
+
+        // TODO: Trigger actual OTP sending service here if needed (SMS, etc)
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "OTP resent successfully", { verifyToken });
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, null);
+    }
+};
 
 const saveEmailPassword = async (req, res) => {
     try {
@@ -981,6 +1015,57 @@ const login = async (req, res) => {
 };
 
 
+const getProfile = async (req, res) => {
+    try {
+        const userId = req.user.userId;
+
+        const user = await User.findById(userId).lean();
+        if (!user) {
+            return apiErrorRes(
+                HTTP_STATUS.NOT_FOUND,
+                res,
+                "User not found"
+            );
+        }
+
+        const [myThreadCount, productListed, boughtCount, sellCount] = await Promise.all([
+            Thread.countDocuments({ userId, isDeleted: false }),
+            SellProducts.countDocuments({ userId, isDeleted: false }),
+            Order.countDocuments({ userId, isDeleted: false }),
+            SellProducts.countDocuments({ userId, isDeleted: false, isSold: true }),
+        ]);
+
+        const output = {
+            userId: user._id,
+            roleId: user.roleId,
+            role: user.role,
+            profileImage: user.profileImage,
+            userName: user.userName,
+            email: user.email,
+            phoneNumber: user.phoneNumber,
+            dob: user.dob,
+            gender: user.gender,
+            language: user.language,
+            is_Verified_Seller: user.is_Verified_Seller,
+            is_Id_verified: user.is_Id_verified,
+            is_Preferred_seller: user.is_Preferred_seller,
+            myThreadCount,
+            productListedCount: productListed,
+            boughtCount,
+            sellCount
+        };
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, output);
+    } catch (error) {
+        return apiErrorRes(
+            HTTP_STATUS.INTERNAL_SERVER_ERROR,
+            res,
+            "Internal server error",
+            error.message
+        );
+    }
+};
+
 
 
 
@@ -991,6 +1076,7 @@ router.post('/upload', upload.single('file'), uploadfile);
 // Registration Process
 router.post('/requestOtp', perApiLimiter(), upload.none(), validateRequest(mobileLoginSchema), requestOtp);
 router.post('/verifyOtp', perApiLimiter(), upload.none(), validateRequest(otpVerification), verifyOtp);
+router.post('/resendOtp', perApiLimiter(), upload.none(), validateRequest(resendOtpSchema), resendOtp);
 router.post('/saveEmailPassword', perApiLimiter(), upload.none(), validateRequest(saveEmailPasswords), saveEmailPassword);
 router.post('/saveCategories', perApiLimiter(), upload.none(), saveCategories);
 router.post('/completeRegistration', perApiLimiter(), upload.single('file'), validateRequest(completeRegistrationSchema), completeRegistration);
@@ -1007,9 +1093,6 @@ router.post('/resetPassword', perApiLimiter(), upload.none(), validateRequest(re
 router.post('/resendResetOtp', perApiLimiter(), upload.none(), validateRequest(resendResetOtpSchema), resendResetOtp);
 
 
-
-
-
 //Follow //Like
 router.post('/follow', perApiLimiter(), upload.none(), validateRequest(followSchema), follow);
 router.post('/threadlike', perApiLimiter(), upload.none(), validateRequest(threadLikeSchema), threadlike);
@@ -1018,7 +1101,12 @@ router.get('/getLikedProducts', perApiLimiter(), upload.none(), getLikedProducts
 router.get('/getLikedThreads', perApiLimiter(), upload.none(), getLikedThreads)
 
 
-//userList
+//login_user 
+router.get('/getProfile', perApiLimiter(), upload.none(), getProfile);
+router.get('/countApi', perApiLimiter(), upload.none(), getProfile);
+
+
+
 
 
 module.exports = router;

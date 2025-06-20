@@ -91,6 +91,10 @@ const SellProductsSchema = new Schema({
     isDeleted: {
         type: Boolean,
         default: false
+    },
+    isSold:{
+        type: Boolean,
+        default: false
     }
 }, {
     timestamps: true
@@ -135,8 +139,6 @@ SellProductsSchema.pre('save', function (next) {
     //     this.auctionSettings.biddingEndsAt = fullEnd.toDate();
     //     this.auctionSettings.isBiddingOpen = moment().isBefore(fullEnd);
     // }
-
-
 
     if (this.deliveryType === DeliveryType.CHARGE_SHIPPING && this.shippingCharge == null) {
         return next(new Error("Shipping charge is required when delivery type is 'shipping'"));
