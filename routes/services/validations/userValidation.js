@@ -7,7 +7,7 @@ const loginSchema = Joi.object({
     'string.min': `"password" should have a minimum length of 6`,
     'any.required': `"password" is a required field`
   }),
-  fmcToken: Joi.string().optional()
+  fcmToken: Joi.string().optional()
 });
 
 const mobileLoginSchema = Joi.object({
@@ -81,12 +81,29 @@ const verifyResetOtpSchema = Joi.object({
 
 });
 
-const resetPasswordSchema =Joi.object({
+const resetPasswordSchema = Joi.object({
   phoneNumber: Joi.string().required(),
   newPassword: Joi.string().required(),
-  confirmPassword:Joi.string().required()
+  confirmPassword: Joi.string().required()
 
 });
+
+
+const loginStepOneSchema = Joi.object({
+  identifier: Joi.string().required()
+})
+const loginStepTwoSchema = Joi.object({
+  verifyToken: Joi.string().required(),
+  password: Joi.string().required(),
+  // fcmToken: Joi.string().optional(),
+})
+
+const loginStepThreeSchema = Joi.object({
+  otpVerifyToken: Joi.string().required(),
+  otp: Joi.string().required(),
+  fcmToken: Joi.string().optional(),
+})
+
 
 
 module.exports = {
@@ -101,5 +118,8 @@ module.exports = {
   productLikeSchema,
   requestResetOtpSchema,
   verifyResetOtpSchema,
-  resetPasswordSchema
+  resetPasswordSchema,
+  loginStepOneSchema,
+  loginStepTwoSchema,
+  loginStepThreeSchema
 };

@@ -7,6 +7,10 @@ const Schema = mongoose.Schema;
 const UserSchema = new Schema({
     userName: {
         type: String,
+        required: true,
+        unique: true,
+        trim: true,
+        lowercase: true
     },
     email: {
         type: String,
@@ -18,7 +22,7 @@ const UserSchema = new Schema({
     },
     profileImage: {
         type: String,
-        default:null
+        default: null
     },
     password: {
         type: String,
@@ -47,12 +51,14 @@ const UserSchema = new Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: "Category"
     }],
-    fmcToken: {
+    fcmToken: {
         type: String,
+        default: null,
     },
     phoneNumber: {
         type: String,
-        trim: true
+        trim: true,
+        unique: true,
     },
     dob: {
         type: Date
