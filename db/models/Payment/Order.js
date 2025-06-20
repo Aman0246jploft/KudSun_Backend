@@ -74,13 +74,60 @@ OrderSchema.index({ userId: 1 });
 OrderSchema.index({ status: 1 });
 
 
-OrderSchema.pre('save', function (next) {
+OrderSchema.pre('save', async function (next) {
     if (!this.orderId) {
         const hexId = this._id.toString();
         const shortId = hexId.slice(-8).toUpperCase();
         this.orderId = `ORD-${shortId}`;
     }
+
+
+    if (this.isNew && this.items && this.items.length > 0) {
+        const productIds = this.items.map(item => item.productId);
+        await mongoose.model('SellProduct').updateMany(
+            { _id: { $in: productIds } },
+            { $set: { isSold: true } }
+        );
+    }
+
+    const cancelStatuses = [ORDER_STATUS.CANCELLED, ORDER_STATUS.RETURNED, ORDER_STATUS.FAILED];
+    if (!this.isNew && this.isModified('status') && cancelStatuses.includes(this.status)) {
+        const productIds = this.items?.map(item => item.productId);
+        if (productIds?.length) {
+            await mongoose.model('SellProduct').updateMany(
+                { _id: { $in: productIds } },
+                { $set: { isSold: false } }
+            );
+        }
+    }
+
     next();
+});
+
+
+OrderSchema.pre('findOneAndUpdate', async function (next) {
+    try {
+        const update = this.getUpdate();
+        const status = update?.status;
+
+        // Only react when order status is being updated to one of the listed statuses
+        const cancelStatuses = [ORDER_STATUS.CANCELLED, ORDER_STATUS.RETURNED, ORDER_STATUS.FAILED];
+        if (status && cancelStatuses.includes(status)) {
+            // Get the current order to access its items
+            const order = await this.model.findOne(this.getQuery()).lean();
+
+            if (order && order.items?.length) {
+                const productIds = order.items.map(item => item.productId);
+                await mongoose.model('SellProduct').updateMany(
+                    { _id: { $in: productIds } },
+                    { $set: { isSold: false } }
+                );
+            }
+        }
+        next();
+    } catch (err) {
+        next(err);
+    }
 });
 
 

@@ -20,6 +20,10 @@ const otpVerification = Joi.object({
   otp: Joi.string().required(),
   verifyToken: Joi.string().required()
 });
+const resendOtpSchema = Joi.object({
+  verifyToken: Joi.string().required()
+});
+
 
 
 const categorySchema = Joi.object({
@@ -132,5 +136,6 @@ module.exports = {
   loginStepTwoSchema,
   loginStepThreeSchema,
   otpTokenSchema,
+  resendOtpSchema,
   resendResetOtpSchema
 };
