@@ -308,7 +308,7 @@ const showNormalProducts = async (req, res) => {
                 .limit(limit)
                 .select("title fixedPrice productImages condition  userId  tags originPriceView originPrice description specifics")
                 .populate("categoryId", "name")
-                .populate("userId", "userName profileImage is_Id_verified isLive")
+                .populate("userId", "userName profileImage is_Id_verified isLive is_Preferred_seller")
                 .lean(),
 
             SellProduct.countDocuments(filter)
@@ -386,7 +386,7 @@ const showAuctionProducts = async (req, res) => {
                 .limit(limit)
                 .select("title productImages condition auctionSettings tags description specifics")
                 .populate("categoryId", "name")
-                .populate("userId", "userName profileImage is_Id_verified isLive")
+                .populate("userId", "userName profileImage is_Id_verified isLive is_Preferred_seller")
                 .lean(),
             SellProduct.countDocuments(filter)
         ]);
