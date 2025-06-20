@@ -89,6 +89,10 @@ const resetPasswordSchema = Joi.object({
 });
 
 
+const resendResetOtpSchema = Joi.object({
+  resetToken: Joi.string().required()
+});
+
 const loginStepOneSchema = Joi.object({
   identifier: Joi.string().required()
 })
@@ -127,5 +131,6 @@ module.exports = {
   loginStepOneSchema,
   loginStepTwoSchema,
   loginStepThreeSchema,
-  otpTokenSchema
+  otpTokenSchema,
+  resendResetOtpSchema
 };
