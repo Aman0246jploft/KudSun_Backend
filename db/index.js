@@ -36,6 +36,7 @@ module.exports = {
     ChatRoom: require("./models/Chat/ChatRoom"),
     ChatMessage: require("./models/Chat/ChatMessage"),
     Notification: require("./models/Notification"),
+    SearchHistory: require("./models/SearchHistory"),
     //rbac---->
     AppSetting: require('./models/AppSetting'),
     Module: require("./models/Rbac/Module"),

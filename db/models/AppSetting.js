@@ -25,7 +25,7 @@ let AppSettingSchema = new Schema({
         type: Boolean,
         default: false
     },
-    isDisabled: {
+    isDisable: {
         type: Boolean,
         default: false
     },

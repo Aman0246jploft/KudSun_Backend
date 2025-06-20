@@ -39,7 +39,7 @@ const SellerVerificationSchema = new Schema({
         default: 'Pending',
     },
 
-    isDisabled: { type: Boolean, default: false },
+    isDisable: { type: Boolean, default: false },
     isDeleted: { type: Boolean, default: false }
 }, {
     timestamps: true
