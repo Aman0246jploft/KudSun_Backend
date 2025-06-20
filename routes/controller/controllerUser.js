@@ -455,7 +455,7 @@ const resendLoginOtp = async (req, res) => {
         const user = await User.findById(userId);
         if (!user) return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
 
-        const newOtp = process.env.NODE_ENV !== 'production' ? '1234567' : generateOTP();
+        const newOtp = process.env.NODE_ENV !== 'production' ? '123457' : generateOTP();
 
         await setKeyWithTime(`otpLogin:${otpToken}`, JSON.stringify({ userId, otp: newOtp }), 500);
 
@@ -1049,7 +1049,6 @@ router.post('/loginStepOne', perApiLimiter(), upload.none(), validateRequest(log
 router.post('/loginStepTwo', perApiLimiter(), upload.none(), validateRequest(loginStepTwoSchema), loginStepTwoPassword);
 router.post('/loginStepThree', perApiLimiter(), upload.none(), validateRequest(loginStepThreeSchema), loginStepThreeVerifyOtp);
 router.post('/resendLoginOtp', perApiLimiter(), upload.none(), validateRequest(otpTokenSchema), resendLoginOtp);
-
 router.post('/login', perApiLimiter(), upload.none(), validateRequest(loginSchema), login);
 
 
