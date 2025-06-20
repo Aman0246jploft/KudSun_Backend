@@ -188,7 +188,7 @@ const completeRegistration = async (req, res) => {
     try {
 
         const { phoneNumber, userName, gender, dob } = req.body
-        console.log("testinggggggg", req.body)
+
 
         const onboardingDataResult = await getKey(`onboard:${phoneNumber}`);
 
@@ -204,7 +204,7 @@ const completeRegistration = async (req, res) => {
 
 
             const imageResult = await uploadImageCloudinary(req.file, 'profile-images');
-            console.log("222222222", imageResult)
+
 
             if (!imageResult) {
                 return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Image upload failed");
@@ -743,9 +743,6 @@ const getLikedThreads = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error.message);
     }
 };
-
-
-
 
 
 
