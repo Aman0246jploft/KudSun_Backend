@@ -93,13 +93,14 @@ const loginStepOneSchema = Joi.object({
   identifier: Joi.string().required()
 })
 const loginStepTwoSchema = Joi.object({
-  verifyToken: Joi.string().required(),
-  password: Joi.string().required(),
-  // fcmToken: Joi.string().optional(),
+  loginToken: Joi.string().required(),
+  password: Joi.string().optional().allow(null,""),
+  loginWithCode: Joi.string().required(),
+  fcmToken: Joi.string().optional(),
 })
 
 const loginStepThreeSchema = Joi.object({
-  otpVerifyToken: Joi.string().required(),
+  otpToken: Joi.string().required(),
   otp: Joi.string().required(),
   fcmToken: Joi.string().optional(),
 })
