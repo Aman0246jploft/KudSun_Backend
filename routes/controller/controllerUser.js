@@ -10,7 +10,7 @@ const CONSTANTS = require('../../utils/constants')
 const HTTP_STATUS = require('../../utils/statusCode');
 const { apiErrorRes, verifyPassword, apiSuccessRes, generateOTP, generateKey, toObjectId } = require('../../utils/globalFunction');
 const { signToken } = require('../../utils/jwtTokenUtils');
-const { loginSchema, mobileLoginSchema, otpVerification, categorySchema, completeRegistrationSchema, saveEmailPasswords, followSchema, threadLikeSchema, productLikeSchema, requestResetOtpSchema, verifyResetOtpSchema, resetPasswordSchema, loginStepOneSchema, loginStepTwoSchema, loginStepThreeSchema, otpTokenSchema } = require('../services/validations/userValidation');
+const { loginSchema, mobileLoginSchema, otpVerification, categorySchema, completeRegistrationSchema, saveEmailPasswords, followSchema, threadLikeSchema, productLikeSchema, requestResetOtpSchema, verifyResetOtpSchema, resetPasswordSchema, loginStepOneSchema, loginStepTwoSchema, loginStepThreeSchema, otpTokenSchema, resendResetOtpSchema } = require('../services/validations/userValidation');
 const validateRequest = require('../../middlewares/validateRequest');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const { setKeyWithTime, setKeyNoTime, getKey, removeKey } = require('../services/serviceRedis');
@@ -470,80 +470,6 @@ const resendLoginOtp = async (req, res) => {
 
 
 
-// const login = async (req, res) => {
-//     try {
-//         const email = String(req.body.email);
-//         const userCheckEmail = await getDocumentByQuery(User, { email });
-//         if (userCheckEmail.statusCode === CONSTANTS.SUCCESS) {
-//             if (userCheckEmail.data.isDisable === true) {
-//                 return apiErrorRes(
-//                     HTTP_STATUS.BAD_REQUEST,
-//                     res,
-//                     CONSTANTS_MSG.ACCOUNT_DISABLE,
-//                     userCheckEmail.data
-//                 );
-//             }
-
-//             // ✅ Continue with password verification
-//             const verifyPass = await verifyPassword(
-//                 userCheckEmail.data.password,
-//                 req.body.password
-//             );
-
-//             if (!verifyPass) {
-//                 return apiErrorRes(
-//                     HTTP_STATUS.UNAUTHORIZED,
-//                     res,
-//                     CONSTANTS_MSG.INVALID_PASSWORD
-//                 );
-//             }
-
-
-
-//             if (req.body?.fcmToken && req.body?.fcmToken !== "") {
-//                 userCheckEmail.data.fcmToken = req.body.fcmToken;
-//                 await userCheckEmail.data.save();
-//             }
-
-//             const payload = {
-//                 email: userCheckEmail.data.email,
-//                 userId: userCheckEmail.data._id,
-//                 roleId: userCheckEmail.data.roleId,
-//                 role: userCheckEmail.data.role,
-//                 profileImage: userCheckEmail.data.profileImage,
-//                 userName: userCheckEmail.data.userName
-//             };
-
-//             const token = signToken(payload);
-
-//             const output = {
-//                 token,
-//                 userId: userCheckEmail.data._id,
-//                 roleId: userCheckEmail.data.roleId,
-//                 role: userCheckEmail.data.role,
-//                 profileImage: userCheckEmail.data.profileImage,
-//                 userName: userCheckEmail.data.userName
-//             };
-
-//             return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, output);
-//         } else {
-//             return apiErrorRes(
-//                 HTTP_STATUS.BAD_REQUEST,
-//                 res,
-//                 CONSTANTS_MSG.EMAIL_NOTFOUND,
-//                 userCheckEmail.data
-//             );
-//         }
-//     } catch (error) {
-//         return apiErrorRes(
-//             HTTP_STATUS.INTERNAL_SERVER_ERROR,
-//             res,
-//             error.message,
-//             error.message
-//         );
-//     }
-// };
-
 const follow = async (req, res) => {
     try {
         let followedBy = req.user.userId
@@ -839,7 +765,7 @@ const requestResetOtp = async (req, res) => {
         const redisValue = JSON.stringify({ otp, phoneNumber });
 
         // Save OTP + phoneNumber in Redis with 5 mins expiry
-        await setKeyWithTime(`reset:${resetToken}`, redisValue, 5);
+        await setKeyWithTime(`reset:${resetToken}`, redisValue, 500);
 
         // (Optionally send OTP via SMS here...)
 
@@ -949,6 +875,37 @@ const resetPassword = async (req, res) => {
 };
 
 
+const resendResetOtp = async (req, res) => {
+    try {
+        const { resetToken } = req.body;
+
+        // ✅ Check if token exists in Redis
+        const redisData = await getKey(`reset:${resetToken}`);
+        if (redisData.statusCode !== CONSTANTS.SUCCESS) {
+            return apiErrorRes(
+                HTTP_STATUS.UNAUTHORIZED,
+                res,
+                "Reset token expired or invalid"
+            );
+        }
+        const { phoneNumber } = JSON.parse(redisData.data);
+
+        // ✅ Regenerate OTP with same token
+        const otp = process.env.NODE_ENV !== 'production' ? '123457' : generateOTP();
+        const updatedRedisValue = JSON.stringify({ otp, phoneNumber });
+
+        // ✅ Overwrite existing Redis value, reset expiry to 5 mins
+        await setKeyWithTime(`reset:${resetToken}`, updatedRedisValue, 500);
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "OTP resent successfully", { resetToken });
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    }
+};
+
+
+
+
 
 
 const login = async (req, res) => {
@@ -1050,13 +1007,12 @@ router.post('/loginStepTwo', perApiLimiter(), upload.none(), validateRequest(log
 router.post('/loginStepThree', perApiLimiter(), upload.none(), validateRequest(loginStepThreeSchema), loginStepThreeVerifyOtp);
 router.post('/resendLoginOtp', perApiLimiter(), upload.none(), validateRequest(otpTokenSchema), resendLoginOtp);
 router.post('/login', perApiLimiter(), upload.none(), validateRequest(loginSchema), login);
-
-
-
 //RESET PASSWORD 
 router.post('/requestResetOtp', perApiLimiter(), upload.none(), validateRequest(requestResetOtpSchema), requestResetOtp);
 router.post('/verifyResetOtp', perApiLimiter(), upload.none(), validateRequest(verifyResetOtpSchema), verifyResetOtp);
 router.post('/resetPassword', perApiLimiter(), upload.none(), validateRequest(resetPasswordSchema), resetPassword);
+router.post('/resendResetOtp', perApiLimiter(), upload.none(), validateRequest(resendResetOtpSchema), resendResetOtp);
+
 
 
 
