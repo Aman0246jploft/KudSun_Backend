@@ -10,7 +10,7 @@ const CONSTANTS = require('../../utils/constants')
 const HTTP_STATUS = require('../../utils/statusCode');
 const { apiErrorRes, verifyPassword, apiSuccessRes, generateOTP, generateKey, toObjectId } = require('../../utils/globalFunction');
 const { signToken } = require('../../utils/jwtTokenUtils');
-const { loginSchema, mobileLoginSchema, otpVerification, categorySchema, completeRegistrationSchema, saveEmailPasswords, followSchema, threadLikeSchema, productLikeSchema, requestResetOtpSchema, verifyResetOtpSchema, resetPasswordSchema, loginStepOneSchema, loginStepTwoSchema, loginStepThreeSchema } = require('../services/validations/userValidation');
+const { loginSchema, mobileLoginSchema, otpVerification, categorySchema, completeRegistrationSchema, saveEmailPasswords, followSchema, threadLikeSchema, productLikeSchema, requestResetOtpSchema, verifyResetOtpSchema, resetPasswordSchema, loginStepOneSchema, loginStepTwoSchema, loginStepThreeSchema, otpTokenSchema } = require('../services/validations/userValidation');
 const validateRequest = require('../../middlewares/validateRequest');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const { setKeyWithTime, setKeyNoTime, getKey, removeKey } = require('../services/serviceRedis');
@@ -266,7 +266,8 @@ const completeRegistration = async (req, res) => {
             roleId: user.roleId,
             role: user.role,
             profileImage: user.profileImage,
-            userName: user.userName
+            userName: user.userName,
+            email: user.email,
         };
 
 
@@ -309,7 +310,7 @@ const loginStepOne = async (req, res) => {
         const verifyToken = generateKey();
 
         // Store userId linked to verifyToken in Redis with expiration (e.g. 10 mins)
-        await setKeyWithTime(`loginStepTwo:${verifyToken}`, userResult.data._id.toString(), 10);
+        await setKeyWithTime(`loginStepTwo:${verifyToken}`, userResult.data._id.toString(), 500);
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "User verified, proceed with password", { verifyToken });
 
@@ -371,13 +372,15 @@ const loginStepTwoPassword = async (req, res) => {
                 roleId: user.roleId,
                 role: user.role,
                 profileImage: user.profileImage,
-                userName: user.userName
+                userName: user.userName,
+                email: user.email,
+
             });
         } else if (loginWithCode === 'true') {
             const otp = process.env.NODE_ENV !== 'production' ? '123456' : generateOTP();
             const otpToken = generateKey();
 
-            await setKeyWithTime(`otpLogin:${otpToken}`, JSON.stringify({ userId: user._id, otp }), 5);
+            await setKeyWithTime(`otpLogin:${otpToken}`, JSON.stringify({ userId: user._id, otp }), 500);
             console.log(`OTP for ${user.phoneNumber}: ${otp}`);
             return apiSuccessRes(HTTP_STATUS.OK, res, "OTP sent", { otpToken });
         }
@@ -432,13 +435,38 @@ const loginStepThreeVerifyOtp = async (req, res) => {
             roleId: user.roleId,
             role: user.role,
             profileImage: user.profileImage,
-            userName: user.userName
+            userName: user.userName,
+            email: user.email,
         });
     } catch (err) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
     }
 };
+const resendLoginOtp = async (req, res) => {
+    try {
+        const { otpToken } = req.body;
 
+        const redisData = await getKey(`otpLogin:${otpToken}`);
+        if (redisData.statusCode !== CONSTANTS.SUCCESS) {
+            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Invalid or expired OTP token");
+        }
+
+        const { userId } = JSON.parse(redisData.data);
+        const user = await User.findById(userId);
+        if (!user) return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
+
+        const newOtp = process.env.NODE_ENV !== 'production' ? '1234567' : generateOTP();
+
+        await setKeyWithTime(`otpLogin:${otpToken}`, JSON.stringify({ userId, otp: newOtp }), 500);
+
+        // Send again
+        console.log(`Resent OTP to ${user.phoneNumber}: ${newOtp}`);
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "OTP resent successfully");
+    } catch (err) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
+    }
+};
 
 
 
@@ -975,7 +1003,9 @@ const login = async (req, res) => {
                 roleId: userCheckEmail.data.roleId,
                 role: userCheckEmail.data.role,
                 profileImage: userCheckEmail.data.profileImage,
-                userName: userCheckEmail.data.userName
+                userName: userCheckEmail.data.userName,
+                email: userCheckEmail.data.email,
+
             };
 
             return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, output);
@@ -1018,6 +1048,8 @@ router.post('/completeRegistration', perApiLimiter(), upload.single('file'), val
 router.post('/loginStepOne', perApiLimiter(), upload.none(), validateRequest(loginStepOneSchema), loginStepOne);
 router.post('/loginStepTwo', perApiLimiter(), upload.none(), validateRequest(loginStepTwoSchema), loginStepTwoPassword);
 router.post('/loginStepThree', perApiLimiter(), upload.none(), validateRequest(loginStepThreeSchema), loginStepThreeVerifyOtp);
+router.post('/resendLoginOtp', perApiLimiter(), upload.none(), validateRequest(otpTokenSchema), resendLoginOtp);
+
 router.post('/login', perApiLimiter(), upload.none(), validateRequest(loginSchema), login);
 
 

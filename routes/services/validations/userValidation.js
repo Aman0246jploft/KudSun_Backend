@@ -94,7 +94,7 @@ const loginStepOneSchema = Joi.object({
 })
 const loginStepTwoSchema = Joi.object({
   loginToken: Joi.string().required(),
-  password: Joi.string().optional().allow(null,""),
+  password: Joi.string().optional().allow(null, ""),
   loginWithCode: Joi.string().required(),
   fcmToken: Joi.string().optional(),
 })
@@ -106,6 +106,10 @@ const loginStepThreeSchema = Joi.object({
 })
 
 
+
+const otpTokenSchema = Joi.object({
+  otpToken: Joi.string().required(),
+})
 
 module.exports = {
   loginSchema,
@@ -122,5 +126,6 @@ module.exports = {
   resetPasswordSchema,
   loginStepOneSchema,
   loginStepTwoSchema,
-  loginStepThreeSchema
+  loginStepThreeSchema,
+  otpTokenSchema
 };
