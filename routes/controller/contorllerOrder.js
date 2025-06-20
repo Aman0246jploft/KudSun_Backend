@@ -8,7 +8,7 @@ const { UserAddress, Order, SellProduct, Bid } = require('../../db');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const HTTP_STATUS = require('../../utils/statusCode');
 const { toObjectId, apiSuccessRes, apiErrorRes, parseItems } = require('../../utils/globalFunction');
-const { SALE_TYPE, DEFAULT_AMOUNT, PAYMENT_METHOD } = require('../../utils/Role');
+const { SALE_TYPE, DEFAULT_AMOUNT, PAYMENT_METHOD, ORDER_STATUS, PAYMENT_STATUS } = require('../../utils/Role');
 const { default: mongoose } = require('mongoose');
 
 
@@ -17,7 +17,7 @@ const createOrder = async (req, res) => {
     session.startTransaction();
 
     try {
-        let { addressId, items, paymentMethod = PAYMENT_METHOD.ONLINE } = req.body;
+        let { items, paymentMethod = PAYMENT_METHOD.ONLINE } = req.body;
         let totalShippingCharge = 0;
         const userId = req.user.userId;
 
@@ -25,17 +25,15 @@ const createOrder = async (req, res) => {
             items = parseItems(req.body.items)
         }
 
-        if (!addressId || !Array.isArray(items) || items.length === 0) {
+        console.log("req.body", req.body)
+
+        if (!Array.isArray(items) || items.length === 0) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Invalid order data');
         }
-
-        const address = await UserAddress.findById(addressId);
+        const address = await UserAddress.findOne({ userId, isActive: true });
         if (!address) {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Address not found');
         }
-
-
-
 
         const productIds = items.map(i => toObjectId(i.productId));
         const existingOrders = await Order.find({
@@ -140,7 +138,7 @@ const createOrder = async (req, res) => {
 
         const order = new Order({
             userId,
-            addressId,
+            addressId: address._id,
             addressSnapshot: {
                 fullName: address.fullName,
                 phone: address.phone,
@@ -170,9 +168,84 @@ const createOrder = async (req, res) => {
     }
 };
 
+const updateOrderById = async (req, res) => {
+    const { orderId } = req.params;
+
+    // ---------------------------
+    // Joi Validation Schema
+    // ---------------------------
+    const schema = Joi.object({
+        addressId: Joi.string().optional(),
+        items: Joi.array().items(
+            Joi.object({
+                productId: Joi.string().required(),
+                quantity: Joi.number().min(1).default(1),
+                saleType: Joi.string().valid(...Object.values(SALE_TYPE)).optional(),
+                priceAtPurchase: Joi.number().required()
+            })
+        ).optional(),
+        totalAmount: Joi.number().optional(),
+        platformFee: Joi.number().optional(),
+        shippingCharge: Joi.number().optional(),
+        grandTotal: Joi.number().optional(),
+        paymentStatus: Joi.string().valid(...Object.values(PAYMENT_STATUS)).optional(),
+        paymentMethod: Joi.string().valid(...Object.values(PAYMENT_METHOD)).optional(),
+        status: Joi.string().valid(...Object.values(ORDER_STATUS)).optional(),
+        isDisable: Joi.boolean().optional(),
+        isDeleted: Joi.boolean().optional()
+    });
+
+    const { error, value } = schema.validate(req.body, { abortEarly: false });
+    if (error) {
+        return res.status(HTTP_STATUS.BAD_REQUEST).json(apiErrorRes(CONSTANTS_MSG.VALIDATION_ERROR, error.details));
+    }
+
+    try {
+        // Check if order exists
+        const existingOrder = await Order.findById(orderId);
+        if (!existingOrder) {
+            return res.status(HTTP_STATUS.NOT_FOUND).json(apiErrorRes("Order not found"));
+        }
+
+        // ---------------------------
+        // Handle addressSnapshot update
+        // ---------------------------
+        if (value.addressId && value.addressId !== String(existingOrder.addressId)) {
+            const address = await UserAddress.findById(value.addressId).lean();
+            if (!address) {
+                return res.status(HTTP_STATUS.BAD_REQUEST).json(apiErrorRes("Invalid addressId"));
+            }
+
+            value.addressSnapshot = {
+                fullName: address.fullName,
+                phone: address.phone,
+                line1: address.line1,
+                line2: address.line2,
+                city: address.city,
+                state: address.state,
+                country: address.country,
+                postalCode: address.postalCode
+            };
+        }
+
+        // ---------------------------
+        // Update Order Document
+        // ---------------------------
+        const updatedOrder = await Order.findByIdAndUpdate(
+            orderId,
+            { $set: value },
+            { new: true }
+        );
+
+        return res.status(HTTP_STATUS.OK).json(apiSuccessRes(updatedOrder, "Order updated successfully"));
+    } catch (err) {
+        console.error("Update Order Error:", err);
+        return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json(apiErrorRes(CONSTANTS_MSG.INTERNAL_SERVER_ERROR));
+    }
+};
 
 router.post('/placeOrder', perApiLimiter(), upload.none(), createOrder);
-
+router.post('/updateOrder/:orderId', perApiLimiter(), upload.none(), updateOrderById);
 
 
 module.exports = router;

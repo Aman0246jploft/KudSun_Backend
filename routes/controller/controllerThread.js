@@ -439,7 +439,7 @@ const getThreads = async (req, res) => {
         }
 
         const threads = await Thread.find(filters)
-            .populate('userId', 'userName profileImage isLive is_Id_verified')
+            .populate('userId', 'userName profileImage isLive is_Id_verified is_Preferred_seller')
             .populate('categoryId', 'name') // populate but remove later
             .populate('subCategoryId', 'name') // populate but remove later
             .sort(sortStage)

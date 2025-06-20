@@ -80,11 +80,17 @@ const UserSchema = new Schema({
     lastLogin: {
         type: Date
     },
+    // when Payment credintial is done
     is_Verified_Seller: {
         type: Boolean,
         default: false
     },
     is_Id_verified: {
+        type: Boolean,
+        default: false
+    },
+    //admin will manage it
+    is_Preferred_seller: {
         type: Boolean,
         default: false
     },
