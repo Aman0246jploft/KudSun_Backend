@@ -10,7 +10,7 @@ const CONSTANTS = require('../../utils/constants')
 const HTTP_STATUS = require('../../utils/statusCode');
 const { apiErrorRes, verifyPassword, apiSuccessRes, generateOTP, generateKey, toObjectId } = require('../../utils/globalFunction');
 const { signToken } = require('../../utils/jwtTokenUtils');
-const { loginSchema, mobileLoginSchema, otpVerification, categorySchema, completeRegistrationSchema, saveEmailPasswords, followSchema, threadLikeSchema, productLikeSchema, requestResetOtpSchema, verifyResetOtpSchema, resetPasswordSchema } = require('../services/validations/userValidation');
+const { loginSchema, mobileLoginSchema, otpVerification, categorySchema, completeRegistrationSchema, saveEmailPasswords, followSchema, threadLikeSchema, productLikeSchema, requestResetOtpSchema, verifyResetOtpSchema, resetPasswordSchema, loginStepOneSchema, loginStepTwoSchema, loginStepThreeSchema } = require('../services/validations/userValidation');
 const validateRequest = require('../../middlewares/validateRequest');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const { setKeyWithTime, setKeyNoTime, getKey, removeKey } = require('../services/serviceRedis');
@@ -234,8 +234,8 @@ const completeRegistration = async (req, res) => {
             language: onboardData.language
         }
 
-        if (req.body?.fmcToken && req.body?.fmcToken !== "") {
-            obj['fmcToken'] = req.body.fmcToken;
+        if (req.body?.fcmToken && req.body?.fcmToken !== "") {
+            obj['fcmToken'] = req.body.fcmToken;
         }
 
         // ✅ Create User
@@ -277,79 +277,239 @@ const completeRegistration = async (req, res) => {
 };
 
 
-const login = async (req, res) => {
+
+const loginStepOne = async (req, res) => {
     try {
-        const email = String(req.body.email);
-        const userCheckEmail = await getDocumentByQuery(User, { email });
-        if (userCheckEmail.statusCode === CONSTANTS.SUCCESS) {
-            if (userCheckEmail.data.isDisable === true) {
-                return apiErrorRes(
-                    HTTP_STATUS.BAD_REQUEST,
-                    res,
-                    CONSTANTS_MSG.ACCOUNT_DISABLE,
-                    userCheckEmail.data
-                );
-            }
+        const { identifier } = req.body; // can be email, phoneNumber, or userName
 
-            // ✅ Continue with password verification
-            const verifyPass = await verifyPassword(
-                userCheckEmail.data.password,
-                req.body.password
-            );
-
-            if (!verifyPass) {
-                return apiErrorRes(
-                    HTTP_STATUS.UNAUTHORIZED,
-                    res,
-                    CONSTANTS_MSG.INVALID_PASSWORD
-                );
-            }
-
-
-
-            if (req.body?.fmcToken && req.body?.fmcToken !== "") {
-                userCheckEmail.data.fmcToken = req.body.fmcToken;
-                await userCheckEmail.data.save();
-            }
-
-            const payload = {
-                email: userCheckEmail.data.email,
-                userId: userCheckEmail.data._id,
-                roleId: userCheckEmail.data.roleId,
-                role: userCheckEmail.data.role,
-                profileImage: userCheckEmail.data.profileImage,
-                userName: userCheckEmail.data.userName
-            };
-
-            const token = signToken(payload);
-
-            const output = {
-                token,
-                userId: userCheckEmail.data._id,
-                roleId: userCheckEmail.data.roleId,
-                role: userCheckEmail.data.role,
-                profileImage: userCheckEmail.data.profileImage,
-                userName: userCheckEmail.data.userName
-            };
-
-            return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, output);
-        } else {
-            return apiErrorRes(
-                HTTP_STATUS.BAD_REQUEST,
-                res,
-                CONSTANTS_MSG.EMAIL_NOTFOUND,
-                userCheckEmail.data
-            );
+        if (!identifier) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Identifier is required");
         }
+        const cleanedIdentifier = identifier.trim().toLowerCase();
+        // Flexible query for email, phoneNumber or userName (case insensitive for email)
+        const query = {
+            $or: [
+                { email: cleanedIdentifier },
+                { phoneNumber: identifier },
+                { userName: cleanedIdentifier }
+            ]
+        };
+
+        const userResult = await getDocumentByQuery(User, query);
+
+        if (userResult.statusCode !== CONSTANTS.SUCCESS) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "User not found");
+        }
+
+        if (userResult.data.isDisable) {
+            return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, CONSTANTS_MSG.ACCOUNT_DISABLE);
+        }
+
+        // Generate temporary verify token for step two
+        const verifyToken = generateKey();
+
+        // Store userId linked to verifyToken in Redis with expiration (e.g. 10 mins)
+        await setKeyWithTime(`loginStepTwo:${verifyToken}`, userResult.data._id.toString(), 10);
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "User verified, proceed with password", { verifyToken });
+
     } catch (error) {
-        return apiErrorRes(
-            HTTP_STATUS.INTERNAL_SERVER_ERROR,
-            res,
-            error.message,
-            error.message
-        );
+        console.error('Login Step 1 error:', error);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
+
+const loginStepTwo = async (req, res) => {
+    try {
+        const { verifyToken, password } = req.body;
+
+        if (!verifyToken || !password) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "verifyToken and password are required");
+        }
+
+        // Get userId from Redis
+        const redisData = await getKey(`loginStepTwo:${verifyToken}`);
+
+        if (redisData.statusCode !== CONSTANTS.SUCCESS) {
+            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Invalid or expired token");
+        }
+
+        const userId = redisData.data;
+
+        // Fetch user from DB
+        const user = await User.findById(userId);
+        if (!user) {
+            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "User not found");
+        }
+
+        if (user.isDisable) {
+            return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, CONSTANTS_MSG.ACCOUNT_DISABLE);
+        }
+
+   
+        // Verify password (make sure your verifyPassword params are correct: password, hash)
+        const isValid = await verifyPassword(user.password,password);
+        if (!isValid) {
+            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, CONSTANTS_MSG.INVALID_PASSWORD);
+        }
+
+        const otp = process.env.NODE_ENV !== 'production' ? '123456' : generateOTP();
+        const otpVerifyToken = generateKey();
+
+        // Save OTP + userId under otpVerifyToken with expiry 5 mins
+        const redisValue = JSON.stringify({ otp, userId: user._id.toString() });
+        await setKeyWithTime(`loginStepThree:${otpVerifyToken}`, redisValue, 5);
+
+        // Remove step 2 token to avoid reuse
+        await removeKey(`loginStepTwo:${verifyToken}`);
+
+        // TODO: Send OTP via SMS/Email here (async, out of scope)
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Password verified, proceed with OTP", { otpVerifyToken });
+
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    }
+};
+
+
+const loginStepThree = async (req, res) => {
+    try {
+        const { otpVerifyToken, otp, fcmToken } = req.body;
+
+        if (!otpVerifyToken || !otp) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "otpVerifyToken and otp are required");
+        }
+
+        const redisData = await getKey(`loginStepThree:${otpVerifyToken}`);
+
+        if (redisData.statusCode !== CONSTANTS.SUCCESS) {
+            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Invalid or expired OTP token");
+        }
+
+        const { otp: storedOtp, userId } = JSON.parse(redisData.data);
+
+        if (otp !== storedOtp) {
+            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Invalid OTP");
+        }
+
+        // Fetch user and finalize login
+        const user = await User.findById(userId);
+        if (!user) {
+            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "User not found");
+        }
+
+        if (user.isDisable) {
+            return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, CONSTANTS_MSG.ACCOUNT_DISABLE);
+        }
+
+        if (fcmToken && fcmToken !== "") {
+            user.fcmToken = fcmToken;
+            await user.save();
+        }
+
+        const payload = {
+            email: user.email,
+            userId: user._id,
+            roleId: user.roleId,
+            role: user.role,
+            profileImage: user.profileImage,
+            userName: user.userName
+        };
+
+        const token = signToken(payload);
+
+        // Cleanup OTP token after success
+        await removeKey(`loginStepThree:${otpVerifyToken}`);
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, {
+            token,
+            userId: user._id,
+            roleId: user.roleId,
+            role: user.role,
+            profileImage: user.profileImage,
+            userName: user.userName
+        });
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    }
+};
+
+
+
+// const login = async (req, res) => {
+//     try {
+//         const email = String(req.body.email);
+//         const userCheckEmail = await getDocumentByQuery(User, { email });
+//         if (userCheckEmail.statusCode === CONSTANTS.SUCCESS) {
+//             if (userCheckEmail.data.isDisable === true) {
+//                 return apiErrorRes(
+//                     HTTP_STATUS.BAD_REQUEST,
+//                     res,
+//                     CONSTANTS_MSG.ACCOUNT_DISABLE,
+//                     userCheckEmail.data
+//                 );
+//             }
+
+//             // ✅ Continue with password verification
+//             const verifyPass = await verifyPassword(
+//                 userCheckEmail.data.password,
+//                 req.body.password
+//             );
+
+//             if (!verifyPass) {
+//                 return apiErrorRes(
+//                     HTTP_STATUS.UNAUTHORIZED,
+//                     res,
+//                     CONSTANTS_MSG.INVALID_PASSWORD
+//                 );
+//             }
+
+
+
+//             if (req.body?.fcmToken && req.body?.fcmToken !== "") {
+//                 userCheckEmail.data.fcmToken = req.body.fcmToken;
+//                 await userCheckEmail.data.save();
+//             }
+
+//             const payload = {
+//                 email: userCheckEmail.data.email,
+//                 userId: userCheckEmail.data._id,
+//                 roleId: userCheckEmail.data.roleId,
+//                 role: userCheckEmail.data.role,
+//                 profileImage: userCheckEmail.data.profileImage,
+//                 userName: userCheckEmail.data.userName
+//             };
+
+//             const token = signToken(payload);
+
+//             const output = {
+//                 token,
+//                 userId: userCheckEmail.data._id,
+//                 roleId: userCheckEmail.data.roleId,
+//                 role: userCheckEmail.data.role,
+//                 profileImage: userCheckEmail.data.profileImage,
+//                 userName: userCheckEmail.data.userName
+//             };
+
+//             return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, output);
+//         } else {
+//             return apiErrorRes(
+//                 HTTP_STATUS.BAD_REQUEST,
+//                 res,
+//                 CONSTANTS_MSG.EMAIL_NOTFOUND,
+//                 userCheckEmail.data
+//             );
+//         }
+//     } catch (error) {
+//         return apiErrorRes(
+//             HTTP_STATUS.INTERNAL_SERVER_ERROR,
+//             res,
+//             error.message,
+//             error.message
+//         );
+//     }
+// };
 
 const follow = async (req, res) => {
     try {
@@ -758,6 +918,79 @@ const resetPassword = async (req, res) => {
 
 
 
+const login = async (req, res) => {
+    try {
+        const email = String(req.body.email);
+        const userCheckEmail = await getDocumentByQuery(User, { email });
+        if (userCheckEmail.statusCode === CONSTANTS.SUCCESS) {
+            if (userCheckEmail.data.isDisable === true) {
+                return apiErrorRes(
+                    HTTP_STATUS.BAD_REQUEST,
+                    res,
+                    CONSTANTS_MSG.ACCOUNT_DISABLE,
+                    userCheckEmail.data
+                );
+            }
+
+            // ✅ Continue with password verification
+            const verifyPass = await verifyPassword(
+                userCheckEmail.data.password,
+                req.body.password
+            );
+
+            if (!verifyPass) {
+                return apiErrorRes(
+                    HTTP_STATUS.UNAUTHORIZED,
+                    res,
+                    CONSTANTS_MSG.INVALID_PASSWORD
+                );
+            }
+
+
+
+            if (req.body?.fmcToken && req.body?.fmcToken !== "") {
+                userCheckEmail.data.fmcToken = req.body.fmcToken;
+                await userCheckEmail.data.save();
+            }
+
+            const payload = {
+                email: userCheckEmail.data.email,
+                userId: userCheckEmail.data._id,
+                roleId: userCheckEmail.data.roleId,
+                role: userCheckEmail.data.role,
+                profileImage: userCheckEmail.data.profileImage,
+                userName: userCheckEmail.data.userName
+            };
+
+            const token = signToken(payload);
+
+            const output = {
+                token,
+                userId: userCheckEmail.data._id,
+                roleId: userCheckEmail.data.roleId,
+                role: userCheckEmail.data.role,
+                profileImage: userCheckEmail.data.profileImage,
+                userName: userCheckEmail.data.userName
+            };
+
+            return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, output);
+        } else {
+            return apiErrorRes(
+                HTTP_STATUS.BAD_REQUEST,
+                res,
+                CONSTANTS_MSG.EMAIL_NOTFOUND,
+                userCheckEmail.data
+            );
+        }
+    } catch (error) {
+        return apiErrorRes(
+            HTTP_STATUS.INTERNAL_SERVER_ERROR,
+            res,
+            error.message,
+            error.message
+        );
+    }
+};
 
 
 
@@ -777,7 +1010,14 @@ router.post('/saveEmailPassword', perApiLimiter(), upload.none(), validateReques
 router.post('/saveCategories', perApiLimiter(), upload.none(), saveCategories);
 router.post('/completeRegistration', perApiLimiter(), upload.single('file'), validateRequest(completeRegistrationSchema), completeRegistration);
 //login 
+router.post('/loginStepOne', perApiLimiter(), upload.none(), validateRequest(loginStepOneSchema), loginStepOne);
+router.post('/loginStepTwo', perApiLimiter(), upload.none(), validateRequest(loginStepTwoSchema), loginStepTwo);
+router.post('/loginStepThree', perApiLimiter(), upload.none(), validateRequest(loginStepThreeSchema), loginStepThree);
+
+
+
 router.post('/login', perApiLimiter(), upload.none(), validateRequest(loginSchema), login);
+
 
 
 //RESET PASSWORD 

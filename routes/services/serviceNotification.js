@@ -1,21 +1,18 @@
 const { Notification, User } = require('../../db');
 const { DATA_NULL, SUCCESS, SERVER_ERROR_CODE, NOT_FOUND } = require('../../utils/constants');
-const { sendFirebaseNotification } = require('../../utils/FireNotification');
+const { sendFirebaseNotification } = require('../../utils/firebasePushNotification');
 const { resultDb, momentValueFunc, objectId } = require('../../utils/globalFunction');
 const { addJobToQueue, createQueue, processQueue } = require('./serviceBull');
 
-
-
+const notificationQueue = createQueue('notificationQueue');
 const saveNotification = async (payload) => {
     try {
         if (!Array.isArray(payload) || payload.length === 0) {
             return resultDb(SERVER_ERROR_CODE, "Payload must be a non-empty array");
         }
-        const notificationQueue = createQueue('notificationQueue');
         payload.forEach(userNotification => {
             addJobToQueue(notificationQueue, userNotification)
         });
-        processQueue(notificationQueue, notificationProcessor);
         return resultDb(SUCCESS, { message: "Notifications added to the queue for saving one by one" });
     } catch (error) {
         console.error("Error saving notifications:", error);
@@ -28,12 +25,34 @@ const saveNotification = async (payload) => {
 
 const notificationProcessor = async (job) => {
     try {
-        console.log("1111111111", 111111111);
+        const {
+            recipientId,
+            type,
+            userId,
+            chatId,
+            orderId,
+            title,
+            message,
+            meta,
+            imageUrl
+        } = job.data;
         const userNotification = job.data;
         if (userNotification && userNotification.userId && userNotification.title && userNotification.message) {
-            await sendFirebaseNotification({ token: userNotification.deviceId, title: userNotification.title, body: userNotification.message, imageUrl: "" })
-            const savedNotification = await Notification.create(userNotification);
-            console.log("savedNotification", savedNotification, userNotification);
+            let userInfo = await User.findById(userId).select('fcmToken')
+            if (userInfo.fcmToken) {
+                await sendFirebaseNotification({ ...userNotification, token: userInfo.fcmToken, title: userNotification.title, body: userNotification.message, imageUrl: imageUrl || "" })
+            }
+            await Notification.create({
+                recipientId,
+                type,
+                userId,
+                chatId,
+                orderId,
+                title,
+                message,
+                meta
+            });
+            // console.log("savedNotification", savedNotification, userNotification);
         } else {
             console.error("Invalid notification format in queue", userNotification);
         }
@@ -363,6 +382,8 @@ const getUserNotification = async (payload) => {
         return resultDb(SERVER_ERROR_CODE, DATA_NULL);
     }
 }
+
+processQueue(notificationQueue, notificationProcessor);
 
 module.exports = {
     saveNotification,

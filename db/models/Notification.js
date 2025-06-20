@@ -6,9 +6,7 @@ const NotificationSchema = new Schema({
     // The recipient user of this notification
     recipientId: {
         type: Schema.Types.ObjectId,
-        ref: 'User',
-        required: true,
-        index: true,
+        ref: 'User'
     },
 
     // The category/type of the notification (user, chat, etc)
@@ -17,11 +15,12 @@ const NotificationSchema = new Schema({
         required: true,
         enum: Object.values(NOTIFICATION_TYPES)
     },
-
     // Conditional related fields depending on type
     userId: {  // For type === 'user'
         type: Schema.Types.ObjectId,
         ref: 'User',
+        required: true,
+        index: true,
     },
     chatId: {  // For type === 'chat'
         type: Schema.Types.ObjectId,
