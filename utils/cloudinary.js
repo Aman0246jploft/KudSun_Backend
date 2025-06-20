@@ -19,6 +19,17 @@ async function uploadImageCloudinary(file, userId) {
   return new Promise((resolve, reject) => {
     try {
       const ext = path.extname(file.originalname).toLowerCase();
+      const guessedMimeTypeMap = {
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+        '.webp': 'image/webp',
+      };
+      const guessedMimeType = guessedMimeTypeMap[ext];
+      const mimetypeToUse = file.mimetype === 'application/octet-stream'
+        ? guessedMimeType
+        : file.mimetype;
+
       const fileName = path.parse(file.originalname).name;
       const publicId = `${fileName}`;
       const resourceType = ['.pdf', '.doc', '.docx', '.txt'].includes(ext) ? 'raw' : 'image';

@@ -19,6 +19,7 @@ const { SALE_TYPE } = require('../../utils/Role');
 
 
 
+
 const uploadfile = async (req, res) => {
     try {
 
@@ -200,30 +201,15 @@ const completeRegistration = async (req, res) => {
 
         // ✅ Upload image if exists
         if (req.file) {
-            console.log("1111111111", req.file)
 
-            const validImageTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
-            const extension = path.extname(req.file.originalname).toLowerCase();
-            const guessedMimeType = {
-                '.jpg': 'image/jpeg',
-                '.jpeg': 'image/jpeg',
-                '.png': 'image/png',
-                '.webp': 'image/webp',
-            }[extension];
-            const mimetypeToUse = req.file.mimetype === 'application/octet-stream'
-                ? guessedMimeType
-                : req.file.mimetype;
 
-            if (!validImageTypes.includes(mimetypeToUse)) {
-            } else {
-                const imageResult = await uploadImageCloudinary(req.file, 'profile-images');
-                console.log("222222222", imageResult)
+            const imageResult = await uploadImageCloudinary(req.file, 'profile-images');
+            console.log("222222222", imageResult)
 
-                if (!imageResult) {
-                    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Image upload failed");
-                }
-                profileImageUrl = imageResult;
+            if (!imageResult) {
+                return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Image upload failed");
             }
+            profileImageUrl = imageResult;
         }
 
 
