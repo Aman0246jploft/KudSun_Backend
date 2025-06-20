@@ -187,7 +187,7 @@ const completeRegistration = async (req, res) => {
     try {
 
         const { phoneNumber, userName, gender, dob } = req.body
-        console.log("testinggggggg",req.body)
+        console.log("testinggggggg", req.body)
 
         const onboardingDataResult = await getKey(`onboard:${phoneNumber}`);
 
@@ -200,14 +200,24 @@ const completeRegistration = async (req, res) => {
 
         // ✅ Upload image if exists
         if (req.file) {
-        console.log("1111111111",req.file)
+            console.log("1111111111", req.file)
 
             const validImageTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
+            const extension = path.extname(req.file.originalname).toLowerCase();
+            const guessedMimeType = {
+                '.jpg': 'image/jpeg',
+                '.jpeg': 'image/jpeg',
+                '.png': 'image/png',
+                '.webp': 'image/webp',
+            }[extension];
+            const mimetypeToUse = req.file.mimetype === 'application/octet-stream'
+                ? guessedMimeType
+                : req.file.mimetype;
 
-            if (!validImageTypes.includes(req.file.mimetype)) {
+            if (!validImageTypes.includes(mimetypeToUse)) {
             } else {
                 const imageResult = await uploadImageCloudinary(req.file, 'profile-images');
-        console.log("222222222",imageResult)
+                console.log("222222222", imageResult)
 
                 if (!imageResult) {
                     return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Image upload failed");
@@ -250,7 +260,7 @@ const completeRegistration = async (req, res) => {
 
         await user.save();
 
-        console.log("5555555",user)
+        console.log("5555555", user)
 
 
         // ✅ Cleanup
