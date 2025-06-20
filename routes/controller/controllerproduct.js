@@ -978,7 +978,7 @@ router.get('/fetchCombinedProducts', perApiLimiter(), fetchCombinedProducts);
 // inside userProfile
 router.get('/fetchUserProducts', perApiLimiter(), fetchUserProducts);
 
-router.get('/productList ', perApiLimiter(), productList);
+// router.get('/productList ', perApiLimiter(), productList);
 
 
 
