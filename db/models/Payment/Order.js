@@ -29,7 +29,7 @@ const OrderSchema = new Schema({
     orderId: { type: String, unique: true, }, // could be custom like ORD123456
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
 
-    addressId: { type: Schema.Types.ObjectId, ref: 'UserAddress', required: true }, // foreign key
+    addressId: { type: Schema.Types.ObjectId, ref: 'UserAddress' }, // foreign key
     addressSnapshot: {
         fullName: String,
         phone: String,
