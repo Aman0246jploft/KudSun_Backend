@@ -21,7 +21,18 @@ const publicRoutes = [
     `/api/v1/appsetting/auctionRule`,
     `/api/v1/appsetting/getFAQs`,
     `/api/v1/contactUs/create`,
-    `/api/v1/category/listCategoryNames`
+    `/api/v1/category/listCategoryNames`,
+    `/api/v1/user/loginStepOne`,
+    `/api/v1/user/loginStepTwo`,
+    `/api/v1/user/loginStepThree`,
+    `/api/v1/user/resendLoginOtp`,
+
+
+
+    
+
+
+
 
 
     
