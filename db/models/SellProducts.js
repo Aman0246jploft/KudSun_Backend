@@ -69,11 +69,11 @@ const SellProductsSchema = new Schema({
         reservePrice: { type: Number },
         biddingIncrementPrice: { type: Number },
         duration: { type: Number },
-        endDate: { type: Date },
-        endTime: { type: String },
+        endDate: { type: String },//YYYY-MM-DD
+        endTime: { type: String },//hh-mm
         biddingEndsAt: { type: Date },
-        isBiddingOpen: { type: Boolean } // ✅ Add this
-        // only required if saleType is 'auction'
+        isBiddingOpen: { type: Boolean },// ✅ Add this
+        timeZone: { type: String },
     },
     deliveryType: {
         type: String,
@@ -121,13 +121,20 @@ SellProductsSchema.pre('save', function (next) {
 
     const { endDate, endTime } = this.auctionSettings || {};
     if (endDate && endTime) {
-        const fullEnd = moment(`${moment(endDate).format("YYYY-MM-DD")} ${endTime}`, "YYYY-MM-DD HH:mm");
-        if (!fullEnd.isValid()) {
-            return next(new Error("Invalid bidding end time format"));
-        }
-        this.auctionSettings.biddingEndsAt = fullEnd.toDate();
-        this.auctionSettings.isBiddingOpen = moment().isBefore(fullEnd);
+        const [hours, minutes] = endTime.split(':').map(Number);
+        const fullEnd = new Date(endDate);
+        fullEnd.setHours(hours || 0, minutes || 0, 0, 0);
+        this.auctionSettings.biddingEndsAt = fullEnd;
+        this.auctionSettings.isBiddingOpen = new Date() < fullEnd;
     }
+    // if (endDate && endTime) {
+    //     const fullEnd = moment(`${moment(endDate).format("YYYY-MM-DD")} ${endTime}`, "YYYY-MM-DD HH:mm");
+    //     if (!fullEnd.isValid()) {
+    //         return next(new Error("Invalid bidding end time format"));
+    //     }
+    //     this.auctionSettings.biddingEndsAt = fullEnd.toDate();
+    //     this.auctionSettings.isBiddingOpen = moment().isBefore(fullEnd);
+    // }
 
 
 

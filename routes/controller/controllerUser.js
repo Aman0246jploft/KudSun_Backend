@@ -187,6 +187,7 @@ const completeRegistration = async (req, res) => {
     try {
 
         const { phoneNumber, userName, gender, dob } = req.body
+        console.log("testinggggggg", req.body)
 
         const onboardingDataResult = await getKey(`onboard:${phoneNumber}`);
 
@@ -199,11 +200,15 @@ const completeRegistration = async (req, res) => {
 
         // ✅ Upload image if exists
         if (req.file) {
+            console.log("1111111111", req.file)
+
             const validImageTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
 
             if (!validImageTypes.includes(req.file.mimetype)) {
             } else {
                 const imageResult = await uploadImageCloudinary(req.file, 'profile-images');
+                console.log("222222222", imageResult)
+
                 if (!imageResult) {
                     return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Image upload failed");
                 }
@@ -245,6 +250,9 @@ const completeRegistration = async (req, res) => {
 
         await user.save();
 
+        console.log("5555555", user)
+
+
         // ✅ Cleanup
         await removeKey(`onboard:${phoneNumber}`);
         await removeKey(`verified:${phoneNumber}`);
@@ -254,7 +262,7 @@ const completeRegistration = async (req, res) => {
             userId: user._id,
             roleId: user.roleId,
             role: user.role,
-            profileImage: user.profileImage,
+            profileImage: profileImageUrl,
             userName: user.userName
         };
 
@@ -265,7 +273,7 @@ const completeRegistration = async (req, res) => {
             userId: user._id,
             roleId: user.roleId,
             role: user.role,
-            profileImage: user.profileImage,
+            profileImage: profileImageUrl,
             userName: user.userName,
             email: user.email,
         };
@@ -390,8 +398,6 @@ const loginStepTwoPassword = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
     }
 };
-
-
 
 const loginStepThreeVerifyOtp = async (req, res) => {
     try {
@@ -906,8 +912,6 @@ const resendResetOtp = async (req, res) => {
 
 
 
-
-
 const login = async (req, res) => {
     try {
         const email = String(req.body.email);
@@ -989,9 +993,6 @@ const login = async (req, res) => {
 
 
 
-
-
-
 //upload api 
 router.post('/upload', upload.single('file'), uploadfile);
 
@@ -1017,13 +1018,15 @@ router.post('/resendResetOtp', perApiLimiter(), upload.none(), validateRequest(r
 
 
 
-
 //Follow //Like
 router.post('/follow', perApiLimiter(), upload.none(), validateRequest(followSchema), follow);
 router.post('/threadlike', perApiLimiter(), upload.none(), validateRequest(threadLikeSchema), threadlike);
 router.post('/productLike', perApiLimiter(), upload.none(), validateRequest(productLikeSchema), productLike);
 router.get('/getLikedProducts', perApiLimiter(), upload.none(), getLikedProducts)
 router.get('/getLikedThreads', perApiLimiter(), upload.none(), getLikedThreads)
+
+
+//userList
 
 
 module.exports = router;

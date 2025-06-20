@@ -18,11 +18,9 @@ const placeBid = async (req, res) => {
     session.startTransaction();
 
     try {
-
-        const userId = req.user.userId; // assuming auth middleware sets this
+        const userId = req.user.userId;
         const { productId, amount } = req.body;
 
-        // Validate product with session
         const product = await SellProduct.findOne({ _id: productId, isDeleted: false, isDisable: false }).session(session);
 
         if (!product) {
@@ -32,16 +30,18 @@ const placeBid = async (req, res) => {
         }
 
         const { auctionSettings = {} } = product;
-        const { endDate, endTime } = auctionSettings;
+        const { biddingEndsAt } = auctionSettings;
 
-        if (!endDate || !endTime) {
+        if (!biddingEndsAt) {
             await session.abortTransaction();
             session.endSession();
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Auction end date and time not properly set.");
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Auction end time not properly set.");
         }
-        const auctionEnd = moment(`${moment(endDate).format("YYYY-MM-DD")} ${endTime}`, "YYYY-MM-DD HH:mm");
 
-        if (moment().isAfter(auctionEnd)) {
+        const now = new Date(); // UTC
+        const auctionEnd = new Date(biddingEndsAt); // already UTC
+
+        if (now >= auctionEnd) {
             await session.abortTransaction();
             session.endSession();
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "The auction has already ended. You cannot place a bid.");
@@ -67,10 +67,8 @@ const placeBid = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Product auction settings are incomplete');
         }
 
-        // Get current highest bid within the session
         const highestBid = await Bid.findOne({ productId }).sort({ amount: -1 }).session(session);
 
-        // Validate bid amount
         const minAllowed = highestBid ? highestBid.amount + (biddingIncrementPrice || 1) : startingPrice;
         if (amount < minAllowed) {
             await session.abortTransaction();
@@ -78,7 +76,6 @@ const placeBid = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `Your bid must be at least ${minAllowed}`);
         }
 
-        // Unmark previous winning bid
         if (highestBid) {
             await Bid.updateOne(
                 { _id: highestBid._id },
@@ -87,10 +84,8 @@ const placeBid = async (req, res) => {
             );
         }
 
-        // Determine if reserve price is met
         const isReserveMet = reservePrice != null ? amount >= reservePrice : false;
 
-        // Create new bid
         const newBid = new Bid({
             userId,
             productId,
@@ -100,11 +95,10 @@ const placeBid = async (req, res) => {
         });
         await newBid.save({ session });
 
-        // Update product auctionSettings (inside session)
-        product.auctionSettings.isBiddingOpen = moment().isBefore(auctionEnd);
+        // Optional: mark biddingOpen as false if just expired
+        product.auctionSettings.isBiddingOpen = now < auctionEnd;
         await product.save({ session });
 
-        // Commit transaction
         await session.commitTransaction();
         session.endSession();
 

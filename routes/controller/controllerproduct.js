@@ -10,6 +10,8 @@ const HTTP_STATUS = require('../../utils/statusCode');
 const { uploadImageCloudinary } = require('../../utils/cloudinary');
 const CONSTANTS_MSG = require('../../utils/constantsMessage');
 const { SALE_TYPE, DeliveryType, ORDER_STATUS } = require('../../utils/Role');
+const { DateTime } = require('luxon');
+
 
 const addSellerProduct = async (req, res) => {
     try {
@@ -26,7 +28,7 @@ const addSellerProduct = async (req, res) => {
             deliveryType,
             shippingCharge
         } = req.body;
-
+        const timezone = req.body.timezone || 'UTC';
 
         let specifics = [];
         let auctionSettings = {};
@@ -90,29 +92,39 @@ const addSellerProduct = async (req, res) => {
                 console.warn("❌ Missing startingPrice or reservePrice in auctionSettings:", auctionSettings);
                 return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Auction settings are required when saleType is 'auction'");
             }
+            let biddingEndsAtDateTime;
 
-            let endDate;
+            // CASE 1: endDate + endTime provided
+            if (userEndDate && endTime) {
+                // Combine date + time in the user's timezone
+                biddingEndsAtDateTime = DateTime.fromISO(`${userEndDate}T${endTime}`, { zone: timezone });
 
-            if (userEndDate) {
-                endDate = new Date(userEndDate);
-                if (endTime) {
-                    const [hours, minutes] = endTime.split(':').map(Number);
-                    endDate.setHours(hours || 0, minutes || 0, 0, 0);
+                // Validate
+                if (!biddingEndsAtDateTime.isValid) {
+                    return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid endDate or endTime with provided timezone.");
                 }
+
+                // CASE 2: Only duration provided
             } else if (duration) {
-                const now = new Date();
-                endDate = new Date(now);
-                endDate.setDate(now.getDate() + Number(duration));
+                const now = DateTime.now().setZone(timezone);
+                biddingEndsAtDateTime = now.plus({ days: Number(duration) });
+
                 if (endTime) {
                     const [hours, minutes] = endTime.split(':').map(Number);
-                    endDate.setHours(hours || 0, minutes || 0, 0, 0);
+                    biddingEndsAtDateTime = biddingEndsAtDateTime.set({ hour: hours, minute: minutes, second: 0, millisecond: 0 });
+                } else {
+                    // No endTime specified, default to 23:59:59
+                    biddingEndsAtDateTime = biddingEndsAtDateTime.set({ hour: 23, minute: 59, second: 59, millisecond: 0 });
                 }
             } else {
-                return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Either duration or endDate is required.");
+                return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Please provide either (endDate & endTime) or duration.");
             }
 
-            auctionSettings.endDate = endDate;
-            auctionSettings.biddingIncrementPrice = Number(biddingIncrementPrice || 0);
+            auctionSettings.biddingEndsAt = biddingEndsAtDateTime.toJSDate(); // save as JS Date (UTC internally)
+            auctionSettings.isBiddingOpen = DateTime.now().setZone('UTC') < biddingEndsAtDateTime.toUTC();
+            auctionSettings.endDate = biddingEndsAtDateTime.toISODate();
+            auctionSettings.endTime = biddingEndsAtDateTime.toFormat('HH:mm');
+            auctionSettings.timezone = timezone; // Save timezone in DB if you want
         }
 
 
@@ -965,6 +977,9 @@ router.get('/limited-time', perApiLimiter(), getLimitedTimeDeals);
 router.get('/fetchCombinedProducts', perApiLimiter(), fetchCombinedProducts);
 // inside userProfile
 router.get('/fetchUserProducts', perApiLimiter(), fetchUserProducts);
+
+router.get('/productList ', perApiLimiter(), productList);
+
 
 
 
