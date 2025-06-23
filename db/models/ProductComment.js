@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 
 
-const commentSchema = new mongoose.Schema({
+const ProductCommentSchema = new mongoose.Schema({
     content: {
         type: String,
         trim: true,
@@ -21,14 +21,14 @@ const commentSchema = new mongoose.Schema({
         ref: 'User',
         required: true,
     },
-    thread: {
+    product: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Thread',
+        ref: 'SellProduct',
         required: true,
     },
     parent: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'ThreadComment',
+        ref: 'ProductComment',
         default: null,
     },
         isDisable: {
@@ -42,7 +42,7 @@ const commentSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
-commentSchema.set('toJSON', {
+ProductCommentSchema.set('toJSON', {
     transform: function (doc, ret) {
         delete ret.__v;
         return ret;
@@ -50,4 +50,4 @@ commentSchema.set('toJSON', {
 });
 
 
-module.exports = mongoose.model("ThreadComment", commentSchema, "ThreadComment"); 
+module.exports = mongoose.model("ProductComment", ProductCommentSchema, "ProductComment"); 

@@ -53,7 +53,11 @@ const threadSchema = new Schema({
     isDeleted: {
         type: Boolean,
         default: false
-    }
+    },
+    isDisable: {
+        type: Boolean,
+        default: false
+    },
 }, {
     timestamps: true
 });
