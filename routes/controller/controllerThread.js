@@ -625,7 +625,7 @@ const getThreads = async (req, res) => {
             .sort(sortStage)
             .skip((page - 1) * limit)
             .limit(limit)
-            .select('-createdAt -updatedAt -__v')
+            .select(' -__v')
             .lean();
 
         const threadIds = threads.map(t => t._id);
@@ -709,7 +709,152 @@ const getThreads = async (req, res) => {
 };
 
 
-//Draft Thread 
+const getFollowedUsersThreads = async (req, res) => {
+    try {
+        const {
+            pageNo = 1,
+            size = 10,
+            keyWord = '',
+            categoryId,
+            subCategoryId,
+            sortBy = 'createdAt', // 'createdAt' | 'budget'
+            sortOrder = 'desc'    // 'asc' | 'desc'
+        } = req.query;
+
+        const page = parseInt(pageNo);
+        const limit = parseInt(size);
+        const sortDir = sortOrder === 'asc' ? 1 : -1;
+        const currentUserId = req.user?.userId;
+
+        if (!currentUserId) {
+            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "User not authenticated");
+        }
+
+        // Step 1: Get userIds followed by current user
+        const follows = await Follow.find({
+            followedBy: toObjectId(currentUserId),
+            isDeleted: false,
+            isDisable: false
+        }).select('userId');
+
+        const followedUserIds = follows.map(f => f.userId);
+
+        if (followedUserIds.length === 0) {
+            return apiSuccessRes(HTTP_STATUS.OK, res, "No followed users", {
+                pageNo: page,
+                size: limit,
+                total: 0,
+                threads: []
+            });
+        }
+
+        // Step 2: Prepare filters
+        const filters = {
+            userId: { $in: followedUserIds },
+            isDeleted: false
+        };
+
+        if (categoryId && mongoose.Types.ObjectId.isValid(categoryId)) {
+            filters.categoryId = categoryId;
+        }
+
+        if (subCategoryId && mongoose.Types.ObjectId.isValid(subCategoryId)) {
+            filters.subCategoryId = subCategoryId;
+        }
+
+        if (keyWord?.trim()) {
+            filters.title = { $regex: keyWord.trim(), $options: 'i' };
+        }
+
+        let sortStage = {};
+        if (sortBy === 'budget') {
+            sortStage = { 'budgetRange.min': sortDir };
+        } else {
+            sortStage = { createdAt: sortDir };
+        }
+
+        const threads = await Thread.find(filters)
+            .populate('userId', 'userName profileImage isLive is_Id_verified is_Preferred_seller')
+            .sort(sortStage)
+            .skip((page - 1) * limit)
+            .limit(limit)
+            .select(' -__v')
+            .lean();
+
+        const threadIds = threads.map(t => t._id);
+        const userIds = [...new Set(threads.map(t => t.userId?._id?.toString()).filter(Boolean))];
+
+        const [followerCounts, commentCounts, likeCounts, productCounts] = await Promise.all([
+            Follow.aggregate([
+                { $match: { userId: { $in: userIds.map(id => toObjectId(id)) }, isDeleted: false, isDisable: false } },
+                { $group: { _id: '$userId', count: { $sum: 1 } } }
+            ]),
+            ThreadComment.aggregate([
+                { $match: { thread: { $in: threadIds }, parent: null } },
+                { $group: { _id: '$thread', count: { $sum: 1 } } }
+            ]),
+            ThreadLike.aggregate([
+                { $match: { threadId: { $in: threadIds }, isDeleted: false, isDisable: false } },
+                { $group: { _id: '$threadId', count: { $sum: 1 } } }
+            ]),
+            ThreadComment.aggregate([
+                { $match: { thread: { $in: threadIds }, associatedProducts: { $exists: true, $not: { $size: 0 } } } },
+                {
+                    $group: {
+                        _id: '$thread',
+                        productSet: { $addToSet: '$associatedProducts' }
+                    }
+                },
+                {
+                    $project: {
+                        count: {
+                            $size: {
+                                $reduce: {
+                                    input: '$productSet',
+                                    initialValue: [],
+                                    in: { $setUnion: ['$$value', '$$this'] }
+                                }
+                            }
+                        }
+                    }
+                }
+            ])
+        ]);
+
+        const followerMap = Object.fromEntries(followerCounts.map(f => [f._id.toString(), f.count]));
+        const commentMap = Object.fromEntries(commentCounts.map(c => [c._id.toString(), c.count]));
+        const likeMap = Object.fromEntries(likeCounts.map(l => [l._id.toString(), l.count]));
+        const productMap = Object.fromEntries(productCounts.map(p => [p._id.toString(), p.count]));
+
+        const enrichedThreads = threads.map(thread => {
+            const tid = thread._id.toString();
+            const uid = thread.userId?._id?.toString() || '';
+
+            return {
+                ...thread,
+                totalFollowers: followerMap[uid] || 0,
+                totalComments: commentMap[tid] || 0,
+                totalLikes: likeMap[tid] || 0,
+                totalAssociatedProducts: productMap[tid] || 0,
+                myThread: uid === currentUserId
+            };
+        });
+
+        const total = await Thread.countDocuments(filters);
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Followed users' threads fetched successfully", {
+            pageNo: page,
+            size: limit,
+            total,
+            threads: enrichedThreads
+        });
+
+    } catch (error) {
+        console.error('Error in getFollowedUsersThreads:', error);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Something went wrong");
+    }
+};
+
 
 
 //thread
@@ -717,6 +862,9 @@ router.post('/create', perApiLimiter(), upload.array('files', 10), addThread);
 router.post('/updateThread/:id', perApiLimiter(), upload.array('files', 10), updateThread);
 router.post('/delete/:id', perApiLimiter(), deleteThread);
 router.post('/changeStatus/:id', perApiLimiter(), changeStatus);
+
+//getFollowedUsersThreads
+router.get('/getFollowedUsersThreads', perApiLimiter(), upload.none(), getFollowedUsersThreads);
 
 
 
