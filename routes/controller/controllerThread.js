@@ -3,7 +3,7 @@ const express = require('express');
 const multer = require('multer');
 const upload = multer();
 const router = express.Router();
-const { Thread, ThreadComment, SellProduct, Bid, Follow, ThreadLike } = require('../../db');
+const { Thread, ThreadComment, SellProduct, Bid, Follow, ThreadLike, ThreadDraft } = require('../../db');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const { apiErrorRes, apiSuccessRes, toObjectId } = require('../../utils/globalFunction');
 const HTTP_STATUS = require('../../utils/statusCode');
@@ -12,7 +12,7 @@ const CONSTANTS_MSG = require('../../utils/constantsMessage');
 const { default: mongoose } = require('mongoose');
 const { SALE_TYPE } = require('../../utils/Role');
 
-// Add a new thread
+// Add a new thread // Draft also
 const addThread = async (req, res) => {
     try {
         const {
@@ -23,11 +23,17 @@ const addThread = async (req, res) => {
             budgetFlexible,
             min,
             max,
-            tags
+            tags,
+            isDraft
         } = req.body;
-        if (!categoryId || !subCategoryId || !title) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Missing required fields.");
+        const draftMode = isDraft === 'true' || isDraft === true;
+
+        if (!draftMode) {
+            if (!categoryId || !subCategoryId || !title) {
+                return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Missing required fields.");
+            }
         }
+
         let tagArray = [];
         if (tags) {
             const raw = Array.isArray(tags)
@@ -45,27 +51,204 @@ const addThread = async (req, res) => {
                 if (imageUrl) photoUrls.push(imageUrl);
             }
         }
+
+
+        const budgetRange = {};
+        if (budgetFlexible === 'true' || budgetFlexible === true) {
+            budgetRange.min = undefined;
+            budgetRange.max = undefined;
+        } else if (!draftMode) {
+            // Only enforce if not draft
+            budgetRange.min = Number(min);
+            budgetRange.max = Number(max);
+        } else {
+            // draft mode: optionally save min/max if present
+            if (min) budgetRange.min = Number(min);
+            if (max) budgetRange.max = Number(max);
+        }
+
+
+
+
         const threadData = {
             userId: req.user?.userId,
-            categoryId,
-            subCategoryId,
-            title,
+            categoryId: categoryId || undefined,
+            subCategoryId: subCategoryId || undefined,
+            title: title || undefined,
             description: description || '',
-            budgetFlexible: budgetFlexible === 'true',
-            budgetRange: {
-                min: budgetFlexible === 'true' ? undefined : Number(min),
-                max: budgetFlexible === 'true' ? undefined : Number(max)
-            },
+            budgetFlexible: budgetFlexible === 'true' || budgetFlexible === true,
+            budgetRange,
             tags: tagArray,
-            photos: photoUrls
+            photos: photoUrls,
+
         };
-        const thread = new Thread(threadData);
-        const saved = await thread.save();
+        let saved;
+
+        if (draftMode) {
+            const draft = new ThreadDraft(threadData);
+            saved = await draft.save();
+        } else {
+            const thread = new Thread(threadData);
+            saved = await thread.save();
+        }
         return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, saved);
     } catch (error) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
     }
 };
+
+
+
+const updateThread = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const {
+            categoryId,
+            subCategoryId,
+            title,
+            description,
+            budgetFlexible,
+            min,
+            max,
+            tags,
+            isDraft,
+            removePhotos // <--- new field (array of photo URLs to remove)
+        } = req.body;
+
+        const draftMode = isDraft === 'true' || isDraft === true;
+        const Model = draftMode ? ThreadDraft : Thread;
+
+        const existing = await Model.findById(id);
+        if (!existing) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, `${draftMode ? 'Draft' : 'Thread'} not found.`);
+        }
+
+        if (existing.userId.toString() !== req.user.userId) {
+            return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, "You are not authorized to update this thread.");
+        }
+
+        if (!draftMode) {
+            if (!categoryId || !subCategoryId || !title) {
+                return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Missing required fields for published thread.");
+            }
+        }
+
+        let tagArray = [];
+        if (tags) {
+            const raw = Array.isArray(tags) ? tags : [tags];
+            tagArray = raw.map(t => t.trim?.()).filter(t => t);
+        }
+
+        // Remove photos as requested
+        let photoUrls = existing.photos || [];
+        if (removePhotos) {
+            const photosToRemove = Array.isArray(removePhotos) ? removePhotos : [removePhotos];
+            photoUrls = photoUrls.filter(url => !photosToRemove.includes(url));
+        }
+
+        // Upload new photos and append
+        if (req.files && req.files.length > 0) {
+            for (const file of req.files) {
+                const imageUrl = await uploadImageCloudinary(file, 'thread-photos');
+                if (imageUrl) photoUrls.push(imageUrl);
+            }
+        }
+
+        const budgetRange = {};
+        if (budgetFlexible === 'true' || budgetFlexible === true) {
+            budgetRange.min = undefined;
+            budgetRange.max = undefined;
+        } else if (!draftMode) {
+            budgetRange.min = Number(min);
+            budgetRange.max = Number(max);
+        } else {
+            budgetRange.min = min !== undefined ? Number(min) : existing.budgetRange?.min;
+            budgetRange.max = max !== undefined ? Number(max) : existing.budgetRange?.max;
+        }
+
+        const updateData = {
+            categoryId: categoryId !== undefined ? categoryId : existing.categoryId,
+            subCategoryId: subCategoryId !== undefined ? subCategoryId : existing.subCategoryId,
+            title: title !== undefined ? title : existing.title,
+            description: description !== undefined ? description : existing.description,
+            budgetFlexible: (budgetFlexible !== undefined)
+                ? (budgetFlexible === 'true' || budgetFlexible === true)
+                : existing.budgetFlexible,
+            budgetRange,
+            tags: tagArray.length > 0 ? tagArray : existing.tags,
+            photos: photoUrls,
+            isDeleted: existing.isDeleted || false
+        };
+
+        const updated = await Model.findByIdAndUpdate(id, updateData, { new: true });
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, updated);
+
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
+    }
+};
+
+
+
+const deleteThread = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { isDraft } = req.body; // pass ?isDraft=true if deleting draft
+        const draftMode = isDraft === 'true';
+
+        const Model = draftMode ? ThreadDraft : Thread;
+
+        const existing = await Model.findById(id);
+        if (!existing) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, `${draftMode ? 'Draft' : 'Thread'} not found.`);
+        }
+
+        if (existing.userId.toString() !== req.user.userId) {
+            return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, "You are not authorized to delete this thread.");
+        }
+
+        // Soft delete: mark isDeleted = true
+        existing.isDeleted = true;
+        await existing.save();
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, `${draftMode ? 'Draft' : 'Thread'} deleted successfully.`);
+
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
+    }
+};
+
+
+const changeStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { isDraft } = req.body; // pass ?isDraft=true if deleting draft
+        const draftMode = isDraft === 'true';
+
+        const Model = draftMode ? ThreadDraft : Thread;
+
+        const existing = await Model.findById(id);
+        if (!existing) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, `${draftMode ? 'Draft' : 'Thread'} not found.`);
+        }
+
+        if (existing.userId.toString() !== req.user.userId) {
+            return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, "You are not authorized to Change Status .");
+        }
+
+        existing.isDisable = !existing.isDisable;
+        await existing.save();
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, `${draftMode ? 'Draft' : 'Thread'} updated successfully.`);
+
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
+    }
+};
+
+
+
 
 
 // Get my threads
@@ -243,9 +426,6 @@ const associatedProductByThreadId = async (req, res) => {
 };
 
 
-
-
-// GET /api/comments/:threadId
 const getThreadComments = async (req, res) => {
     try {
         const { threadId } = req.params;
@@ -528,8 +708,18 @@ const getThreads = async (req, res) => {
     }
 };
 
+
+//Draft Thread 
+
+
 //thread
 router.post('/create', perApiLimiter(), upload.array('files', 10), addThread);
+router.post('/updateThread/:id', perApiLimiter(), upload.array('files', 10), updateThread);
+router.post('/delete/:id', perApiLimiter(), deleteThread);
+router.post('/changeStatus/:id', perApiLimiter(), changeStatus);
+
+
+
 router.post('/getThreadByUserId', perApiLimiter(), getThreadByUserId);
 router.post('/closeThread/:threadId', perApiLimiter(), closeThread);
 

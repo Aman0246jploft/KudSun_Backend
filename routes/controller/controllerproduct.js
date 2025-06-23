@@ -3,7 +3,7 @@ const express = require('express');
 const multer = require('multer');
 const upload = multer();
 const router = express.Router();
-const { SellProduct, Order, Bid, SearchHistory } = require('../../db');
+const { SellProduct, Order, Bid, SearchHistory, Follow, User, ProductComment } = require('../../db');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const { apiErrorRes, apiSuccessRes, toObjectId, formatTimeRemaining } = require('../../utils/globalFunction');
 const HTTP_STATUS = require('../../utils/statusCode');
@@ -1069,21 +1069,268 @@ const getSearchHistory = async (req, res) => {
 };
 
 
+const getNormalProduct = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const loginUserId = req.user?.userId;
+
+        // Find product that is not deleted, not disabled, not sold
+        const product = await SellProduct.findOne({
+            _id: id,
+            isDeleted: false,
+            isDisable: false,
+        })
+            .populate('categoryId', 'name')
+            .lean();
+
+        if (!product) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Product not found or unavailable.");
+        }
+
+        // Get user details (excluding sensitive data)
+        const user = await User.findById(product.userId)
+            .select('userName profileImage is_Id_verified is_Preferred_seller isLive')
+            .lean();
+
+        // Get follower count
+        const followersCount = await Follow.countDocuments({
+            userId: toObjectId(product.userId),
+            isDeleted: false,
+            isDisable: false
+        });
+        let isFollowing = false;
+        if (loginUserId) {
+            const followDoc = await Follow.findOne({
+                userId: toObjectId(product.userId),
+                followedBy: toObjectId(loginUserId),
+                isDeleted: false,
+                isDisable: false
+            });
+
+            isFollowing = !!followDoc;
+        }
 
 
+        product.seller = {
+            ...user,
+            followers: followersCount,
+            isFollowing
+        };
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Product fetched successfully.", product);
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
+    }
+};
+
+const addComment = async (req, res) => {
+    try {
+        let value = req.body
+        let imageList = [];
+        if (req.files && req.files.length > 0) {
+            for (const file of req.files) {
+                const image = await uploadImageCloudinary(file, 'comment-images');
+                if (image) imageList.push(image);
+            }
+        }
+        let productIds = [];
+        if (value.associatedProducts) {
+            const raw = Array.isArray(value.associatedProducts)
+                ? value.associatedProducts
+                : [value.associatedProducts];
+
+            // Clean array: remove empty strings or invalid ObjectId formats
+            productIds = raw
+                .map(id => id.trim?.()) // optional chaining for safety
+                .filter(id => id && /^[a-f\d]{24}$/i.test(id)); // only valid Mongo ObjectIds
+        }
+        const comment = new ProductComment({
+            content: value.content || '',
+            product: value.product,
+            parent: value.parent || null,
+            associatedProducts: productIds,
+            photos: imageList,
+            author: req.user?.userId
+        });
+        const saved = await comment.save();
+        return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, saved);
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    }
+};
+
+
+
+
+const getProductComment = async (req, res) => {
+    try {
+        const { productId } = req.params;
+        const page = parseInt(req.query.pageNo) || 1;
+        const limit = parseInt(req.query.size) || 10;
+        const skip = (page - 1) * limit;
+        const totalCount = await ProductComment.countDocuments({ product: toObjectId(productId), parent: null, isDeleted: false });
+
+        // Fetch top-level comments
+        const comments = await ProductComment.find({ product: toObjectId(productId), parent: null, isDeleted: false })
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit)
+            .populate('author', 'username profilePic isLive')
+            .populate('associatedProducts')
+            .lean();
+
+        const commentIds = comments.map(comment => comment._id);
+
+        // Aggregation for replies with associatedProducts populated
+        const replies = await ProductComment.aggregate([
+            { $match: { parent: { $in: commentIds }, isDeleted: false } },
+            { $sort: { createdAt: 1 } },
+            {
+                $lookup: {
+                    from: 'SellProduct', // make sure this is the correct collection name
+                    localField: 'associatedProducts',
+                    foreignField: '_id',
+                    as: 'associatedProducts'
+                }
+            },
+            {
+                $group: {
+                    _id: "$parent",
+                    firstReply: { $first: "$$ROOT" },
+                    replyCount: { $sum: 1 },
+                },
+            },
+        ]);
+
+        const replyMap = {};
+        replies.forEach(r => {
+            replyMap[r._id.toString()] = {
+                reply: r.firstReply,
+                count: r.replyCount,
+            };
+        });
+
+        // Attach replies to top-level comments
+        const enrichedComments = comments.map(comment => {
+            const match = replyMap[comment._id.toString()];
+            return {
+                ...comment,
+                firstReply: match ? match.reply : null,
+                totalReplies: match ? match.count : 0,
+            };
+        });
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Comments fetched successfully", {
+            pageNo: page,
+            size: limit,
+            total: totalCount,
+            commentList: enrichedComments,
+        });
+    } catch (err) {
+        console.error('Error fetching comments:', err);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
+    }
+};
+
+
+
+
+const getCommentByParentId = async (req, res) => {
+    try {
+        const { parentId } = req.params;
+        const page = parseInt(req.query.pageNo) || 1;
+        const limit = parseInt(req.query.size) || 10;
+        const skip = (page - 1) * limit;
+
+        if (!mongoose.Types.ObjectId.isValid(parentId)) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid parentId");
+        }
+
+        // Fetch replies (direct children) with author and products
+        const replies = await ProductComment.find({ parent: toObjectId(parentId), isDeleted: false })
+            .sort({ createdAt: 1 })
+            .skip(skip)
+            .limit(limit)
+            .populate("author", "username profilePic isLive")
+            .populate(
+                "associatedProducts",
+                "title _id description productImages condition saleType"
+            )
+            .lean();
+
+        // For each reply, fetch total replies count & first reply
+        const enrichedReplies = await Promise.all(
+            replies.map(async (reply) => {
+                const totalRepliesCount = await ProductComment.countDocuments({
+                    parent: reply._id, isDeleted: false
+                });
+
+                const firstReply = await ProductComment.findOne({
+                    parent: reply._id, isDeleted: false
+                })
+                    .sort({ createdAt: 1 })
+                    .populate("author", "username profilePic")
+                    .lean();
+
+                return {
+                    ...reply,
+                    totalReplies: totalRepliesCount,
+                    firstReply: firstReply
+                        ? {
+                            _id: firstReply._id,
+                            content: firstReply.content,
+                            author: firstReply.author,
+                            createdAt: firstReply.createdAt,
+                        }
+                        : null,
+                };
+            })
+        );
+
+        // Count total replies for pagination
+        const totalReplies = await ProductComment.countDocuments({
+            parent: toObjectId(parentId), isDeleted: false
+        });
+
+        const responseObj = {
+            pageNo: page,
+            size: limit,
+            total: totalReplies,
+            data: enrichedReplies,
+        };
+
+        return apiSuccessRes(
+            HTTP_STATUS.OK,
+            res,
+            "Replies fetched successfully",
+            responseObj
+        );
+    } catch (error) {
+        console.error("Error in getCommentByParentId:", error);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Server error");
+    }
+};
 
 
 router.post('/addSellerProduct', perApiLimiter(), upload.array('files', 10), addSellerProduct);
 //List api for the Home Screen // thread controller
 router.get('/showNormalProducts', perApiLimiter(), showNormalProducts);
 router.get('/showAuctionProducts', perApiLimiter(), showAuctionProducts);
+router.get('/getProducts/:id', perApiLimiter(), getNormalProduct);
+
+
+//comment
+router.post('/addComment', perApiLimiter(), upload.array('files', 2), addComment);
+router.get('/getProductComment/:productId', perApiLimiter(), getProductComment);
+router.get('/getCommentByParentId/:parentId', perApiLimiter(), getCommentByParentId);
+
+
 //Category detail Page
 router.get('/limited-time', perApiLimiter(), getLimitedTimeDeals);
 router.get('/fetchCombinedProducts', perApiLimiter(), fetchCombinedProducts);
 // inside userProfile
 router.get('/fetchUserProducts', perApiLimiter(), fetchUserProducts);
 //Search Panel
-
 router.post('/createHistory', perApiLimiter(), createHistory);
 router.post('/clearAllHistory', perApiLimiter(), clearAllHistory);
 router.post('/clearOneHistory/:id', perApiLimiter(), clearOneHistory);

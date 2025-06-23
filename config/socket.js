@@ -8,7 +8,8 @@ const { toObjectId } = require('../utils/globalFunction');
 
 
 const connectedUsers = {};
-function setupSocket(server) {
+async function setupSocket(server) {
+    await resetAllLiveStatuses();
     const io = new Server(server, {
         cors: {
             origin: '*',
@@ -235,6 +236,14 @@ processQueue(liveStatusQueue, async (job) => {
 });
 
 
+async function resetAllLiveStatuses() {
+    try {
+        await User.updateMany({ isLive: true }, { isLive: false });
+        console.log('✅ Reset all user live statuses on server start');
+    } catch (err) {
+        console.error('❌ Failed to reset live statuses:', err);
+    }
+}
 
 
-module.exports = { setupSocket };
+module.exports = { setupSocket, resetAllLiveStatuses };
