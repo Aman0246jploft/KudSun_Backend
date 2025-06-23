@@ -536,7 +536,7 @@ const fetchCombinedProducts = async (req, res) => {
     try {
         const {
             pageNo = 1,
-            size = 20,
+            size = 10,
             keyWord,
             categoryId,
             subCategoryId,
@@ -1318,17 +1318,11 @@ router.get('/showNormalProducts', perApiLimiter(), showNormalProducts);
 router.get('/showAuctionProducts', perApiLimiter(), showAuctionProducts);
 router.get('/getProducts/:id', perApiLimiter(), getNormalProduct);
 
-
-//comment
-router.post('/addComment', perApiLimiter(), upload.array('files', 2), addComment);
-router.get('/getProductComment/:productId', perApiLimiter(), getProductComment);
-router.get('/getCommentByParentId/:parentId', perApiLimiter(), getCommentByParentId);
-
-
 //Category detail Page
 router.get('/limited-time', perApiLimiter(), getLimitedTimeDeals);
 router.get('/fetchCombinedProducts', perApiLimiter(), fetchCombinedProducts);
 // inside userProfile
+
 router.get('/fetchUserProducts', perApiLimiter(), fetchUserProducts);
 //Search Panel
 router.post('/createHistory', perApiLimiter(), createHistory);
@@ -1337,7 +1331,10 @@ router.post('/clearOneHistory/:id', perApiLimiter(), clearOneHistory);
 router.get('/getSearchHistory', perApiLimiter(), getSearchHistory);
 
 
-
+//comment
+router.post('/addComment', perApiLimiter(), upload.array('files', 2), addComment);
+router.get('/getProductComment/:productId', perApiLimiter(), getProductComment);
+router.get('/getCommentByParentId/:parentId', perApiLimiter(), getCommentByParentId);
 
 
 

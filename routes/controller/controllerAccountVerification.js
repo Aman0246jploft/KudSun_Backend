@@ -82,7 +82,7 @@ const getVerificationIdList = async (req, res) => {
                 .sort({ createdAt: -1 }) // newest first
                 .skip(skip)
                 .limit(pageSize)
-                .select('-__v -isDisable -isDeleted -createdAt -updatedAt'), // optional: exclude __v
+                .select('-__v -isDisable -isDeleted '), // optional: exclude __v
 
             AccountVerification.countDocuments({ isDeleted: false })
         ]);
