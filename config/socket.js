@@ -211,6 +211,60 @@ async function setupSocket(server) {
             handleGetMessageList(socket, data);
         });
 
+        socket.on('getMessagesWithUser', async ({ otherUserId, pageNo = 1, size = 20 }) => {
+            try {
+                const userId = socket.user.userId;
+
+                if (!otherUserId) {
+                    return socket.emit('error', { message: 'otherUserId is required' });
+                }
+
+                // Try to find existing one-on-one room (don't create)
+                const room = await ChatRoom.findOne({
+                    isGroup: false,
+                    participants: { $all: [toObjectId(userId), toObjectId(otherUserId)], $size: 2 }
+                });
+
+                if (!room) {
+                    // No existing room, return empty result
+                    return socket.emit('messageList', {
+                        chatRoomId: null,
+                        total: 0,
+                        pageNo: parseInt(pageNo),
+                        size: parseInt(size),
+                        messages: [],
+                        isNewRoom: true
+                    });
+                }
+
+                const chatRoomId = room._id.toString();
+                const page = parseInt(pageNo);
+                const limit = parseInt(size);
+                const skip = (page - 1) * limit;
+
+                const messages = await ChatMessage.find({ chatRoom: chatRoomId })
+                    .populate('sender', 'userName profileImage')
+                    .sort({ createdAt: 1 })
+                    .skip(skip)
+                    .limit(limit)
+                    .lean();
+
+                const totalMessages = await ChatMessage.countDocuments({ chatRoom: chatRoomId });
+
+                socket.emit('messageList', {
+                    chatRoomId,
+                    total: totalMessages,
+                    pageNo: page,
+                    size: limit,
+                    messages,
+                    isNewRoom: false
+                });
+
+            } catch (error) {
+                console.error('❌ Error in getMessagesWithUser:', error);
+                socket.emit('error', { message: 'Failed to get messages with user' });
+            }
+        });
 
         socket.on('disconnect', () => {
             console.log(`🔴 User ${userId} disconnected`);

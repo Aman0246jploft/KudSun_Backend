@@ -3,7 +3,7 @@ const express = require('express');
 const multer = require('multer');
 const upload = multer();
 const router = express.Router();
-const { Dispute } = require('../../db');
+const { Dispute, Order } = require('../../db');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const { uploadImageCloudinary } = require('../../utils/cloudinary');
 const HTTP_STATUS = require('../../utils/statusCode');
@@ -13,6 +13,9 @@ const { apiErrorRes, apiSuccessRes } = require('../../utils/globalFunction');
 
 
 const createDispute = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
     try {
         const { orderId, reason, description } = req.body;
         const userId = req.user.userId;
@@ -21,6 +24,7 @@ const createDispute = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Order ID and description are required");
         }
 
+        // Upload evidence files to Cloudinary
         let evidenceUrls = [];
         if (req.files && req.files.length > 0) {
             for (const file of req.files) {
@@ -28,22 +32,39 @@ const createDispute = async (req, res) => {
                 if (imageUrl) evidenceUrls.push(imageUrl);
             }
         }
-        let newDispute = new Dispute({
+
+        // Create the dispute
+        const dispute = new Dispute({
             raisedBy: userId,
-            orderId,
+            orderId: toObjectId(orderId),
             reason,
             description,
             evidence: evidenceUrls
-        })
+        });
 
-        const dispute = await newDispute.save()
+        const savedDispute = await dispute.save({ session });
 
-        return apiSuccessRes(HTTP_STATUS.CREATED, res, "Dispute raised successfully", dispute);
+        // Update the related order to reference this dispute
+        await Order.updateOne(
+            { _id: toObjectId(orderId) },
+            { $set: { disputeId: savedDispute._id } },
+            { session }
+        );
+
+        await session.commitTransaction();
+        session.endSession();
+
+        return apiSuccessRes(HTTP_STATUS.CREATED, res, "Dispute raised successfully", savedDispute);
+
     } catch (err) {
+        await session.abortTransaction();
+        session.endSession();
         console.error("Create dispute error:", err);
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
     }
 };
+
+
 
 const updateDisputeStatus = async (req, res) => {
     try {

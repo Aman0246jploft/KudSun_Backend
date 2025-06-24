@@ -38,7 +38,8 @@ module.exports = {
     Notification: require("./models/Notification"),
     SearchHistory: require("./models/SearchHistory"),
     ThreadDraft: require("./models/thread/ThreadDraft"),
-    ProductComment:require("./models/ProductComment"),
+    ProductComment: require("./models/ProductComment"),
+    SellProductDraft: require('./models/SellProductDraft'),
     //rbac---->
     AppSetting: require('./models/AppSetting'),
     Module: require("./models/Rbac/Module"),
