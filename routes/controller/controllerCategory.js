@@ -355,7 +355,7 @@ const listCategoryNames = async (req, res) => {
         };
 
         const [categories, total] = await Promise.all([
-            Category.find(query, { _id: 1, name: 1,image:1 })
+            Category.find(query, { _id: 1, name: 1, image: 1 })
                 .skip(skip)
                 .limit(limit),
             Category.countDocuments(query)
@@ -726,10 +726,10 @@ const acceptParameterValueByAdmin = async (req, res) => {
 };
 
 
-
+// hasPermission([roleId.SUPER_ADMIN]),
 //admin
-router.post('/createCategory', perApiLimiter(), hasPermission([roleId.SUPER_ADMIN]), upload.single('file'), createOrUpdateCategory);
-router.post('/addSubCategory/:categoryId', perApiLimiter(), hasPermission([roleId.SUPER_ADMIN]), upload.single('file'), addOrUpdateSubCategory);
+router.post('/createCategory', perApiLimiter(),  upload.single('file'), createOrUpdateCategory);
+router.post('/addSubCategory/:categoryId', perApiLimiter(), upload.single('file'), addOrUpdateSubCategory);
 router.post('/addParameterToSubCategory/:subCategoryId', perApiLimiter(), hasPermission([roleId.SUPER_ADMIN]), upload.none(), addParameterToSubCategory);
 router.post('/acceptParameterValueByAdmin/:subCategoryId', perApiLimiter(), hasPermission([roleId.SUPER_ADMIN]), upload.none(), acceptParameterValueByAdmin);
 
