@@ -44,11 +44,15 @@ const threadDraftSchema = new Schema({
         type: Boolean,
         default: false
     },
+    isTrending: {
+        type: Boolean,
+        default: false
+    },
     isDisable: {
         type: Boolean,
         default: false
     },
-    
+
 }, {
     timestamps: true
 });

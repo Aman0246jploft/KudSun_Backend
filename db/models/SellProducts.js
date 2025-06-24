@@ -92,7 +92,11 @@ const SellProductsSchema = new Schema({
         type: Boolean,
         default: false
     },
-    isSold:{
+    isTrending: {
+        type: Boolean,
+        default: false
+    },
+    isSold: {
         type: Boolean,
         default: false
     }

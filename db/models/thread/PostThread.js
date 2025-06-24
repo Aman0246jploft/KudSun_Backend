@@ -50,6 +50,11 @@ const threadSchema = new Schema({
         type: Boolean,
         default: false
     },
+    isTrending: {
+        type: Boolean,
+        default: false
+    },
+
     isDeleted: {
         type: Boolean,
         default: false

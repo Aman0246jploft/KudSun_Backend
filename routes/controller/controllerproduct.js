@@ -3,11 +3,11 @@ const express = require('express');
 const multer = require('multer');
 const upload = multer();
 const router = express.Router();
-const { SellProduct, Order, Bid, SearchHistory, Follow, User, ProductComment } = require('../../db');
+const { SellProduct, Order, Bid, SearchHistory, Follow, User, ProductComment, SellProductDraft } = require('../../db');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const { apiErrorRes, apiSuccessRes, toObjectId, formatTimeRemaining } = require('../../utils/globalFunction');
 const HTTP_STATUS = require('../../utils/statusCode');
-const { uploadImageCloudinary } = require('../../utils/cloudinary');
+const { uploadImageCloudinary, deleteImageCloudinary } = require('../../utils/cloudinary');
 const CONSTANTS_MSG = require('../../utils/constantsMessage');
 const { SALE_TYPE, DeliveryType, ORDER_STATUS } = require('../../utils/Role');
 const { DateTime } = require('luxon');
@@ -26,7 +26,8 @@ const addSellerProduct = async (req, res) => {
             originPriceView,
             originPrice,
             deliveryType,
-            shippingCharge
+            shippingCharge,
+            isDraft
         } = req.body;
         const timezone = req.body.timezone || 'UTC';
 
@@ -88,8 +89,8 @@ const addSellerProduct = async (req, res) => {
                 biddingIncrementPrice
             } = auctionSettings;
 
-            if (!startingPrice || !reservePrice) {
-                console.warn("❌ Missing startingPrice or reservePrice in auctionSettings:", auctionSettings);
+            if (!startingPrice || !reservePrice || !biddingIncrementPrice) {
+                console.warn("❌ Missing startingPrice or reservePrice or biddingIncrementPrice in auctionSettings:", auctionSettings);
                 return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Auction settings are required when saleType is 'auction'");
             }
             let biddingEndsAtDateTime;
@@ -207,13 +208,185 @@ const addSellerProduct = async (req, res) => {
             deliveryType,
             shippingCharge: deliveryType === DeliveryType.CHARGE_SHIPPING ? shippingCharge : undefined
         };
+        let savedProduct;
+        if (isDraft === 'true' || isDraft === true) {
+            // Save to draft collection
+            const draft = new SellProductDraft(productData);
+            savedProduct = await draft.save();
+        } else {
+            // Save to main collection
+            const product = new SellProduct(productData);
+            savedProduct = await product.save();
+        }
 
-        const newProduct = new SellProduct(productData);
-        const saved = await newProduct.save();
-
-        return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, saved);
+        return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, savedProduct);
     } catch (error) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
+    }
+};
+
+
+const updateSellerProduct = async (req, res) => {
+    try {
+        const productId = req.params.id;
+        const isDraftUpdate = req.body.isDraft === 'true' || req.body.isDraft === true;
+
+        // Find existing product - draft or published depending on isDraftUpdate flag
+        const Model = isDraftUpdate ? SellProductDraft : SellProduct;
+        const existingProduct = await Model.findById(productId);
+
+        if (!existingProduct) {
+            return apiErrorRes(404, res, "Product not found");
+        }
+
+        // Prepare fields to update from req.body
+        const {
+            categoryId,
+            subCategoryId,
+            title,
+            description,
+            condition,
+            saleType,
+            fixedPrice,
+            originPriceView,
+            originPrice,
+            deliveryType,
+            shippingCharge,
+            specifics,
+            tags,
+            auctionSettings,
+            timezone,
+            removePhotos
+        } = req.body;
+
+        // Validate required fields ONLY for published (non-draft) products
+        if (!isDraftUpdate) {
+            if (!categoryId) return apiErrorRes(400, res, "Missing required field: categoryId.");
+            if (!subCategoryId) return apiErrorRes(400, res, "Missing required field: subCategoryId.");
+            if (!title) return apiErrorRes(400, res, "Missing required field: title.");
+            if (!condition) return apiErrorRes(400, res, "Missing required field: condition.");
+            if (!saleType) return apiErrorRes(400, res, "Missing required field: saleType.");
+            if (!deliveryType) return apiErrorRes(400, res, "Missing required field: deliveryType.");
+
+            // Condition must be valid
+            const validConditions = ['brand_new', 'like_new', 'good', 'fair', 'works'];
+            if (!validConditions.includes(condition)) return apiErrorRes(400, res, "Invalid condition value.");
+
+            // specifics must be array and non-empty
+            if (!Array.isArray(specifics) || specifics.length === 0) {
+                return apiErrorRes(400, res, "Missing or invalid field: specifics must be a non-empty array.");
+            }
+
+            // specifics: each item must have required keys
+            for (const spec of specifics) {
+                const keys = ['parameterId', 'parameterName', 'valueId', 'valueName'];
+                for (const key of keys) {
+                    if (!spec[key]) {
+                        return apiErrorRes(400, res, `Missing '${key}' in specifics.`);
+                    }
+                }
+            }
+
+            // saleType specific validations
+            if (saleType === SALE_TYPE.FIXED && (fixedPrice == null || isNaN(fixedPrice))) {
+                return apiErrorRes(400, res, "Fixed price is required and must be a number.");
+            }
+
+            if (saleType === SALE_TYPE.AUCTION) {
+                if (!auctionSettings) {
+                    return apiErrorRes(400, res, "Auction settings are required.");
+                }
+                const { startingPrice, reservePrice, duration, endDate, endTime, biddingIncrementPrice } = auctionSettings;
+
+
+                if (startingPrice == null || reservePrice == null || !biddingIncrementPrice) {
+                    return apiErrorRes(400, res, "Auction settings must include startingPrice , reservePrice and biddingIncrementPrice.");
+                }
+
+                // Validate biddingEndsAt calculation like in add product API
+                let biddingEndsAtDateTime;
+                const auctionTimezone = timezone || auctionSettings.timezone || 'UTC';
+
+                if (endDate && endTime) {
+                    biddingEndsAtDateTime = DateTime.fromISO(`${endDate}T${endTime}`, { zone: auctionTimezone });
+                    if (!biddingEndsAtDateTime.isValid) {
+                        return apiErrorRes(400, res, "Invalid auction endDate or endTime.");
+                    }
+                } else if (duration != null) {
+                    const now = DateTime.now().setZone(auctionTimezone);
+                    biddingEndsAtDateTime = now.plus({ days: Number(duration) });
+                    if (endTime) {
+                        const [h, m] = endTime.split(':').map(Number);
+                        biddingEndsAtDateTime = biddingEndsAtDateTime.set({ hour: h, minute: m, second: 0, millisecond: 0 });
+                    } else {
+                        biddingEndsAtDateTime = biddingEndsAtDateTime.set({ hour: 23, minute: 59, second: 59, millisecond: 0 });
+                    }
+                } else {
+                    return apiErrorRes(400, res, "Auction settings must include either (endDate & endTime) or duration.");
+                }
+
+                auctionSettings.biddingEndsAt = biddingEndsAtDateTime.toJSDate();
+                auctionSettings.isBiddingOpen = DateTime.now().setZone('UTC') < biddingEndsAtDateTime.toUTC();
+                auctionSettings.endDate = biddingEndsAtDateTime.toISODate();
+                auctionSettings.endTime = biddingEndsAtDateTime.toFormat('HH:mm');
+                auctionSettings.timezone = auctionTimezone;
+            }
+
+            if (deliveryType === DeliveryType.CHARGE_SHIPPING && (shippingCharge == null || isNaN(shippingCharge))) {
+                return apiErrorRes(400, res, "Shipping charge is required and must be a number when delivery type is shipping.");
+            }
+        }
+
+        // For draft update, allow partial update, no strict validations
+        let photoUrls = existingProduct.productImages || [];
+        // Remove photos as requested
+        if (removePhotos) {
+            const photosToRemove = Array.isArray(removePhotos) ? removePhotos : [removePhotos];
+            // Delete these images from Cloudinary
+            for (const url of photosToRemove) {
+                try {
+
+                    await deleteImageCloudinary(url);
+                } catch (err) {
+                    console.error("Failed to delete old image:", url, err);
+                    // Continue anyway
+                }
+            }
+            // Filter out removed photos from productImages array
+            photoUrls = photoUrls.filter(url => !photosToRemove.includes(url));
+        }
+        if (req.files && req.files.length > 0) {
+            for (const file of req.files) {
+                const imageUrl = await uploadImageCloudinary(file, 'product-images');
+                if (imageUrl) photoUrls.push(imageUrl);
+            }
+        }
+
+
+        // Update product data
+        if (categoryId !== undefined) existingProduct.categoryId = categoryId;
+        if (subCategoryId !== undefined) existingProduct.subCategoryId = subCategoryId;
+        if (title !== undefined) existingProduct.title = title;
+        if (description !== undefined) existingProduct.description = description;
+        if (condition !== undefined) existingProduct.condition = condition;
+        if (saleType !== undefined) existingProduct.saleType = saleType;
+        if (fixedPrice !== undefined) existingProduct.fixedPrice = fixedPrice;
+        if (originPriceView !== undefined) existingProduct.originPriceView = originPriceView === 'true' || originPriceView === true;
+        if (originPrice !== undefined) existingProduct.originPrice = originPrice;
+        if (deliveryType !== undefined) existingProduct.deliveryType = deliveryType;
+        if (shippingCharge !== undefined) existingProduct.shippingCharge = shippingCharge;
+        if (specifics !== undefined) existingProduct.specifics = specifics;
+        if (tags !== undefined) existingProduct.tags = Array.isArray(tags) ? tags : [tags];
+        if (auctionSettings !== undefined) existingProduct.auctionSettings = auctionSettings;
+        existingProduct.productImages = photoUrls;
+
+        // Save updated product
+        const updatedProduct = await existingProduct.save();
+
+        return apiSuccessRes(200, res, "Product updated successfully", updatedProduct);
+
+    } catch (error) {
+        return apiErrorRes(500, res, error.message, error);
     }
 };
 
@@ -227,7 +400,8 @@ const showNormalProducts = async (req, res) => {
             categoryId,
             subCategoryId,
             tags,
-            specifics
+            specifics,
+            isTrending = false
         } = req.query;
 
         const page = parseInt(pageNo);
@@ -235,42 +409,44 @@ const showNormalProducts = async (req, res) => {
         const skip = (page - 1) * limit;
 
         // Step 1: Get sold product IDs (products part of confirmed/pending orders etc.)
-        const soldProductResult = await Order.aggregate([
-            {
-                $match: {
-                    status: {
-                        $in: [ORDER_STATUS.PENDING,
-                        ORDER_STATUS.CONFIRMED,
-                        ORDER_STATUS.SHIPPED,
-                        ORDER_STATUS.DELIVERED,
-                        ORDER_STATUS.RETURNED]
-                    },
-                    isDeleted: false,
-                },
-            },
-            { $unwind: "$items" },
-            {
-                $group: {
-                    _id: null,
-                    soldProductIds: { $addToSet: "$items.productId" },
-                },
-            },
-            {
-                $project: {
-                    _id: 0,
-                    soldProductIds: 1,
-                },
-            },
-        ]);
 
-        const soldProductIds = soldProductResult[0]?.soldProductIds || [];
+        // const soldProductResult = await Order.aggregate([
+        //     {
+        //         $match: {
+        //             status: {
+        //                 $in: [ORDER_STATUS.PENDING,
+        //                 ORDER_STATUS.CONFIRMED,
+        //                 ORDER_STATUS.SHIPPED,
+        //                 ORDER_STATUS.DELIVERED,
+        //                 ORDER_STATUS.RETURNED]
+        //             },
+        //             isDeleted: false,
+        //         },
+        //     },
+        //     { $unwind: "$items" },
+        //     {
+        //         $group: {
+        //             _id: null,
+        //             soldProductIds: { $addToSet: "$items.productId" },
+        //         },
+        //     },
+        //     {
+        //         $project: {
+        //             _id: 0,
+        //             soldProductIds: 1,
+        //         },
+        //     },
+        // ]);
+
+        // const soldProductIds = soldProductResult[0]?.soldProductIds || [];
 
         // Step 2: Build the query filter
         const filter = {
             saleType: SALE_TYPE.FIXED,
             isDeleted: false,
             isDisable: false,
-            _id: { $nin: soldProductIds }
+            isSold: false
+            // _id: { $nin: soldProductIds }
         };
 
         if (keyWord) {
@@ -283,6 +459,10 @@ const showNormalProducts = async (req, res) => {
 
         if (categoryId && categoryId !== "") {
             filter.categoryId = toObjectId(categoryId);
+        }
+
+        if (isTrending !== "") {
+            filter.isTrending = isTrending === true || isTrending === "true";
         }
 
         if (subCategoryId && subCategoryId !== "") {
@@ -299,7 +479,6 @@ const showNormalProducts = async (req, res) => {
             filter['specifics.valueId'] = { $all: parsedSpecifics.map(id => toObjectId(id)) };
         }
 
-
         // Step 3: Query with pagination, sorting, projection
         const [products, total] = await Promise.all([
             SellProduct.find(filter)
@@ -313,6 +492,7 @@ const showNormalProducts = async (req, res) => {
 
             SellProduct.countDocuments(filter)
         ]);
+
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Products fetched successfully", {
             pageNo: page,
@@ -337,8 +517,10 @@ const showAuctionProducts = async (req, res) => {
             categoryId,
             subCategoryId,
             tags,
-            specifics
+            specifics,
+            isTrending = false
         } = req.query;
+
 
         const page = parseInt(pageNo);
         const limit = parseInt(size);
@@ -368,6 +550,11 @@ const showAuctionProducts = async (req, res) => {
             filter.subCategoryId = toObjectId(subCategoryId);
         }
 
+        if (isTrending !== "") {
+            filter.isTrending = isTrending === true || isTrending === "true";
+        }
+
+
         if (tags) {
             const tagArray = Array.isArray(tags) ? tags : tags.split(',');
             filter.tags = { $in: tagArray };
@@ -377,7 +564,7 @@ const showAuctionProducts = async (req, res) => {
             const parsedSpecifics = Array.isArray(specifics) ? specifics : [specifics];
             filter['specifics.valueId'] = { $all: parsedSpecifics.map(id => toObjectId(id)) };
         }
-
+        console.log("filter", filter)
         // Step 2: Query and paginate
         const [products, total] = await Promise.all([
             SellProduct.find(filter)
@@ -451,6 +638,7 @@ const getLimitedTimeDeals = async (req, res) => {
         const filter = {
             saleType: SALE_TYPE.AUCTION,
             isDeleted: false,
+            isSold: false,
             isDisable: false,
             'auctionSettings.isBiddingOpen': true,
             'auctionSettings.biddingEndsAt': { $gte: now, $lte: next24Hours }
@@ -558,44 +746,13 @@ const fetchCombinedProducts = async (req, res) => {
         const skip = (page - 1) * limit;
 
         // Step 1: Get sold product IDs for normal products (cached approach recommended)
-        let soldProductIds = [];
-        if (!saleType || saleType === 'all' || saleType === 'normal') {
-            const soldProductResult = await Order.aggregate([
-                {
-                    $match: {
-                        status: {
-                            $in: [
-                                ORDER_STATUS.PENDING,
-                                ORDER_STATUS.CONFIRMED,
-                                ORDER_STATUS.SHIPPED,
-                                ORDER_STATUS.DELIVERED,
-                                ORDER_STATUS.RETURNED
-                            ]
-                        },
-                        isDeleted: false,
-                    },
-                },
-                { $unwind: "$items" },
-                {
-                    $group: {
-                        _id: null,
-                        soldProductIds: { $addToSet: "$items.productId" },
-                    },
-                },
-                {
-                    $project: {
-                        _id: 0,
-                        soldProductIds: 1,
-                    },
-                },
-            ]);
-            soldProductIds = soldProductResult[0]?.soldProductIds || [];
-        }
+
 
         // Step 2: Build base filter
         const baseFilter = {
             isDeleted: false,
             isDisable: false,
+            isSold: false
         };
 
         // Step 3: Build sale type specific filters
@@ -605,7 +762,7 @@ const fetchCombinedProducts = async (req, res) => {
             saleTypeFilters.push({
                 ...baseFilter,
                 saleType: SALE_TYPE.FIXED,
-                _id: { $nin: soldProductIds }
+                isSold: false,
             });
         }
 
@@ -891,38 +1048,7 @@ const fetchUserProducts = async (req, res) => {
             sortConfig = { createdAt: sortOrder === 'desc' ? -1 : 1 };
         }
 
-        // Get sold product IDs
-        let soldProductIds = [];
-        const soldProductResult = await Order.aggregate([
-            {
-                $match: {
-                    status: {
-                        $in: [
-                            ORDER_STATUS.PENDING,
-                            ORDER_STATUS.CONFIRMED,
-                            ORDER_STATUS.SHIPPED,
-                            ORDER_STATUS.DELIVERED,
-                            ORDER_STATUS.RETURNED
-                        ],
-                    },
-                    isDeleted: false
-                }
-            },
-            { $unwind: "$items" },
-            {
-                $group: {
-                    _id: null,
-                    soldProductIds: { $addToSet: "$items.productId" }
-                }
-            },
-            {
-                $project: {
-                    _id: 0,
-                    soldProductIds: 1
-                }
-            }
-        ]);
-        soldProductIds = soldProductResult[0]?.soldProductIds || [];
+
 
         // Fetch Products
         const [products, total] = await Promise.all([
@@ -930,11 +1056,12 @@ const fetchUserProducts = async (req, res) => {
                 .select(`
                     title 
                     fixedPrice 
-                    saleType 
+                    saleType    
                     condition 
                     productImages 
                     auctionSettings 
                     createdAt
+            isSold
                 `)
                 .sort(sortConfig)
                 .skip(skip)
@@ -945,11 +1072,8 @@ const fetchUserProducts = async (req, res) => {
 
         // Enhance products with isSold flag
         const finalProducts = products.map(product => {
-            const isSold = soldProductIds.some(id => id.toString() === product._id.toString());
-
             return {
-                ...product,
-                isSold
+                ...product
             };
         });
 
@@ -1069,17 +1193,29 @@ const getSearchHistory = async (req, res) => {
 };
 
 
-const getNormalProduct = async (req, res) => {
+const getProduct = async (req, res) => {
     try {
         const { id } = req.params;
         const loginUserId = req.user?.userId;
-
-        // Find product that is not deleted, not disabled, not sold
-        const product = await SellProduct.findOne({
+        const isDraft = req.query.draft === 'true';
+        let query = {
             _id: id,
             isDeleted: false,
             isDisable: false,
-        })
+        };
+
+        if (isDraft) {
+            // Fetch draft product (assuming you have isDraft field)
+            query.isDraft = true;
+        } else {
+            // Fetch published product (not sold and not draft)
+            query.isSold = false;
+            query.isDraft = { $ne: true };  // explicitly exclude drafts
+        }
+
+
+        // Find product that is not deleted, not disabled, not sold
+        const product = await SellProduct.findOne(query)
             .populate('categoryId', 'name')
             .lean();
 
@@ -1312,11 +1448,124 @@ const getCommentByParentId = async (req, res) => {
 };
 
 
+const getDraftProducts = async (req, res) => {
+    try {
+        const loginUserId = req.user?.userId;
+
+        // Pagination params with defaults
+        const pageNo = Math.max(1, parseInt(req.query.pageNo) || 1);
+        const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize) || 10));
+        const skip = (pageNo - 1) * pageSize;
+
+        // Query for draft products (not deleted, not disabled, isDraft = true)
+        const query = {
+            isDeleted: false,
+            isDisable: false,
+            userId: toObjectId(loginUserId)
+        };
+
+        // Get total count for pagination
+        const totalDraftCount = await SellProductDraft.countDocuments(query);
+
+        // Fetch draft products with pagination, populate category name, lean() for plain JS objects
+        const drafts = await SellProductDraft.find(query)
+            .populate('categoryId', 'name')
+            .skip(skip)
+            .limit(pageSize)
+            .lean();
+
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Draft products fetched successfully.", {
+            pageNo,
+            size: pageSize,
+            total: totalDraftCount,
+            drafts: drafts,
+        });
+
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
+    }
+};
+
+const deleteProduct = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const loginUserId = req.user?.userId;
+
+        if (!id) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Product ID is required.");
+        }
+
+        // Find product and check ownership
+        const product = await SellProduct.findOne({ _id: id, isDeleted: false });
+        if (!product) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Product not found.");
+        }
+
+        if (product.userId.toString() !== loginUserId) {
+            return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, "You are not authorized to delete this product.");
+        }
+
+        // Delete images from Cloudinary
+        if (product.photos && product.photos.length > 0) {
+            for (const url of product.photos) {
+                try {
+                    await deleteImageCloudinary(url);
+                } catch (err) {
+                    console.error("Failed to delete image from Cloudinary:", url, err);
+                    // Continue deleting other images even if one fails
+                }
+            }
+        }
+
+        // Soft delete product
+        product.isDeleted = true;
+        await product.save();
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Product deleted successfully.");
+
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
+    }
+};
+
+
+const trending = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const existing = await SellProduct.findById(id);
+        if (!existing) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, `Product not found.`);
+        }
+
+
+        existing.isTrending = !existing.isTrending;
+        await existing.save();
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, `Product updated successfully.`);
+
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
+    }
+};
+
+
+
 router.post('/addSellerProduct', perApiLimiter(), upload.array('files', 10), addSellerProduct);
+
+router.post('/updateSellerProduct/:id', perApiLimiter(), upload.array('files', 10), updateSellerProduct);
+router.get('/getDraftProducts', perApiLimiter(), getDraftProducts);
+router.post('/deleteProduct/:id', perApiLimiter(), deleteProduct);
+router.post('/trending/:id', perApiLimiter(), trending);
+
+
+
+
 //List api for the Home Screen // thread controller
 router.get('/showNormalProducts', perApiLimiter(), showNormalProducts);
 router.get('/showAuctionProducts', perApiLimiter(), showAuctionProducts);
-router.get('/getProducts/:id', perApiLimiter(), getNormalProduct);
+router.get('/getProducts/:id', perApiLimiter(), getProduct);
 
 //Category detail Page
 router.get('/limited-time', perApiLimiter(), getLimitedTimeDeals);
@@ -1335,12 +1584,6 @@ router.get('/getSearchHistory', perApiLimiter(), getSearchHistory);
 router.post('/addComment', perApiLimiter(), upload.array('files', 2), addComment);
 router.get('/getProductComment/:productId', perApiLimiter(), getProductComment);
 router.get('/getCommentByParentId/:parentId', perApiLimiter(), getCommentByParentId);
-
-
-
-
-
-
 
 
 

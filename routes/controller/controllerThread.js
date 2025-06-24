@@ -3,7 +3,7 @@ const express = require('express');
 const multer = require('multer');
 const upload = multer();
 const router = express.Router();
-const { Thread, ThreadComment, SellProduct, Bid, Follow, ThreadLike, ThreadDraft } = require('../../db');
+const { Thread, ThreadComment, SellProduct, Bid, Follow, ThreadLike, ThreadDraft, User } = require('../../db');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const { apiErrorRes, apiSuccessRes, toObjectId } = require('../../utils/globalFunction');
 const HTTP_STATUS = require('../../utils/statusCode');
@@ -248,6 +248,26 @@ const changeStatus = async (req, res) => {
 };
 
 
+
+const trending = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const existing = await Thread.findById(id);
+        if (!existing) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, `Thread not found.`);
+        }
+
+
+        existing.isTrending = !existing.isTrending;
+        await existing.save();
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, `Thread updated successfully.`);
+
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
+    }
+};
 
 
 
@@ -585,6 +605,7 @@ const getThreads = async (req, res) => {
             categoryId,
             subCategoryId,
             userId,
+            isTrending = false,
             sortBy = 'createdAt', // 'createdAt' | 'budget' | 'comments'
             sortOrder = 'desc'    // 'asc' | 'desc'
         } = req.query;
@@ -599,6 +620,12 @@ const getThreads = async (req, res) => {
         if (categoryId && mongoose.Types.ObjectId.isValid(categoryId)) {
             filters.categoryId = categoryId;
         }
+
+
+        if (isTrending !== "") {
+            filters.isTrending = isTrending;
+        }
+
 
         if (subCategoryId && mongoose.Types.ObjectId.isValid(subCategoryId)) {
             filters.subCategoryId = subCategoryId;
@@ -856,15 +883,156 @@ const getFollowedUsersThreads = async (req, res) => {
 };
 
 
+const getRecentFollowedUsers = async (req, res) => {
+    try {
+        const currentUserId = toObjectId(req.user.userId);
+        const pageNo = parseInt(req.query.pageNo) || 1;
+        const size = parseInt(req.query.size) || 10;
+        const skip = (pageNo - 1) * size;
+
+        // Get followed user IDs
+        const follows = await Follow.find({
+            followedBy: currentUserId,
+            isDeleted: false,
+            isDisable: false
+        }).select('userId');
+
+        const followedUserIds = follows.map(f => f.userId);
+        if (!followedUserIds.length) {
+            return apiSuccessRes(HTTP_STATUS.OK, res, "No followed users.", {
+                pageNo,
+                size,
+                total: 0,
+                users: []
+            });
+        }
+
+        // Aggregate user info + latest thread
+        const users = await User.aggregate([
+            {
+                $match: {
+                    _id: { $in: followedUserIds },
+                    isDeleted: false,
+                    isDisable: false
+                }
+            },
+            {
+                $lookup: {
+                    from: 'thread',
+                    let: { userId: '$_id' },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: { $eq: ['$userId', '$$userId'] },
+                                isDeleted: false,
+                                isDisable: false
+                            }
+                        },
+                        { $sort: { createdAt: -1 } },
+                        { $limit: 1 },
+                        {
+                            $project: {
+                                _id: 1,
+                                title: 1,
+                                createdAt: 1
+                            }
+                        }
+                    ],
+                    as: 'latestThread'
+                }
+            },
+            {
+                $addFields: {
+                    latestThread: { $arrayElemAt: ['$latestThread', 0] },
+                    latestThreadDate: {
+                        $ifNull: [{ $arrayElemAt: ['$latestThread.createdAt', 0] }, null]
+                    }
+                }
+            },
+            {
+                $sort: {
+                    latestThreadDate: -1
+                }
+            },
+            {
+                $project: {
+                    _id: 1,
+                    userName: 1,
+                    profileImage: 1,
+                    isLive: 1,
+                    latestThread: 1
+                }
+            },
+            { $skip: skip },
+            { $limit: size }
+        ]);
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Recent followed users fetched successfully.", {
+            pageNo,
+            size,
+            total: followedUserIds.length,
+            users
+        });
+
+    } catch (err) {
+        console.error("Error in getRecentFollowedUsers:", err);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Something went wrong");
+    }
+};
+
+
+
+const getDraftThreads = async (req, res) => {
+    try {
+        const pageNo = parseInt(req.query.pageNo) || 1;
+        const size = parseInt(req.query.size) || 10;
+
+        if (pageNo < 1 || size < 1) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Invalid pageNo or size.');
+        }
+
+        const skip = (pageNo - 1) * size;
+
+        const query = {
+            userId: req.user.userId,
+            isDeleted: { $ne: true }
+        };
+
+        const [drafts, total] = await Promise.all([
+            ThreadDraft.find(query)
+                .sort({ createdAt: -1 }) // newest first
+                .skip(skip)
+                .limit(size),
+            ThreadDraft.countDocuments(query)
+        ]);
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, {
+            total,
+            pageNo,
+            size,
+            drafts,
+        });
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
+    }
+};
+
+
+
 
 //thread
 router.post('/create', perApiLimiter(), upload.array('files', 10), addThread);
 router.post('/updateThread/:id', perApiLimiter(), upload.array('files', 10), updateThread);
 router.post('/delete/:id', perApiLimiter(), deleteThread);
 router.post('/changeStatus/:id', perApiLimiter(), changeStatus);
+router.post('/trending/:id', perApiLimiter(), trending);
+
+
 
 //getFollowedUsersThreads
 router.get('/getFollowedUsersThreads', perApiLimiter(), upload.none(), getFollowedUsersThreads);
+router.get('/recentUser', perApiLimiter(), getRecentFollowedUsers);
+router.get('/getDraftThreads', perApiLimiter(), getDraftThreads);
 
 
 

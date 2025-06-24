@@ -51,6 +51,10 @@ const OrderSchema = new Schema({
     totalAmount: { type: Number, required: true },
     platformFee: { type: Number },
     shippingCharge: { type: Number, default: 0 },
+    shippingId: {
+        type: Schema.Types.ObjectId,
+        ref: 'Shipping',
+    },
     grandTotal: { type: Number, required: true },
 
     paymentStatus: { type: String, enum: Object.values(PAYMENT_STATUS), default: PAYMENT_STATUS.PENDING },
@@ -61,8 +65,10 @@ const OrderSchema = new Schema({
         enum: Object.values(ORDER_STATUS),
         default: ORDER_STATUS.PENDING
     },
-
-
+    disputeId: {
+        type: Schema.Types.ObjectId,
+        ref: 'Dispute',
+    },
     isDisable: { type: Boolean, default: false },
     isDeleted: { type: Boolean, default: false }
 }, {

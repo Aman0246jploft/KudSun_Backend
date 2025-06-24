@@ -49,8 +49,64 @@ async function uploadImageCloudinary(file, userId) {
   });
 }
 
+function parseCloudinaryUrl(url) {
+  try {
+    // Example Cloudinary URL format:
+    // https://res.cloudinary.com/<cloud_name>/image/upload/v1234567890/userId/fileName.jpg
+
+    const urlObj = new URL(url);
+    const parts = urlObj.pathname.split('/'); // ['', 'image', 'upload', 'v1234567890', 'userId', 'fileName.jpg']
+
+    // folder (userId) is at index -2, filename at index -1
+    const userId = parts[parts.length - 2];
+    const fileWithExt = parts[parts.length - 1];
+
+    // split filename and ext
+    const dotIndex = fileWithExt.lastIndexOf('.');
+    const fileName = dotIndex !== -1 ? fileWithExt.substring(0, dotIndex) : fileWithExt;
+    const ext = dotIndex !== -1 ? fileWithExt.substring(dotIndex) : '';
+
+    return { userId, fileName, ext };
+  } catch (err) {
+    console.error("Failed to parse Cloudinary URL:", url, err);
+    return null;
+  }
+}
+
+async function deleteImageCloudinary(url) {
+  try {
+    // Parse the Cloudinary URL to get public_id and folder (userId)
+    const urlObj = new URL(url);
+    const parts = urlObj.pathname.split('/'); 
+    // Example: ['', 'image', 'upload', 'v1234567890', 'userId', 'fileName.jpg']
+
+    const userId = parts[parts.length - 2];
+    const fileWithExt = parts[parts.length - 1];
+    
+    const dotIndex = fileWithExt.lastIndexOf('.');
+    const publicId = dotIndex !== -1 ? fileWithExt.substring(0, dotIndex) : fileWithExt;
+
+    // Construct the full public_id including folder
+    const fullPublicId = `${userId}/${publicId}`;
+
+    // Call Cloudinary delete API
+    return new Promise((resolve, reject) => {
+      cloudinary.uploader.destroy(fullPublicId, { resource_type: 'image' }, (error, result) => {
+        if (error) {
+          console.error("Cloudinary delete error:", error);
+          return reject(error);
+        }
+        resolve(result);
+      });
+    });
+  } catch (err) {
+    console.error("Error parsing URL or deleting from Cloudinary:", err);
+    throw err;
+  }
+}
+
 
 module.exports = {
   uploadImageCloudinary,
-
+  deleteImageCloudinary
 }
