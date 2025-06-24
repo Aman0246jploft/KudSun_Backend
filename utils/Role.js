@@ -17,7 +17,8 @@ const SALE_TYPE = {
 
 const DeliveryType = {
     FREE_SHIPPING: 'free_shipping',
-    CHARGE_SHIPPING: 'charge_shipping'
+    CHARGE_SHIPPING: 'charge_shipping',
+    LOCAL_PICKUP:'local_pickup'
 
 }
 

@@ -33,6 +33,7 @@ const addSellerProduct = async (req, res) => {
 
         let specifics = [];
         let auctionSettings = {};
+        console.log("req.body111", req.body)
 
         // Parse JSON fields from form-data
         try {
@@ -401,7 +402,9 @@ const showNormalProducts = async (req, res) => {
             subCategoryId,
             tags,
             specifics,
-            isTrending = false
+            isTrending = false,
+            includeSold,
+            isSold = false
         } = req.query;
 
         const page = parseInt(pageNo);
@@ -445,9 +448,22 @@ const showNormalProducts = async (req, res) => {
             saleType: SALE_TYPE.FIXED,
             isDeleted: false,
             isDisable: false,
-            isSold: false
+            // isSold: false
             // _id: { $nin: soldProductIds }
         };
+
+
+        if (includeSold == true || includeSold == "true") {
+            // Do not filter isSold — return both sold and unsold
+        } else if (isSold === 'true' || isSold === true) {
+            filter.isSold = true;
+        } else {
+            filter.isSold = false; // default
+        }
+
+        console.log("filterfilter", filter, includeSold, includeSold == true || includeSold == "true")
+
+
 
         if (keyWord) {
             filter.$or = [
@@ -485,7 +501,7 @@ const showNormalProducts = async (req, res) => {
                 .sort({ createdAt: -1 })
                 .skip(skip)
                 .limit(limit)
-                .select("title fixedPrice productImages condition  userId  tags originPriceView originPrice description specifics")
+                .select("title fixedPrice productImages condition  isSold userId  tags originPriceView originPrice description specifics")
                 .populate("categoryId", "name")
                 .populate("userId", "userName profileImage is_Id_verified isLive is_Preferred_seller")
                 .lean(),
