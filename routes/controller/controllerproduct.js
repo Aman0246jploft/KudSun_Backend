@@ -534,6 +534,8 @@ const showAuctionProducts = async (req, res) => {
             subCategoryId,
             tags,
             specifics,
+            isSold = false,
+            includeSold = false,
             isTrending = false
         } = req.query;
 
@@ -547,8 +549,14 @@ const showAuctionProducts = async (req, res) => {
             saleType: SALE_TYPE.AUCTION,
             isDeleted: false,
             isDisable: false,
-            'auctionSettings.isBiddingOpen': true
         };
+
+        if (includeSold == true || includeSold == "true") {
+            // Do not filter isSold — return both sold and unsold
+        } else {
+            filter['auctionSettings.isBiddingOpen'] = true
+
+        }
 
         if (keyWord) {
             filter.$or = [
