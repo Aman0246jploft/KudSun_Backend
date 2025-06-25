@@ -40,6 +40,7 @@ module.exports = {
     ThreadDraft: require("./models/thread/ThreadDraft"),
     ProductComment: require("./models/ProductComment"),
     SellProductDraft: require('./models/SellProductDraft'),
+    FeeSetting: require("./models/FeeSetting"),
     //rbac---->
     AppSetting: require('./models/AppSetting'),
     Module: require("./models/Rbac/Module"),
