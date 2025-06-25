@@ -4,11 +4,11 @@ const multer = require('multer');
 const upload = multer();
 const router = express.Router();
 const moment = require("moment")
-const { UserAddress, Order, SellProduct, Bid } = require('../../db');
+const { UserAddress, Order, SellProduct, Bid, FeeSetting } = require('../../db');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const HTTP_STATUS = require('../../utils/statusCode');
 const { toObjectId, apiSuccessRes, apiErrorRes, parseItems } = require('../../utils/globalFunction');
-const { SALE_TYPE, DEFAULT_AMOUNT, PAYMENT_METHOD, ORDER_STATUS, PAYMENT_STATUS } = require('../../utils/Role');
+const { SALE_TYPE, DEFAULT_AMOUNT, PAYMENT_METHOD, ORDER_STATUS, PAYMENT_STATUS, CHARGE_TYPE, PRICING_TYPE } = require('../../utils/Role');
 const { default: mongoose } = require('mongoose');
 
 
@@ -24,8 +24,6 @@ const createOrder = async (req, res) => {
         if (req.body.items) {
             items = parseItems(req.body.items)
         }
-
-        console.log("req.body", req.body)
 
         if (!Array.isArray(items) || items.length === 0) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Invalid order data');
@@ -67,6 +65,15 @@ const createOrder = async (req, res) => {
             );
         }
 
+        const feeSettings = await FeeSetting.find({
+            isActive: true,
+            isDisable: false,
+            isDeleted: false
+        }).lean();
+        const feeMap = {};
+        feeSettings.forEach(fee => {
+            feeMap[fee.name] = fee;
+        });
 
 
         let totalAmount = 0;
@@ -139,9 +146,31 @@ const createOrder = async (req, res) => {
             });
             totalShippingCharge += Number(product.shippingCharge ?? DEFAULT_AMOUNT.SHIPPING_CHARGE);
         }
-        const shippingCharge = totalShippingCharge
-        const plateFormFee = Number(DEFAULT_AMOUNT.PLATFORM_FEE)
-        const grandTotal = totalAmount + shippingCharge + plateFormFee;
+
+        const buyerProtectionFeeSetting = feeMap[CHARGE_TYPE.BUYER_PROTECTION_FEE];
+        let buyerProtectionFee = 0;
+        let buyerProtectionFeeType = PRICING_TYPE.FIXED;
+        if (buyerProtectionFeeSetting) {
+            buyerProtectionFeeType = buyerProtectionFeeSetting.type;
+            buyerProtectionFee = buyerProtectionFeeType === PRICING_TYPE.PERCENTAGE
+                ? (totalAmount * buyerProtectionFeeSetting.value / 100)
+                : buyerProtectionFeeSetting.value;
+        }
+        const taxSetting = feeMap[CHARGE_TYPE.TAX];
+        let tax = 0;
+        let taxType = PRICING_TYPE.FIXED;
+        if (taxSetting) {
+            taxType = taxSetting.type;
+            tax = taxType === PRICING_TYPE.PERCENTAGE
+                ? (totalAmount * taxSetting.value / 100)
+                : taxSetting.value;
+        }
+
+
+        const shippingCharge = totalShippingCharge || 0
+
+        const grandTotal = totalAmount + shippingCharge + buyerProtectionFee + tax;
+
 
 
         const order = new Order({
@@ -162,7 +191,10 @@ const createOrder = async (req, res) => {
             shippingCharge,
             grandTotal,
             paymentMethod,
-            platformFee: plateFormFee
+            BuyerProtectionFee: buyerProtectionFee,
+            BuyerProtectionFeeType: buyerProtectionFeeType,
+            Tax: tax,
+            TaxType: taxType,
         });
         await order.save({ session });
         await session.commitTransaction();
@@ -386,14 +418,46 @@ const previewOrder = async (req, res) => {
         }
 
         const shippingCharge = totalShippingCharge;
-        const platformFee = Number(DEFAULT_AMOUNT.PLATFORM_FEE);
-        const grandTotal = totalAmount + shippingCharge + platformFee;
+        // Fetch FeeSettings for buyer protection fee and tax
+        const feeSettings = await FeeSetting.find({
+            isActive: true,
+            isDisable: false,
+            isDeleted: false
+        }).lean();
+        const feeMap = {};
+        feeSettings.forEach(fee => {
+            feeMap[fee.name] = fee;
+        });
+        const buyerProtectionFeeSetting = feeMap[CHARGE_TYPE.BUYER_PROTECTION_FEE];
+        let buyerProtectionFee = 0;
+        let buyerProtectionFeeType = PRICING_TYPE.FIXED;
+        if (buyerProtectionFeeSetting) {
+            buyerProtectionFeeType = buyerProtectionFeeSetting.type;
+            buyerProtectionFee = buyerProtectionFeeType === PRICING_TYPE.PERCENTAGE
+                ? (totalAmount * buyerProtectionFeeSetting.value / 100)
+                : buyerProtectionFeeSetting.value;
+        }
+
+        const taxSetting = feeMap[CHARGE_TYPE.TAX];
+        let tax = 0;
+        let taxType = PRICING_TYPE.FIXED;
+        if (taxSetting) {
+            taxType = taxSetting.type;
+            tax = taxType === PRICING_TYPE.PERCENTAGE
+                ? (totalAmount * taxSetting.value / 100)
+                : taxSetting.value;
+        }
+
+        const grandTotal = totalAmount + shippingCharge + buyerProtectionFee + tax;
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Order preview", {
             items: previewItems,
             totalAmount,
             shippingCharge,
-            platformFee,
+            buyerProtectionFee,
+            buyerProtectionFeeType,
+            tax,
+            taxType,
             grandTotal
         });
     } catch (err) {

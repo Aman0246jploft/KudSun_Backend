@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const { PAYMENT_STATUS, PAYMENT_METHOD, ORDER_STATUS, SALE_TYPE } = require("../../../utils/Role");
+const { PAYMENT_STATUS, PAYMENT_METHOD, ORDER_STATUS, SALE_TYPE, PRICING_TYPE } = require("../../../utils/Role");
 
 // const ORDER_STATUS = {
 //     PENDING: 'pending',
@@ -49,7 +49,13 @@ const OrderSchema = new Schema({
     }],
 
     totalAmount: { type: Number, required: true },
-    platformFee: { type: Number },
+
+    BuyerProtectionFee: { type: Number },
+    BuyerProtectionFeeType: { type: String, enum: Object.values(PRICING_TYPE), default: PRICING_TYPE.FIXED },
+    TaxType: { type: String, enum: Object.values(PRICING_TYPE), default: PRICING_TYPE.FIXED },
+    Tax: { type: Number },
+
+
     shippingCharge: { type: Number, default: 0 },
     shippingId: {
         type: Schema.Types.ObjectId,

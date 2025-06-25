@@ -20,7 +20,6 @@ const SellProducts = require('../../db/models/SellProducts');
 
 const uploadfile = async (req, res) => {
     try {
-
         // ✅ Upload image if exists
         if (req.file) {
             const validImageTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
@@ -319,13 +318,16 @@ const getUserResponse = (user) => {
 
 
 
-
 const requestOtp = async (req, res) => {
     const { phoneNumber, language } = req.body;
 
     const existingUser = await User.findOne({ phoneNumber });
     if (existingUser) {
-        return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Phone number already registered");
+        // Return existing step, or default to step 1 if not set
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Phone number already registered", {
+            phoneNumber,
+            step: existingUser.step || 1,
+        });
     }
 
     const otp = process.env.NODE_ENV !== 'production' ? '123456' : generateOTP();
@@ -336,13 +338,37 @@ const requestOtp = async (req, res) => {
             phoneNumber,
             language,
             step: 1,
-            tempOtp: otp
+            tempOtp: otp,
         },
         { upsert: true, new: true }
     );
 
     return apiSuccessRes(HTTP_STATUS.OK, res, "OTP sent", { phoneNumber, step: 1 });
 };
+
+// const requestOtp = async (req, res) => {
+//     const { phoneNumber, language } = req.body;
+
+//     const existingUser = await User.findOne({ phoneNumber });
+//     if (existingUser) {
+//         return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Phone number already registered");
+//     }
+
+//     const otp = process.env.NODE_ENV !== 'production' ? '123456' : generateOTP();
+
+//     const user = await User.findOneAndUpdate(
+//         { phoneNumber },
+//         {
+//             phoneNumber,
+//             language,
+//             step: 1,
+//             tempOtp: otp
+//         },
+//         { upsert: true, new: true }
+//     );
+
+//     return apiSuccessRes(HTTP_STATUS.OK, res, "OTP sent", { phoneNumber, step: 1 });
+// };
 const verifyOtp = async (req, res) => {
     const { phoneNumber, otp } = req.body;
 
@@ -445,7 +471,7 @@ const completeRegistration = async (req, res) => {
     const { phoneNumber, userName, gender, dob, fcmToken } = req.body;
 
     const user = await User.findOne({ phoneNumber });
-    if (!user ) {
+    if (!user) {
         return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Incomplete onboarding");
     }
 
@@ -1023,8 +1049,6 @@ const verifyResetOtp = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
-
-
 const resetPassword = async (req, res) => {
     try {
         const { phoneNumber, newPassword, confirmPassword } = req.body;
@@ -1076,9 +1100,6 @@ const resetPassword = async (req, res) => {
         );
     }
 };
-
-
-
 const resendResetOtp = async (req, res) => {
     try {
         const { phoneNumber } = req.body;
@@ -1265,15 +1286,15 @@ router.post('/completeRegistration', perApiLimiter(), upload.single('file'), com
 router.get('/getOnboardingStep', perApiLimiter(), upload.none(), getOnboardingStep);
 
 //login 
-router.post('/loginStepOne', perApiLimiter(), upload.none(),  loginStepOne);
-router.post('/loginStepTwo', perApiLimiter(), upload.none(),  loginStepTwoPassword);
-router.post('/loginStepThree', perApiLimiter(), upload.none(),  loginStepThreeVerifyOtp);
-router.post('/resendLoginOtp', perApiLimiter(), upload.none(),  resendLoginOtp);
+router.post('/loginStepOne', perApiLimiter(), upload.none(), loginStepOne);
+router.post('/loginStepTwo', perApiLimiter(), upload.none(), loginStepTwoPassword);
+router.post('/loginStepThree', perApiLimiter(), upload.none(), loginStepThreeVerifyOtp);
+router.post('/resendLoginOtp', perApiLimiter(), upload.none(), resendLoginOtp);
 router.post('/login', perApiLimiter(), upload.none(), validateRequest(loginSchema), login);
 //RESET PASSWORD 
-router.post('/requestResetOtp', perApiLimiter(), upload.none(),  requestResetOtp);
+router.post('/requestResetOtp', perApiLimiter(), upload.none(), requestResetOtp);
 router.post('/verifyResetOtp', perApiLimiter(), upload.none(), verifyResetOtp);
-router.post('/resetPassword', perApiLimiter(), upload.none(),  resetPassword);
+router.post('/resetPassword', perApiLimiter(), upload.none(), resetPassword);
 router.post('/resendResetOtp', perApiLimiter(), upload.none(), resendResetOtp);
 
 
