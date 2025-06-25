@@ -5,17 +5,22 @@ const { roleId } = require("../../utils/Role");
 const Schema = mongoose.Schema;
 
 const UserSchema = new Schema({
+    step: {
+        type: Number,
+        default: 1,
+        index: true
+    },
+    tempOtp: {
+        type: String,
+        default: null
+    },
     userName: {
         type: String,
-        required: true,
-        unique: true,
         trim: true,
         lowercase: true
     },
     email: {
         type: String,
-        required: true,
-        unique: true,
         trim: true,
         lowercase: true,
         index: true
@@ -26,7 +31,6 @@ const UserSchema = new Schema({
     },
     password: {
         type: String,
-        required: true
     },
     // role: {
     //     type: mongoose.Schema.Types.ObjectId,
