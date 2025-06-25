@@ -1222,6 +1222,7 @@ const getProduct = async (req, res) => {
         const { id } = req.params;
         const loginUserId = req.user?.userId;
         const isDraft = req.query.draft === 'true';
+
         let query = {
             _id: id,
             isDeleted: false,
@@ -1229,16 +1230,12 @@ const getProduct = async (req, res) => {
         };
 
         if (isDraft) {
-            // Fetch draft product (assuming you have isDraft field)
             query.isDraft = true;
         } else {
-            // Fetch published product (not sold and not draft)
             query.isSold = false;
-            query.isDraft = { $ne: true };  // explicitly exclude drafts
+            query.isDraft = { $ne: true };
         }
 
-
-        // Find product that is not deleted, not disabled, not sold
         const product = await SellProduct.findOne(query)
             .populate('categoryId', 'name')
             .lean();
@@ -1247,17 +1244,17 @@ const getProduct = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Product not found or unavailable.");
         }
 
-        // Get user details (excluding sensitive data)
+        // --- Seller Info
         const user = await User.findById(product.userId)
             .select('userName profileImage is_Id_verified is_Preferred_seller isLive')
             .lean();
 
-        // Get follower count
         const followersCount = await Follow.countDocuments({
             userId: toObjectId(product.userId),
             isDeleted: false,
             isDisable: false
         });
+
         let isFollowing = false;
         if (loginUserId) {
             const followDoc = await Follow.findOne({
@@ -1266,10 +1263,8 @@ const getProduct = async (req, res) => {
                 isDeleted: false,
                 isDisable: false
             });
-
             isFollowing = !!followDoc;
         }
-
 
         product.seller = {
             ...user,
@@ -1277,11 +1272,144 @@ const getProduct = async (req, res) => {
             isFollowing
         };
 
+        // --- Auction Info (if applicable)
+        if (product.saleType === SALE_TYPE.AUCTION) {
+            const allBids = await Bid.find({ productId: id }).sort({ placedAt: -1 }).lean();
+
+            const totalBids = allBids.length;
+            const isReserveMet = allBids.some(bid => bid.isReserveMet === true);
+            const currentHighestBid = allBids.reduce((max, bid) => bid.amount > max.amount ? bid : max, { amount: 0 });
+
+            const bidderMap = new Map();
+            for (const bid of allBids) {
+                if (!bidderMap.has(bid.userId.toString())) {
+                    bidderMap.set(bid.userId.toString(), bid.amount);
+                }
+            }
+
+            const bidderIds = Array.from(bidderMap.keys());
+
+            const bidderUsers = await User.find({ _id: { $in: bidderIds } })
+                .select('_id userName profileImage isLive')
+                .lean();
+
+            const bidders = bidderUsers.map(user => ({
+                ...user,
+                latestBidAmount: bidderMap.get(user._id.toString())
+            }));
+
+            product.auctionDetails = {
+                totalBids,
+                isReserveMet,
+                isLiveAuction: product.auctionSettings?.isBiddingOpen || false,
+                currentHighestBid: {
+                    userId: currentHighestBid.userId,
+                    amount: currentHighestBid.amount,
+                    placedAt: currentHighestBid.placedAt
+                },
+                bidders
+            };
+        }
+        const [totalComments, topComments] = await Promise.all([
+            ProductComment.countDocuments({
+                product: product._id,
+                parent: null,
+                isDeleted: false,
+                isDisable: false
+            }),
+            ProductComment.aggregate([
+                {
+                    $match: {
+                        product: toObjectId(product._id),
+                        parent: null,
+                        isDeleted: false,
+                        isDisable: false
+                    }
+                },
+                { $sort: { createdAt: -1 } },
+                { $limit: 2 },
+                {
+                    $lookup: {
+                        from: 'User',
+                        localField: 'author',
+                        foreignField: '_id',
+                        as: 'author'
+                    }
+                },
+                { $unwind: '$author' },
+                {
+                    $lookup: {
+                        from: 'ProductComment',
+                        let: { commentId: '$_id' },
+                        pipeline: [
+                            {
+                                $match: {
+                                    $expr: { $eq: ['$parent', '$$commentId'] },
+                                    isDeleted: false,
+                                    isDisable: false
+                                }
+                            },
+                            { $sort: { createdAt: 1 } },
+                            { $limit: 2 }, // Limit to top 2 replies
+                            {
+                                $lookup: {
+                                    from: 'User',
+                                    localField: 'author',
+                                    foreignField: '_id',
+                                    as: 'author'
+                                }
+                            },
+                            { $unwind: '$author' },
+                            {
+                                $project: {
+                                    _id: 1,
+                                    content: 1,
+                                    createdAt: 1,
+                                    author: {
+                                        _id: '$author._id',
+                                        userName: '$author.userName',
+                                        profileImage: '$author.profileImage'
+                                    }
+                                }
+                            }
+                        ],
+                        as: 'replies'
+                    }
+                },
+                {
+                    $addFields: {
+                        totalReplies: { $size: '$replies' }
+                    }
+                },
+                {
+                    $project: {
+                        _id: 1,
+                        content: 1,
+                        createdAt: 1,
+                        totalReplies: 1,
+                        replies: 1,
+                        author: {
+                            _id: '$author._id',
+                            userName: '$author.userName',
+                            profileImage: '$author.profileImage'
+                        }
+                    }
+                }
+            ])
+        ]);
+
+        product.commentData = {
+            totalComments,
+            topComments
+        };
+        console.log("topComments", topComments)
+
         return apiSuccessRes(HTTP_STATUS.OK, res, "Product fetched successfully.", product);
     } catch (error) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
     }
 };
+
 
 const addComment = async (req, res) => {
     try {
@@ -1602,7 +1730,6 @@ router.post('/createHistory', perApiLimiter(), createHistory);
 router.post('/clearAllHistory', perApiLimiter(), clearAllHistory);
 router.post('/clearOneHistory/:id', perApiLimiter(), clearOneHistory);
 router.get('/getSearchHistory', perApiLimiter(), getSearchHistory);
-
 
 //comment
 router.post('/addComment', perApiLimiter(), upload.array('files', 2), addComment);

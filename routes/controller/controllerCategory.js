@@ -559,16 +559,66 @@ const getSubCategoriesByCategoryId = async (req, res) => {
     }
 };
 
+// const getParametersBySubCategoryId = async (req, res) => {
+//     try {
+//         const { subCategoryId } = req.params;
+//         const userId = req.user?.userId;  // assuming userId is set in req.user after auth
+
+//         if (!subCategoryId) {
+//             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Subcategory ID is required');
+//         }
+
+//         // Find the category containing the subcategory
+//         const category = await Category.findOne(
+//             { 'subCategories._id': subCategoryId, isDeleted: false },
+//             { 'subCategories.$': 1 }
+//         );
+
+//         if (!category || !category.subCategories.length) {
+//             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
+//         }
+
+//         const subCategory = category.subCategories[0];
+
+//         // Filter parameter values according to admin/user logic
+//         const parameters = subCategory.parameters.map(param => {
+//             const filteredValues = param.values.filter(val =>
+//                 val.isAddedByAdmin ||
+//                 (userId && val.addedByUserId?.toString() === userId)
+//             );
+
+//             return {
+//                 _id: param._id,
+//                 key: param.key,
+//                 values: filteredValues
+//             };
+//         }).filter(param => param.values.length > 0); // optionally exclude params with no visible values
+
+//         return apiSuccessRes(HTTP_STATUS.OK, res, 'Parameters fetched successfully', {
+//             subCategoryId,
+//             parameters
+//         });
+
+//     } catch (error) {
+//         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+//     }
+// };
+
+
+
+
+
+
 const getParametersBySubCategoryId = async (req, res) => {
     try {
         const { subCategoryId } = req.params;
-        const userId = req.user?.userId;  // assuming userId is set in req.user after auth
+        const userId = req.user?.userId;
+        const isAdmin = req.user?.role === 1; // Assuming role is stored in JWT payload
 
         if (!subCategoryId) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Subcategory ID is required');
         }
 
-        // Find the category containing the subcategory
         const category = await Category.findOne(
             { 'subCategories._id': subCategoryId, isDeleted: false },
             { 'subCategories.$': 1 }
@@ -580,29 +630,38 @@ const getParametersBySubCategoryId = async (req, res) => {
 
         const subCategory = category.subCategories[0];
 
-        // Filter parameter values according to admin/user logic
         const parameters = subCategory.parameters.map(param => {
-            const filteredValues = param.values.filter(val =>
-                val.isAddedByAdmin ||
-                (userId && val.addedByUserId?.toString() === userId)
-            );
+            // Show all values to admin
+            let filteredValues;
+            if (isAdmin) {
+                filteredValues = param.values;
+            } else {
+                filteredValues = param.values.filter(val =>
+                    val.isAddedByAdmin ||
+                    (userId && val.addedByUserId?.toString() === userId)
+                );
+            }
 
             return {
                 _id: param._id,
                 key: param.key,
                 values: filteredValues
             };
-        }).filter(param => param.values.length > 0); // optionally exclude params with no visible values
+        });
+
+        // Optionally, filter out parameters with no visible values for non-admins
+        const finalParameters = isAdmin ? parameters : parameters.filter(p => p.values.length > 0);
 
         return apiSuccessRes(HTTP_STATUS.OK, res, 'Parameters fetched successfully', {
             subCategoryId,
-            parameters
+            parameters: finalParameters
         });
 
     } catch (error) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
+
 
 
 
@@ -625,31 +684,22 @@ const addUserParameterValue = async (req, res) => {
         const subCategory = category.subCategories.id(subCategoryId);
         const paramKey = key.trim().toLowerCase();
 
-        // Normalize incoming values to array
         const incomingValues = Array.isArray(values) ? values : [values];
         const newValuesToAdd = incomingValues.map(val => val.trim().toLowerCase());
 
-        // Find existing parameter
         const existingParam = subCategory.parameters.find(p => p.key === paramKey);
         if (!existingParam) {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Parameter key not found in this subcategory');
         }
 
-        // Collect existing values added by this user
-        const userValuesSet = new Set(
-            existingParam.values
-                .filter(v => v.addedByUserId?.toString() === userId)
-                .map(v => v.value)
-        );
-
-        // Filter new values to avoid duplicates
-        const uniqueValuesToAdd = newValuesToAdd.filter(v => !userValuesSet.has(v));
+        // Prevent duplicate insertion (check all existing values, not just current user)
+        const existingValuesSet = new Set(existingParam.values.map(v => v.value));
+        const uniqueValuesToAdd = newValuesToAdd.filter(v => !existingValuesSet.has(v));
 
         if (uniqueValuesToAdd.length === 0) {
             return apiSuccessRes(HTTP_STATUS.OK, res, 'No new values to add, all values already exist');
         }
 
-        // Add new values with user info
         uniqueValuesToAdd.forEach(value => {
             existingParam.values.push({
                 value,
@@ -669,6 +719,7 @@ const addUserParameterValue = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
+
 
 const acceptParameterValueByAdmin = async (req, res) => {
     try {
@@ -706,7 +757,7 @@ const acceptParameterValueByAdmin = async (req, res) => {
         }
 
         if (paramValueObj.isAddedByAdmin) {
-            return apiSuccessRes(HTTP_STATUS.OK, res, 'Parameter value is already accepted by admin');
+            return apiErrorRes(HTTP_STATUS.CONFLICT, res, 'Parameter value is already accepted by admin');
         }
 
         // Update the value as accepted by admin
@@ -724,14 +775,66 @@ const acceptParameterValueByAdmin = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
+const rejectParameterValueByAdmin = async (req, res) => {
+    try {
+        const { subCategoryId } = req.params;
+        const { key, value } = req.body; // assuming this is sent as form-data
+        const userId = req.user?.userId;
+        const roleId = req.user?.roleId;
+
+        if (roleId !== 1) {
+            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, 'Only admin can reject parameter values');
+        }
+
+        if (!key || !value) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Parameter key and value are required');
+        }
+
+        const category = await Category.findOne({ 'subCategories._id': subCategoryId, isDeleted: false });
+        if (!category) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
+        }
+
+        const subCategory = category.subCategories.id(subCategoryId);
+        const paramKey = key.trim().toLowerCase();
+        const targetValue = value.trim().toLowerCase();
+
+        const parameter = subCategory.parameters.find(p => p.key === paramKey);
+        if (!parameter) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Parameter key not found');
+        }
+
+        const index = parameter.values.findIndex(v =>
+            v.value === targetValue && v.isAddedByAdmin === false
+        );
+
+        if (index === -1) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'User-added parameter value not found');
+        }
+
+        // Remove the value
+        parameter.values.splice(index, 1);
+        await category.save();
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, 'Parameter value rejected and removed successfully', {
+            key: paramKey,
+            value: targetValue
+        });
+
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    }
+};
 
 
 // hasPermission([roleId.SUPER_ADMIN]),
 //admin
-router.post('/createCategory', perApiLimiter(),  upload.single('file'), createOrUpdateCategory);
+router.post('/createCategory', perApiLimiter(), upload.single('file'), createOrUpdateCategory);
 router.post('/addSubCategory/:categoryId', perApiLimiter(), upload.single('file'), addOrUpdateSubCategory);
-router.post('/addParameterToSubCategory/:subCategoryId', perApiLimiter(), hasPermission([roleId.SUPER_ADMIN]), upload.none(), addParameterToSubCategory);
-router.post('/acceptParameterValueByAdmin/:subCategoryId', perApiLimiter(), hasPermission([roleId.SUPER_ADMIN]), upload.none(), acceptParameterValueByAdmin);
+router.post('/addParameterToSubCategory/:subCategoryId', perApiLimiter(), upload.none(), addParameterToSubCategory);
+router.post('/acceptParameterValueByAdmin/:subCategoryId', perApiLimiter(), upload.none(), acceptParameterValueByAdmin);
+router.post('/rejectParameterValueByAdmin/:subCategoryId', upload.none(), rejectParameterValueByAdmin);
+
 
 router.post('/addUserParameterValue/:subCategoryId', perApiLimiter(), upload.none(), addUserParameterValue);
 

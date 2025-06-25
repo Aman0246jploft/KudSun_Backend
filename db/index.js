@@ -41,6 +41,7 @@ module.exports = {
     ProductComment: require("./models/ProductComment"),
     SellProductDraft: require('./models/SellProductDraft'),
     FeeSetting: require("./models/FeeSetting"),
+    TempUser: require("./models/TempUser"),
     //rbac---->
     AppSetting: require('./models/AppSetting'),
     Module: require("./models/Rbac/Module"),
