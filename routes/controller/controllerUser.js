@@ -309,297 +309,175 @@ const uploadfile = async (req, res) => {
 //     }
 // };
 
-
-
-
-
-
-
-
-
-
-
+const getUserResponse = (user) => {
+    return {
+        token: null,
+        ...user.toJSON()
+    };
+};
 
 
 
 
 
 const requestOtp = async (req, res) => {
-    try {
-        const { phoneNumber, language } = req.body;
-        const userExists = await User.findOne({ phoneNumber });
+    const { phoneNumber, language } = req.body;
 
-        if (userExists) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Phone number already exists", null);
-        }
-
-        const otp = process.env.NODE_ENV !== 'production' ? '123456' : generateOTP();
-        const verifyToken = generateKey();
-        const step = 1;
-
-        const redisValue = JSON.stringify({ otp, phoneNumber, language, step });
-        const expiry = 60 * 60 * 24 * 90; // 3 months
-
-        await setKeyWithTime(`verify:${verifyToken}`, redisValue, expiry);
-
-        return apiSuccessRes(HTTP_STATUS.OK, res, "OTP sent", { verifyToken, step });
-    } catch (error) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, null);
+    const existingUser = await User.findOne({ phoneNumber });
+    if (existingUser) {
+        return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Phone number already registered");
     }
-};
 
+    const otp = process.env.NODE_ENV !== 'production' ? '123456' : generateOTP();
+
+    const user = await User.findOneAndUpdate(
+        { phoneNumber },
+        {
+            phoneNumber,
+            language,
+            step: 1,
+            tempOtp: otp
+        },
+        { upsert: true, new: true }
+    );
+
+    return apiSuccessRes(HTTP_STATUS.OK, res, "OTP sent", { phoneNumber, step: 1 });
+};
 const verifyOtp = async (req, res) => {
-    try {
-        const { otp, verifyToken } = req.body;
-        const redisData = await getKey(`verify:${verifyToken}`);
+    const { phoneNumber, otp } = req.body;
 
-        if (redisData.statusCode !== CONSTANTS.SUCCESS) {
-            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Verification token expired or invalid", null);
-        }
-
-        const { otp: storedOtp, phoneNumber, language } = JSON.parse(redisData.data);
-
-        if (otp !== storedOtp) {
-            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Invalid OTP", null);
-        }
-
-        // Mark as verified
-        await setKeyWithTime(`verified:${phoneNumber}`, 'true', 60 * 60 * 24 * 90);
-        await setKeyWithTime(`verified:${phoneNumber}:language`, language, 60 * 60 * 24 * 90);
-
-        // Prepare onboard step 2
-        await setKeyWithTime(`verify:${verifyToken}`, JSON.stringify({ phoneNumber, language, step: 2 }), 60 * 60 * 24 * 90);
-
-        return apiSuccessRes(HTTP_STATUS.OK, res, "OTP verified successfully", { phoneNumber, verifyToken, step: 2 });
-    } catch (error) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, null);
+    const user = await User.findOne({ phoneNumber });
+    console.log("useruser", user)
+    if (!user || user.tempOtp !== otp) {
+        return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Invalid OTP");
     }
-};
 
+    user.step = 2;
+    user.tempOtp = undefined; // Clear OTP
+    await user.save();
+
+    return apiSuccessRes(HTTP_STATUS.OK, res, "OTP verified", getUserResponse(user));
+};
 const resendOtp = async (req, res) => {
     try {
-        const { verifyToken } = req.body;
-        const redisData = await getKey(`verify:${verifyToken}`);
+        const { phoneNumber } = req.body;
 
-        if (redisData.statusCode !== CONSTANTS.SUCCESS) {
-            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Verification token expired or invalid", null);
+        if (!phoneNumber) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Phone number is required");
         }
 
-        const existingData = JSON.parse(redisData.data);
-        const { phoneNumber, language, step = 1 } = existingData;
+        const user = await User.findOne({ phoneNumber }).select('+tempOtp +tempOtpExpiresAt +step');
 
+        if (!user) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found for OTP resend");
+        }
+
+        if (user.step >= 2) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "OTP already verified");
+        }
+
+        // ✅ Generate new OTP
         const newOtp = process.env.NODE_ENV !== 'production' ? '123457' : generateOTP();
-        const newRedisValue = JSON.stringify({ otp: newOtp, phoneNumber, language, step });
 
-        await setKeyWithTime(`verify:${verifyToken}`, newRedisValue, 60 * 60 * 24 * 90);
-
-        return apiSuccessRes(HTTP_STATUS.OK, res, "OTP resent successfully", { verifyToken, step });
-    } catch (error) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, null);
-    }
-};
-
-const saveEmailPassword = async (req, res) => {
-    try {
-        const { phoneNumber, email, password } = req.body;
-
-        // ✅ Ensure OTP verification first
-        const isVerified = await getKey(`verified:${phoneNumber}`);
-        const languageRes = await getKey(`verified:${phoneNumber}:language`);
-        if (isVerified.statusCode !== CONSTANTS.SUCCESS) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Phone number not verified");
-        }
-
-        // ✅ Prevent duplicate emails
-        const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
-        if (existingUser) {
-            return apiErrorRes(HTTP_STATUS.CONFLICT, res, "Email already in use");
-        }
-
-        // ✅ Prepare onboarding data with updated step
-        const onboardData = {
-            email: email.toLowerCase().trim(),
-            password,
-            language: languageRes?.data || 'english',
-            step: 3 // Mark as Email+Password saved
-        };
-
-        // ✅ Store onboard data in Redis for next 3 months
-        await setKeyWithTime(`onboard:${phoneNumber}`, JSON.stringify(onboardData), 60 * 60 * 24 * 90);
-
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Email and password saved", {
-            email,
-            phoneNumber,
-            step: 3
-        });
-    } catch (err) {
-        return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, err.message);
-    }
-};
-
-const saveCategories = async (req, res) => {
-    try {
-        const { phoneNumber, categories } = req.body;
-        const data = await getKey(`onboard:${phoneNumber}`);
-
-        if (data.statusCode !== CONSTANTS.SUCCESS) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Missing onboarding session");
-        }
-
-        const parsed = JSON.parse(data.data);
-
-        let categoriesArray = Array.isArray(categories) ? categories : [categories];
-        categoriesArray = categoriesArray.map(id => id?.trim?.()).filter(Boolean);
-
-        parsed.categories = categoriesArray;
-        parsed.step = 4;
-
-        await setKeyWithTime(`onboard:${phoneNumber}`, JSON.stringify(parsed), 60 * 60 * 24 * 90);
-
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Categories saved", { phoneNumber, categories: categoriesArray, step: 4 });
-    } catch (err) {
-        return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, err.message);
-    }
-};
-
-const getOnboardingStep = async (req, res) => {
-    try {
-        const { verifyToken, phoneNumber } = req.query;
-
-        if (!verifyToken && !phoneNumber) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "verifyToken or phoneNumber is required");
-        }
-
-        let redisData = null;
-        let step = null;
-        let redisSource = null;
-        let resolvedPhoneNumber = phoneNumber;
-
-        // ✅ Try onboard:<phoneNumber> first if phoneNumber is available
-        if (phoneNumber) {
-            redisData = await getKey(`onboard:${phoneNumber}`);
-            if (redisData.statusCode === CONSTANTS.SUCCESS) {
-                const parsed = JSON.parse(redisData.data);
-                step = parsed.step || 2; // 2 because phone is verified
-                redisSource = 'onboard';
-                resolvedPhoneNumber = phoneNumber;
-            }
-        }
-
-        // ✅ If no onboard data found, fallback to verifyToken
-        if (!redisData || redisData.statusCode !== CONSTANTS.SUCCESS) {
-            if (verifyToken) {
-                const verifyData = await getKey(`verify:${verifyToken}`);
-                if (verifyData.statusCode === CONSTANTS.SUCCESS) {
-                    const parsed = JSON.parse(verifyData.data);
-                    step = 1; // still in OTP stage
-                    redisSource = 'verify';
-                    resolvedPhoneNumber = parsed.phoneNumber || phoneNumber;
-                }
-            }
-        }
-
-        if (!step) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "No onboarding session found");
-        }
-
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Current onboarding step fetched", {
-            step,
-            source: redisSource,
-            phoneNumber: resolvedPhoneNumber,
-            verifyToken: verifyToken || null,
-        });
-
-    } catch (err) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
-    }
-};
-
-
-
-const completeRegistration = async (req, res) => {
-    try {
-        const { phoneNumber, userName, gender, dob } = req.body;
-
-        const onboardingDataResult = await getKey(`onboard:${phoneNumber}`);
-        if (onboardingDataResult.statusCode !== CONSTANTS.SUCCESS) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Incomplete onboarding data");
-        }
-
-        const onboardData = JSON.parse(onboardingDataResult.data);
-        let profileImageUrl = undefined;
-
-        // ✅ Upload profile image if provided
-        if (req.file) {
-            const imageResult = await uploadImageCloudinary(req.file, 'profile-images');
-            if (!imageResult) {
-                return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Image upload failed");
-            }
-            profileImageUrl = imageResult;
-        }
-
-        // ✅ Parse categories
-        let categories = onboardData.categories;
-        if (typeof categories === 'string') {
-            try {
-                categories = JSON.parse(categories);
-            } catch (e) {
-                categories = categories.split(',').map(item => item.trim());
-            }
-        }
-
-        const obj = {
-            userName,
-            gender,
-            dob,
-            phoneNumber,
-            categories,
-            email: onboardData.email,
-            password: onboardData.password,
-            profileImage: profileImageUrl || undefined,
-            language: onboardData.language
-        };
-
-        if (req.body?.fcmToken && req.body?.fcmToken !== "") {
-            obj['fcmToken'] = req.body.fcmToken;
-        }
-
-        // ✅ Create User in DB
-        const user = new User({ ...obj });
+        // ✅ Set OTP expiration (e.g., 5 minutes)
+        const expiresInMinutes = 5;
+        user.tempOtp = newOtp;
+        user.tempOtpExpiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000);
         await user.save();
 
-        // ✅ Save current step = 5 in Redis for 3 months
-        await setKeyWithTime(`onboard:${phoneNumber}`, JSON.stringify({ step: 5, phoneNumber }), 7776000);
+        // ✅ Send OTP (SMS/Email gateway integration - placeholder)
+        // await sendSms(phoneNumber, `Your OTP is: ${newOtp}`);
 
-        // ✅ Cleanup temporary Redis keys
-        await removeKey(`verified:${phoneNumber}`);
+        return apiSuccessRes(HTTP_STATUS.OK, res, "OTP resent successfully", {
+            phoneNumber,
+            step: user.step
+        });
 
-        // ✅ Generate token and response
-        const payload = {
-            email: user.email,
-            userId: user._id,
-            roleId: user.roleId,
-            role: user.role,
-            userName: user.userName
-        };
-
-        const token = signToken(payload);
-        const output = {
-            token,
-            userId: user._id,
-            roleId: user.roleId,
-            role: user.role,
-            profileImage: user.profileImage,
-            userName: user.userName,
-            email: user.email,
-        };
-
-        return apiSuccessRes(HTTP_STATUS.CREATED, res, "Registration completed", output);
-
-    } catch (err) {
-        return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, err.message);
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
+const saveEmailPassword = async (req, res) => {
+    const { phoneNumber, email, password } = req.body;
+
+    const user = await User.findOne({ phoneNumber });
+    if (!user || user.step !== 2) {
+        return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "OTP not verified");
+    }
+
+    const emailExists = await User.findOne({ email });
+    if (emailExists && emailExists._id.toString() !== user._id.toString()) {
+        return apiErrorRes(HTTP_STATUS.CONFLICT, res, "Email already in use");
+    }
+
+    user.email = email.toLowerCase().trim();
+    user.password = password;
+    user.step = 3;
+    await user.save();
+
+    return apiSuccessRes(HTTP_STATUS.OK, res, "Email and password saved", getUserResponse(user));
+};
+const saveCategories = async (req, res) => {
+    const { phoneNumber, categories } = req.body;
+
+    const user = await User.findOne({ phoneNumber });
+    if (!user || user.step !== 3) {
+        return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Complete previous step first");
+    }
+
+    user.categories = Array.isArray(categories) ? categories : [categories];
+    user.step = 4;
+    await user.save();
+
+    return apiSuccessRes(HTTP_STATUS.OK, res, "Categories saved", getUserResponse(user));
+};
+const getOnboardingStep = async (req, res) => {
+    const { phoneNumber } = req.query;
+    const user = await User.findOne({ phoneNumber });
+    if (!user) return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
+
+    return apiSuccessRes(HTTP_STATUS.OK, res, "Current onboarding step", {
+        phoneNumber,
+        step: user.step
+    });
+};
+const completeRegistration = async (req, res) => {
+    const { phoneNumber, userName, gender, dob, fcmToken } = req.body;
+
+    const user = await User.findOne({ phoneNumber });
+    if (!user ) {
+        return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Incomplete onboarding");
+    }
+
+    if (req.file) {
+        const imageUrl = await uploadImageCloudinary(req.file, 'profile-images');
+        user.profileImage = imageUrl;
+    }
+
+    user.userName = userName;
+    user.gender = gender;
+    user.dob = dob;
+    user.fcmToken = fcmToken || null;
+    user.step = 5;
+
+    await user.save();
+
+    const payload = {
+        userId: user._id,
+        email: user.email,
+        roleId: user.roleId,
+        role: user.role,
+        userName: user.userName
+    };
+
+    const token = signToken(payload);
+
+    return apiSuccessRes(HTTP_STATUS.CREATED, res, "Registration completed", {
+        token,
+        ...user.toJSON()
+    });
+};
+
 
 
 
@@ -643,7 +521,6 @@ const loginStepOne = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
-
 const loginStepTwoPassword = async (req, res) => {
     try {
         const { loginToken, password, fcmToken, loginWithCode } = req.body;
@@ -714,7 +591,6 @@ const loginStepTwoPassword = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
     }
 };
-
 const loginStepThreeVerifyOtp = async (req, res) => {
     try {
         const { otpToken, otp, fcmToken } = req.body;
@@ -789,7 +665,6 @@ const resendLoginOtp = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
     }
 };
-
 
 
 const follow = async (req, res) => {
@@ -1372,12 +1247,12 @@ const getProfile = async (req, res) => {
 router.post('/upload', upload.single('file'), uploadfile);
 
 // Registration Process
-router.post('/requestOtp', perApiLimiter(), upload.none(), validateRequest(mobileLoginSchema), requestOtp);
-router.post('/verifyOtp', perApiLimiter(), upload.none(), validateRequest(otpVerification), verifyOtp);
-router.post('/resendOtp', perApiLimiter(), upload.none(), validateRequest(resendOtpSchema), resendOtp);
-router.post('/saveEmailPassword', perApiLimiter(), upload.none(), validateRequest(saveEmailPasswords), saveEmailPassword);
+router.post('/requestOtp', perApiLimiter(), upload.none(), requestOtp);
+router.post('/verifyOtp', perApiLimiter(), upload.none(), verifyOtp);
+router.post('/resendOtp', perApiLimiter(), upload.none(), resendOtp);
+router.post('/saveEmailPassword', perApiLimiter(), upload.none(), saveEmailPassword);
 router.post('/saveCategories', perApiLimiter(), upload.none(), saveCategories);
-router.post('/completeRegistration', perApiLimiter(), upload.single('file'), validateRequest(completeRegistrationSchema), completeRegistration);
+router.post('/completeRegistration', perApiLimiter(), upload.single('file'), completeRegistration);
 router.get('/getOnboardingStep', perApiLimiter(), upload.none(), getOnboardingStep);
 
 //login 
