@@ -483,13 +483,13 @@ const completeRegistration = async (req, res) => {
 
 const loginStepOne = async (req, res) => {
     try {
-        const { identifier } = req.body; // can be email, phoneNumber, or userName
-
+        const { identifier } = req.body; // email, phoneNumber, or userName
         if (!identifier) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Identifier is required");
         }
+
         const cleanedIdentifier = identifier.trim().toLowerCase();
-        // Flexible query for email, phoneNumber or userName (case insensitive for email)
+
         const query = {
             $or: [
                 { email: cleanedIdentifier },
@@ -498,23 +498,19 @@ const loginStepOne = async (req, res) => {
             ]
         };
 
-        const userResult = await getDocumentByQuery(User, query);
+        const user = await User.findOne(query);
 
-        if (userResult.statusCode !== CONSTANTS.SUCCESS) {
+        if (!user) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "User not found");
         }
 
-        if (userResult.data.isDisable) {
+        if (user.isDisable) {
             return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, CONSTANTS_MSG.ACCOUNT_DISABLE);
         }
 
-        // Generate temporary verify token for step two
-        const verifyToken = generateKey();
+        // No token needed here, frontend just proceeds with step 2
 
-        // Store userId linked to verifyToken in Redis with expiration (e.g. 10 mins)
-        await setKeyWithTime(`loginStepTwo:${verifyToken}`, userResult.data._id.toString(), 500);
-
-        return apiSuccessRes(HTTP_STATUS.OK, res, "User verified, proceed with password", { verifyToken });
+        return apiSuccessRes(HTTP_STATUS.OK, res, "User verified, proceed with login");
 
     } catch (error) {
         console.error('Login Step 1 error:', error);
@@ -523,49 +519,49 @@ const loginStepOne = async (req, res) => {
 };
 const loginStepTwoPassword = async (req, res) => {
     try {
-        const { loginToken, password, fcmToken, loginWithCode } = req.body;
-        if (password && password !== "" && loginWithCode == "true") {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Password is required for login with code is not allowed")
+        const { identifier, password, fcmToken, loginWithCode } = req.body;
+        if (!identifier) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Identifier is required");
         }
 
-        const tokenData = await getKey(`loginStepTwo:${loginToken}`);
-        if (tokenData.statusCode !== CONSTANTS.SUCCESS) {
-            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Invalid or expired login token");
+        if (password && loginWithCode === "true") {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Password is required when loginWithCode is false");
         }
 
+        const cleanedIdentifier = identifier.trim().toLowerCase();
 
-        const userId = tokenData.data;
-        const user = await User.findById(userId);
+        const query = {
+            $or: [
+                { email: cleanedIdentifier },
+                { phoneNumber: identifier },
+                { userName: cleanedIdentifier }
+            ]
+        };
+
+        const user = await User.findOne(query).select('+password +loginOtp +loginOtpExpiresAt');
         if (!user) {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
         }
-        if (password && password !== "") {
 
-            // 🔐 Check password
+        if (password && password !== "") {
             const isMatch = await verifyPassword(user.password, password);
             if (!isMatch) {
                 return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Incorrect password");
             }
 
-            // 🔒 Update FCM token (optional)
-            if (fcmToken && fcmToken !== "") {
+            if (fcmToken) {
                 user.fcmToken = fcmToken;
                 await user.save();
             }
 
-            // 🎟️ Create long-lived JWT token (3 years)
-            const payload = {
+            const token = signToken({
                 email: user.email,
                 userId: user._id,
                 roleId: user.roleId,
                 role: user.role,
                 profileImage: user.profileImage,
                 userName: user.userName
-            };
-            const token = signToken(payload);
-
-            // ✅ Cleanup temp token
-            await removeKey(`loginStepOne:${loginToken}`);
+            });
 
             return apiSuccessRes(HTTP_STATUS.OK, res, "Login successful", {
                 token,
@@ -575,57 +571,72 @@ const loginStepTwoPassword = async (req, res) => {
                 profileImage: user.profileImage,
                 userName: user.userName,
                 email: user.email,
-
             });
+
         } else if (loginWithCode === 'true') {
             const otp = process.env.NODE_ENV !== 'production' ? '123456' : generateOTP();
-            const otpToken = generateKey();
 
-            await setKeyWithTime(`otpLogin:${otpToken}`, JSON.stringify({ userId: user._id, otp }), 500);
+            user.loginOtp = otp;
+            user.loginOtpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 mins
+            await user.save();
+
             console.log(`OTP for ${user.phoneNumber}: ${otp}`);
-            return apiSuccessRes(HTTP_STATUS.OK, res, "OTP sent", { otpToken });
+
+            return apiSuccessRes(HTTP_STATUS.OK, res, "OTP sent");
         }
+
         return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Provide either password or loginWithCode=true");
+
     } catch (err) {
-        console.log(err)
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
     }
 };
 const loginStepThreeVerifyOtp = async (req, res) => {
     try {
-        const { otpToken, otp, fcmToken } = req.body;
-
-        const redisData = await getKey(`otpLogin:${otpToken}`);
-        if (redisData.statusCode !== CONSTANTS.SUCCESS) {
-            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Invalid or expired OTP token");
+        const { identifier, otp, fcmToken } = req.body;
+        if (!identifier || !otp) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Identifier and OTP are required");
         }
 
-        const { userId, otp: storedOtp } = JSON.parse(redisData.data);
-        if (otp !== storedOtp) {
+        const cleanedIdentifier = identifier.trim().toLowerCase();
+
+        const query = {
+            $or: [
+                { email: cleanedIdentifier },
+                { phoneNumber: identifier },
+                { userName: cleanedIdentifier }
+            ]
+        };
+
+        const user = await User.findOne(query).select('+loginOtp +loginOtpExpiresAt');
+        if (!user) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
+        }
+
+        if (!user.loginOtp || user.loginOtp !== otp) {
             return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Invalid OTP");
         }
 
-        const user = await User.findById(userId);
-        if (!user) return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
+        if (user.loginOtpExpiresAt < new Date()) {
+            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "OTP expired");
+        }
 
         if (fcmToken) {
             user.fcmToken = fcmToken;
-            await user.save();
         }
 
-        const payload = {
+        user.loginOtp = null;
+        user.loginOtpExpiresAt = null;
+        await user.save();
+
+        const token = signToken({
             email: user.email,
             userId: user._id,
             roleId: user.roleId,
             role: user.role,
             profileImage: user.profileImage,
             userName: user.userName
-        };
-
-        const token = signToken(payload);
-
-
-        await removeKey(`otpLogin:${otpToken}`);
+        });
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "OTP verified, login successful", {
             token,
@@ -636,35 +647,51 @@ const loginStepThreeVerifyOtp = async (req, res) => {
             userName: user.userName,
             email: user.email,
         });
+
     } catch (err) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
     }
 };
 const resendLoginOtp = async (req, res) => {
     try {
-        const { otpToken } = req.body;
-
-        const redisData = await getKey(`otpLogin:${otpToken}`);
-        if (redisData.statusCode !== CONSTANTS.SUCCESS) {
-            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Invalid or expired OTP token");
+        const { identifier } = req.body;
+        if (!identifier) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Identifier is required");
         }
 
-        const { userId } = JSON.parse(redisData.data);
-        const user = await User.findById(userId);
-        if (!user) return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
+        const cleanedIdentifier = identifier.trim().toLowerCase();
+
+        const query = {
+            $or: [
+                { email: cleanedIdentifier },
+                { phoneNumber: identifier },
+                { userName: cleanedIdentifier }
+            ]
+        };
+
+        const user = await User.findOne(query);
+        if (!user) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
+        }
 
         const newOtp = process.env.NODE_ENV !== 'production' ? '123457' : generateOTP();
 
-        await setKeyWithTime(`otpLogin:${otpToken}`, JSON.stringify({ userId, otp: newOtp }), 500);
+        user.loginOtp = newOtp;
+        user.loginOtpExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
+        await user.save();
 
-        // Send again
         console.log(`Resent OTP to ${user.phoneNumber}: ${newOtp}`);
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "OTP resent successfully");
+
     } catch (err) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
     }
 };
+
+
+
+
 
 
 const follow = async (req, res) => {
@@ -702,8 +729,6 @@ const follow = async (req, res) => {
         );
     }
 }
-
-
 const threadlike = async (req, res) => {
     try {
         let likeBy = req.user.userId
@@ -739,7 +764,6 @@ const threadlike = async (req, res) => {
         );
     }
 }
-
 const productLike = async (req, res) => {
     try {
         let likeBy = req.user.userId
@@ -941,29 +965,27 @@ const getLikedThreads = async (req, res) => {
 };
 
 
-
 const requestResetOtp = async (req, res) => {
     try {
         const { phoneNumber } = req.body;
+        if (!phoneNumber) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Phone number is required");
+        }
 
-        // Check if user exists
         const user = await User.findOne({ phoneNumber });
         if (!user) {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User with this phone number does not exist");
         }
 
-        // Generate OTP & token
         const otp = process.env.NODE_ENV !== 'production' ? '123456' : generateOTP();
-        const resetToken = generateKey();
-
         const redisValue = JSON.stringify({ otp, phoneNumber });
 
-        // Save OTP + phoneNumber in Redis with 5 mins expiry
-        await setKeyWithTime(`reset:${resetToken}`, redisValue, 500);
+        // Save OTP keyed by phoneNumber with 5 min expiry
+        await setKeyWithTime(`reset:${phoneNumber}`, redisValue, 5 * 60);
 
-        // (Optionally send OTP via SMS here...)
+        // Optionally send OTP via SMS here...
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "OTP sent for password reset", { resetToken });
+        return apiSuccessRes(HTTP_STATUS.OK, res, "OTP sent for password reset");
     } catch (error) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
@@ -973,47 +995,34 @@ const requestResetOtp = async (req, res) => {
 
 const verifyResetOtp = async (req, res) => {
     try {
-        const { otp, resetToken } = req.body;
+        const { phoneNumber, otp } = req.body;
+        if (!phoneNumber || !otp) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Phone number and OTP are required");
+        }
 
-        const redisData = await getKey(`reset:${resetToken}`);
+        const redisData = await getKey(`reset:${phoneNumber}`);
 
         if (redisData.statusCode !== CONSTANTS.SUCCESS) {
-            return apiErrorRes(
-                HTTP_STATUS.UNAUTHORIZED,
-                res,
-                "Reset token expired or invalid"
-            );
+            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "OTP expired or invalid");
         }
 
-        const { otp: storedOtp, phoneNumber } = JSON.parse(redisData.data);
+        const { otp: storedOtp } = JSON.parse(redisData.data);
 
         if (otp !== storedOtp) {
-            return apiErrorRes(
-                HTTP_STATUS.UNAUTHORIZED,
-                res,
-                "Invalid OTP"
-            );
+            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Invalid OTP");
         }
 
-        // ✅ Mark as verified for password reset
-        await setKeyWithTime(`reset-verified:${phoneNumber}`, 'true', 10 * 60); // 10 mins
-        await removeKey(`reset:${resetToken}`);
+        // Mark as verified for 10 minutes
+        await setKeyWithTime(`reset-verified:${phoneNumber}`, 'true', 10 * 60);
 
-        return apiSuccessRes(
-            HTTP_STATUS.OK,
-            res,
-            "OTP verified successfully",
-            { phoneNumber }
-        );
+        // Remove OTP key so it can't be reused
+        await removeKey(`reset:${phoneNumber}`);
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "OTP verified successfully");
     } catch (error) {
-        return apiErrorRes(
-            HTTP_STATUS.INTERNAL_SERVER_ERROR,
-            res,
-            error.message
-        );
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
-
 
 
 const resetPassword = async (req, res) => {
@@ -1069,33 +1078,33 @@ const resetPassword = async (req, res) => {
 };
 
 
+
 const resendResetOtp = async (req, res) => {
     try {
-        const { resetToken } = req.body;
-
-        // ✅ Check if token exists in Redis
-        const redisData = await getKey(`reset:${resetToken}`);
-        if (redisData.statusCode !== CONSTANTS.SUCCESS) {
-            return apiErrorRes(
-                HTTP_STATUS.UNAUTHORIZED,
-                res,
-                "Reset token expired or invalid"
-            );
+        const { phoneNumber } = req.body;
+        if (!phoneNumber) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Phone number is required");
         }
-        const { phoneNumber } = JSON.parse(redisData.data);
 
-        // ✅ Regenerate OTP with same token
+        const user = await User.findOne({ phoneNumber });
+        if (!user) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
+        }
+
         const otp = process.env.NODE_ENV !== 'production' ? '123457' : generateOTP();
-        const updatedRedisValue = JSON.stringify({ otp, phoneNumber });
+        const redisValue = JSON.stringify({ otp, phoneNumber });
 
-        // ✅ Overwrite existing Redis value, reset expiry to 5 mins
-        await setKeyWithTime(`reset:${resetToken}`, updatedRedisValue, 500);
+        // Overwrite existing OTP and reset expiry
+        await setKeyWithTime(`reset:${phoneNumber}`, redisValue, 5 * 60);
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "OTP resent successfully", { resetToken });
+        // Optionally send OTP via SMS here...
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "OTP resent successfully");
     } catch (error) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
+
 
 
 
@@ -1256,16 +1265,16 @@ router.post('/completeRegistration', perApiLimiter(), upload.single('file'), com
 router.get('/getOnboardingStep', perApiLimiter(), upload.none(), getOnboardingStep);
 
 //login 
-router.post('/loginStepOne', perApiLimiter(), upload.none(), validateRequest(loginStepOneSchema), loginStepOne);
-router.post('/loginStepTwo', perApiLimiter(), upload.none(), validateRequest(loginStepTwoSchema), loginStepTwoPassword);
-router.post('/loginStepThree', perApiLimiter(), upload.none(), validateRequest(loginStepThreeSchema), loginStepThreeVerifyOtp);
-router.post('/resendLoginOtp', perApiLimiter(), upload.none(), validateRequest(otpTokenSchema), resendLoginOtp);
+router.post('/loginStepOne', perApiLimiter(), upload.none(),  loginStepOne);
+router.post('/loginStepTwo', perApiLimiter(), upload.none(),  loginStepTwoPassword);
+router.post('/loginStepThree', perApiLimiter(), upload.none(),  loginStepThreeVerifyOtp);
+router.post('/resendLoginOtp', perApiLimiter(), upload.none(),  resendLoginOtp);
 router.post('/login', perApiLimiter(), upload.none(), validateRequest(loginSchema), login);
 //RESET PASSWORD 
-router.post('/requestResetOtp', perApiLimiter(), upload.none(), validateRequest(requestResetOtpSchema), requestResetOtp);
-router.post('/verifyResetOtp', perApiLimiter(), upload.none(), validateRequest(verifyResetOtpSchema), verifyResetOtp);
-router.post('/resetPassword', perApiLimiter(), upload.none(), validateRequest(resetPasswordSchema), resetPassword);
-router.post('/resendResetOtp', perApiLimiter(), upload.none(), validateRequest(resendResetOtpSchema), resendResetOtp);
+router.post('/requestResetOtp', perApiLimiter(), upload.none(),  requestResetOtp);
+router.post('/verifyResetOtp', perApiLimiter(), upload.none(), verifyResetOtp);
+router.post('/resetPassword', perApiLimiter(), upload.none(),  resetPassword);
+router.post('/resendResetOtp', perApiLimiter(), upload.none(), resendResetOtp);
 
 
 //Follow //Like

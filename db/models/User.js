@@ -14,6 +14,18 @@ const UserSchema = new Schema({
         type: String,
         default: null
     },
+    loginOtp: {
+        type: String,
+        select: false
+    },
+    loginOtpExpiresAt: {
+        type: Date,
+        select: false
+    },
+    loginStepStartedAt: {
+        type: Date,
+        select: false
+    },
     userName: {
         type: String,
         trim: true,
