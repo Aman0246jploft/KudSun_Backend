@@ -700,7 +700,7 @@ const getLimitedTimeDeals = async (req, res) => {
                 .sort({ 'auctionSettings.biddingEndsAt': 1 }) // Soonest first
                 .skip(skip)
                 .limit(limit)
-                .select("title productImages auctionSettings.fixedPrice condition tags description createdAt auctionSettings.biddingEndsAt")
+                .select("title productImages auctionSettings.reservePrice condition tags description createdAt auctionSettings.biddingEndsAt")
                 .populate("categoryId", "name")
                 .populate("userId", "userName profileImage is_Id_verified isLive")
                 .lean(),

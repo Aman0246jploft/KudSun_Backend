@@ -18,7 +18,7 @@ const SALE_TYPE = {
 const DeliveryType = {
     FREE_SHIPPING: 'free_shipping',
     CHARGE_SHIPPING: 'charge_shipping',
-    LOCAL_PICKUP:'local_pickup'
+    LOCAL_PICKUP: 'local_pickup'
 
 }
 
@@ -80,7 +80,17 @@ const NOTIFICATION_TYPES = {
     SYSTEM: 'system',
 };
 
+const PRICING_TYPE = {
+    PERCENTAGE: "PERCENTAGE",
+    FIXED: "FIXED"
+}
 
+
+const CHARGE_TYPE = {
+    SERVICE_CHARGE: "SERVICE_CHARGE",
+    TAX: "TAX",
+    BUYER_PROTECTION_FEE: "BUYER_PROTECTION_FEE"
+}
 
 module.exports = {
     roleId,
@@ -94,5 +104,7 @@ module.exports = {
     DEFAULT_AMOUNT,
     DISPUTE_STATUS,
     NOTIFICATION_TYPES,
-    SELLER_PAYOUT_METHOD
+    SELLER_PAYOUT_METHOD,
+    PRICING_TYPE,
+    CHARGE_TYPE
 }
