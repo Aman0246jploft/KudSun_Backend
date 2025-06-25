@@ -3,7 +3,7 @@ const express = require('express');
 const multer = require('multer');
 const upload = multer();
 const router = express.Router();
-const { User, Follow, ThreadLike, ProductLike, SellProduct, Thread, Order, SellProductDraft, ThreadDraft } = require('../../db');
+const { User, Follow, ThreadLike, ProductLike, SellProduct, Thread, Order, SellProductDraft, ThreadDraft, TempUser } = require('../../db');
 const { getDocumentByQuery } = require('../services/serviceGlobalCURD');
 const CONSTANTS_MSG = require('../../utils/constantsMessage');
 const CONSTANTS = require('../../utils/constants')
@@ -44,7 +44,7 @@ const uploadfile = async (req, res) => {
     }
 }
 
-// //re-check 
+
 // const requestOtp = async (req, res) => {
 //     try {
 //         const { phoneNumber, language } = req.body;
@@ -321,108 +321,96 @@ const getUserResponse = (user) => {
 const requestOtp = async (req, res) => {
     const { phoneNumber, language } = req.body;
 
+    // Check if user exists in main User collection
     const existingUser = await User.findOne({ phoneNumber });
     if (existingUser) {
-        // Return existing step, or default to step 1 if not set
         return apiSuccessRes(HTTP_STATUS.OK, res, "Phone number already registered", {
             phoneNumber,
-            step: existingUser.step || 1,
+            step: existingUser.step || 5,  // 5 or whatever means completed
         });
     }
 
-    const otp = process.env.NODE_ENV !== 'production' ? '123456' : generateOTP();
+    // Check if temp user exists, reuse OTP and step
+    let tempUser = await TempUser.findOne({ phoneNumber });
 
-    const user = await User.findOneAndUpdate(
-        { phoneNumber },
-        {
+    if (!tempUser) {
+        const otp = process.env.NODE_ENV !== 'production' ? '123456' : generateOTP();
+
+        tempUser = new TempUser({
             phoneNumber,
             language,
-            step: 1,
             tempOtp: otp,
-        },
-        { upsert: true, new: true }
-    );
+            step: 1,
+            tempOtpExpiresAt: new Date(Date.now() + 5 * 60 * 1000) // expires in 5 min
+        });
+
+        await tempUser.save();
+    }
 
     return apiSuccessRes(HTTP_STATUS.OK, res, "OTP sent", { phoneNumber, step: 1 });
 };
 
-// const requestOtp = async (req, res) => {
-//     const { phoneNumber, language } = req.body;
-
-//     const existingUser = await User.findOne({ phoneNumber });
-//     if (existingUser) {
-//         return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Phone number already registered");
-//     }
-
-//     const otp = process.env.NODE_ENV !== 'production' ? '123456' : generateOTP();
-
-//     const user = await User.findOneAndUpdate(
-//         { phoneNumber },
-//         {
-//             phoneNumber,
-//             language,
-//             step: 1,
-//             tempOtp: otp
-//         },
-//         { upsert: true, new: true }
-//     );
-
-//     return apiSuccessRes(HTTP_STATUS.OK, res, "OTP sent", { phoneNumber, step: 1 });
-// };
 const verifyOtp = async (req, res) => {
     const { phoneNumber, otp } = req.body;
 
-    const user = await User.findOne({ phoneNumber });
-    console.log("useruser", user)
-    if (!user || user.tempOtp !== otp) {
+    const tempUser = await TempUser.findOne({ phoneNumber });
+    if (!tempUser || tempUser.tempOtp !== otp) {
         return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Invalid OTP");
     }
 
-    user.step = 2;
-    user.tempOtp = undefined; // Clear OTP
+    // OTP verified - move data to User collection
+    let user = await User.findOne({ phoneNumber });
+    if (!user) {
+        user = new User({
+            phoneNumber,
+            language: tempUser.language,
+            step: 2
+        });
+    } else {
+        user.step = 2;
+    }
+
     await user.save();
+
+    // Delete temp user data after successful verification
+    await TempUser.deleteOne({ phoneNumber });
 
     return apiSuccessRes(HTTP_STATUS.OK, res, "OTP verified", getUserResponse(user));
 };
+
 const resendOtp = async (req, res) => {
-    try {
-        const { phoneNumber } = req.body;
+    const { phoneNumber } = req.body;
 
-        if (!phoneNumber) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Phone number is required");
-        }
-
-        const user = await User.findOne({ phoneNumber }).select('+tempOtp +tempOtpExpiresAt +step');
-
-        if (!user) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found for OTP resend");
-        }
-
-        if (user.step >= 2) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "OTP already verified");
-        }
-
-        // ✅ Generate new OTP
-        const newOtp = process.env.NODE_ENV !== 'production' ? '123457' : generateOTP();
-
-        // ✅ Set OTP expiration (e.g., 5 minutes)
-        const expiresInMinutes = 5;
-        user.tempOtp = newOtp;
-        user.tempOtpExpiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000);
-        await user.save();
-
-        // ✅ Send OTP (SMS/Email gateway integration - placeholder)
-        // await sendSms(phoneNumber, `Your OTP is: ${newOtp}`);
-
-        return apiSuccessRes(HTTP_STATUS.OK, res, "OTP resent successfully", {
-            phoneNumber,
-            step: user.step
-        });
-
-    } catch (error) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    if (!phoneNumber) {
+        return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Phone number is required");
     }
+
+    const tempUser = await TempUser.findOne({ phoneNumber });
+
+    if (!tempUser) {
+        return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found for OTP resend");
+    }
+
+    if (tempUser.step >= 2) {
+        return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "OTP already verified");
+    }
+
+    const newOtp = process.env.NODE_ENV !== 'production' ? '123457' : generateOTP();
+    tempUser.tempOtp = newOtp;
+    tempUser.tempOtpExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    await tempUser.save();
+
+    // Send OTP via SMS/email here...
+
+    return apiSuccessRes(HTTP_STATUS.OK, res, "OTP resent successfully", {
+        phoneNumber,
+        step: tempUser.step
+    });
 };
+
+
+
+
 const saveEmailPassword = async (req, res) => {
     const { phoneNumber, email, password } = req.body;
 
@@ -443,6 +431,8 @@ const saveEmailPassword = async (req, res) => {
 
     return apiSuccessRes(HTTP_STATUS.OK, res, "Email and password saved", getUserResponse(user));
 };
+
+
 const saveCategories = async (req, res) => {
     const { phoneNumber, categories } = req.body;
 
@@ -503,7 +493,6 @@ const completeRegistration = async (req, res) => {
         ...user.toJSON()
     });
 };
-
 
 
 
@@ -882,8 +871,6 @@ const getLikedProducts = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error.message);
     }
 };
-
-
 
 const getLikedThreads = async (req, res) => {
     try {
@@ -1270,9 +1257,6 @@ const getProfile = async (req, res) => {
 };
 
 
-
-
-
 //upload api 
 router.post('/upload', upload.single('file'), uploadfile);
 
@@ -1296,22 +1280,15 @@ router.post('/requestResetOtp', perApiLimiter(), upload.none(), requestResetOtp)
 router.post('/verifyResetOtp', perApiLimiter(), upload.none(), verifyResetOtp);
 router.post('/resetPassword', perApiLimiter(), upload.none(), resetPassword);
 router.post('/resendResetOtp', perApiLimiter(), upload.none(), resendResetOtp);
-
-
 //Follow //Like
 router.post('/follow', perApiLimiter(), upload.none(), validateRequest(followSchema), follow);
 router.post('/threadlike', perApiLimiter(), upload.none(), validateRequest(threadLikeSchema), threadlike);
 router.post('/productLike', perApiLimiter(), upload.none(), validateRequest(productLikeSchema), productLike);
 router.get('/getLikedProducts', perApiLimiter(), upload.none(), getLikedProducts)
 router.get('/getLikedThreads', perApiLimiter(), upload.none(), getLikedThreads)
-
-
 //login_user 
 router.get('/getProfile', perApiLimiter(), upload.none(), getProfile);
 router.get('/countApi', perApiLimiter(), upload.none(), getProfile);
-
-
-
 
 
 module.exports = router;
