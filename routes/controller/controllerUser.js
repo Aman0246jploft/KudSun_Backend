@@ -525,10 +525,7 @@ const loginStepOne = async (req, res) => {
 
         // No token needed here, frontend just proceeds with step 2
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "User verified, proceed with login", {
-            token,
-            ...user.toJSON()
-        });
+        return apiSuccessRes(HTTP_STATUS.OK, res, "User verified, proceed with login", getUserResponse(user));
 
 
     } catch (error) {
@@ -594,10 +591,7 @@ const loginStepTwoPassword = async (req, res) => {
 
 
 
-            return apiSuccessRes(HTTP_STATUS.OK, res, "Login successful", {
-                token,
-                ...user.toJSON()
-            });
+            return apiSuccessRes(HTTP_STATUS.OK, res, "Login successful", getUserResponse(user));
 
 
 
@@ -680,10 +674,7 @@ const loginStepThreeVerifyOtp = async (req, res) => {
         //     email: user.email,
         // });
 
-            return apiSuccessRes(HTTP_STATUS.OK, res, "OTP verified, login successful", {
-                token,
-                ...user.toJSON()
-            });
+            return apiSuccessRes(HTTP_STATUS.OK, res, "OTP verified, login successful", getUserResponse(user));
 
 
     } catch (err) {
