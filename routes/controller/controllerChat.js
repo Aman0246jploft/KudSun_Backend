@@ -25,7 +25,7 @@ async function handleGetChatRooms(socket, data) {
             })
             .populate({
                 path: 'participants',
-                select: 'userName profileImage'
+                select: 'userName profileImage isLive'
             })
             .sort({ updatedAt: -1 }) // Prefer updatedAt instead of createdAt for relevance
             .lean();
@@ -33,7 +33,7 @@ async function handleGetChatRooms(socket, data) {
         const chatRooms = await chatRoomsQuery.exec();
 
         // Filter participants and keyword search
-        const filteredRooms = chatRooms
+        const filteredRooms = chatRooms 
             .map(room => {
                 const otherParticipants = room.participants.filter(
                     p => p._id.toString() !== userId.toString()

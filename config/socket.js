@@ -33,7 +33,6 @@ async function setupSocket(server) {
         if (token.startsWith('Bearer ')) {
             token = token.slice(7);
         }
-
         try {
             const user = jwt.verify(token, process.env.JWT_SECRET_KEY);
             socket.user = user;
@@ -51,6 +50,8 @@ async function setupSocket(server) {
         connectedUsers[socket.id] = userId;
         if (userId) {
             liveStatusQueue.add({ userId, isLive: true });
+            io.to(`user_${userId}`).emit('userLiveStatus', { userId, isLive:true });
+
         }
 
         // Join room manually after
@@ -73,18 +74,32 @@ async function setupSocket(server) {
                 isNewRoom = isNew || false;
                 socket.join(roomId); // join the socket room dynamically
             }
-            const newMessage = new ChatMessage({
+            let newMessage = new ChatMessage({
                 chatRoom: roomId,
-                sender: type === 'SYSTEM' || type === 'ORDER' ? null : userId,
+                sender: (type === 'SYSTEM' || type === 'ORDER') ? null : userId,
                 messageType: type,
                 content,
                 mediaUrl,
                 systemMeta
             });
             await newMessage.save();
-            const updatedRoom = await ChatRoom.findByIdAndUpdate(roomId, { lastMessage: newMessage._id, updatedAt: new Date() }, { new: true }).populate('lastMessage').populate('participants', 'userName profileImage');
-            const messageWithRoom = { ...newMessage.toObject(), chatRoom: roomId };
+
+            // Correct way in Mongoose 6+
+            newMessage = await newMessage.populate('sender', '_id userName profileImage');
+
+            const updatedRoom = await ChatRoom.findByIdAndUpdate(
+                roomId,
+                { lastMessage: newMessage._id, updatedAt: new Date() },
+                { new: true }
+            ).populate('lastMessage').populate('participants', 'userName profileImage');
+
+            const messageWithRoom = {
+                ...newMessage.toObject(),
+                chatRoom: roomId
+            };
+
             io.to(roomId).emit('newMessage', messageWithRoom);
+
 
             const roomForSender = {
                 ...updatedRoom.toObject(),
@@ -130,10 +145,80 @@ async function setupSocket(server) {
 
         });
 
+        // socket.on('markMessagesAsSeen', async ({ roomId }) => {
+        //     try {
+        //         const userId = socket.user?.userId;
+        //         if (!roomId || !userId) return;
+        //         const unseenMessages = await ChatMessage.find({
+        //             chatRoom: toObjectId(roomId),
+        //             seenBy: { $ne: toObjectId(userId) },
+        //             sender: { $ne: toObjectId(userId) }
+        //         });
+
+        //         console.log("📥 Unseen messages for user:", unseenMessages.length);
+
+
+        //         // Mark messages as seen (exclude user's own messages)
+        //         const result = await ChatMessage.updateMany(
+        //             {
+        //                 chatRoom: toObjectId(roomId),
+        //                 seenBy: { $ne: toObjectId(userId) },
+        //                 sender: { $ne: toObjectId(userId) }
+        //             },
+        //             { $addToSet: { seenBy: toObjectId(userId) } }
+        //         );
+
+        //         if (result.modifiedCount > 0) {
+        //             // Broadcast seen event to room
+        //             io.to(roomId).emit('messagesSeen', {
+        //                 roomId,
+        //                 userId,
+        //                 seenAt: new Date().toISOString()
+        //             });
+
+        //             // Fetch room with participants
+        //             const room = await ChatRoom.findById(roomId)
+        //                 .populate('participants', '_id userName profileImage')
+        //                 .populate('lastMessage');
+
+        //             if (!room) return;
+
+        //             const roomObj = room.toObject();
+
+        //             // Notify each participant with updated unread count
+        //             await Promise.all(room.participants.map(async (participant) => {
+        //                 const participantId = participant._id?.toString();
+
+        //                 let unreadCount = 0;
+        //                 if (participantId !== userId) {
+        //                     unreadCount = await ChatMessage.countDocuments({
+        //                         chatRoom: roomId,
+        //                         seenBy: { $ne: toObjectId(participantId) },
+        //                         sender: { $ne: toObjectId(participantId) }
+        //                     });
+        //                 }
+
+        //                 io.to(`user_${participantId}`).emit('roomUpdated', {
+        //                     ...roomObj,
+        //                     participants: roomObj.participants.filter(p => p._id?.toString() !== participantId),
+        //                     unreadCount
+        //                 });
+        //             }));
+        //         }
+
+        //     } catch (error) {
+        //         console.error('❌ Error in markMessagesAsSeen:', error);
+        //         socket.emit('error', { message: 'Failed to mark messages as seen' });
+        //     }
+        // });
+
+
+
         socket.on('markMessagesAsSeen', async ({ roomId }) => {
             try {
                 const userId = socket.user?.userId;
                 if (!roomId || !userId) return;
+
                 const unseenMessages = await ChatMessage.find({
                     chatRoom: toObjectId(roomId),
                     seenBy: { $ne: toObjectId(userId) },
@@ -141,7 +226,6 @@ async function setupSocket(server) {
                 });
 
                 console.log("📥 Unseen messages for user:", unseenMessages.length);
-
 
                 // Mark messages as seen (exclude user's own messages)
                 const result = await ChatMessage.updateMany(
@@ -190,12 +274,14 @@ async function setupSocket(server) {
                         });
                     }));
                 }
-
             } catch (error) {
                 console.error('❌ Error in markMessagesAsSeen:', error);
                 socket.emit('error', { message: 'Failed to mark messages as seen' });
             }
         });
+
+
+
 
         socket.on('getChatRooms', (data) => {
             handleGetChatRooms(socket, data);
@@ -266,8 +352,16 @@ async function setupSocket(server) {
             delete connectedUsers[socket.id];
             if (userId) {
                 liveStatusQueue.add({ userId, isLive: false });
+                io.to(`user_${userId}`).emit('userLiveStatus', { userId, isLive: false });
+
             }
         });
+
+
+        socket.on("connect_error", (err) => {
+            console.error("❌ Socket connection error:", err.message, err);
+        });
+
     });
 
     return io;

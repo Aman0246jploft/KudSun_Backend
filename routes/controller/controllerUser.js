@@ -274,7 +274,6 @@ const uploadfile = async (req, res) => {
 
 //         await user.save();
 
-//         console.log("5555555", user)
 
 
 //         // ✅ Cleanup
