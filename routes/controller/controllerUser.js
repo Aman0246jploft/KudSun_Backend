@@ -525,7 +525,11 @@ const loginStepOne = async (req, res) => {
 
         // No token needed here, frontend just proceeds with step 2
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "User verified, proceed with login");
+        return apiSuccessRes(HTTP_STATUS.OK, res, "User verified, proceed with login", {
+            token,
+            ...user.toJSON()
+        });
+
 
     } catch (error) {
         console.error('Login Step 1 error:', error);
@@ -578,15 +582,26 @@ const loginStepTwoPassword = async (req, res) => {
                 userName: user.userName
             });
 
+            // return apiSuccessRes(HTTP_STATUS.OK, res, "Login successful", {
+            //     token,
+            //     userId: user._id,
+            //     roleId: user.roleId,
+            //     role: user.role,
+            //     profileImage: user.profileImage,
+            //     userName: user.userName,
+            //     email: user.email,
+            // });
+
+
+
             return apiSuccessRes(HTTP_STATUS.OK, res, "Login successful", {
                 token,
-                userId: user._id,
-                roleId: user.roleId,
-                role: user.role,
-                profileImage: user.profileImage,
-                userName: user.userName,
-                email: user.email,
+                ...user.toJSON()
             });
+
+
+
+
 
         } else if (loginWithCode === 'true') {
             const otp = process.env.NODE_ENV !== 'production' ? '123456' : generateOTP();
@@ -600,6 +615,8 @@ const loginStepTwoPassword = async (req, res) => {
             return apiSuccessRes(HTTP_STATUS.OK, res, "OTP sent");
         }
 
+
+        
         return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Provide either password or loginWithCode=true");
 
     } catch (err) {
@@ -653,15 +670,21 @@ const loginStepThreeVerifyOtp = async (req, res) => {
             userName: user.userName
         });
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "OTP verified, login successful", {
-            token,
-            userId: user._id,
-            roleId: user.roleId,
-            role: user.role,
-            profileImage: user.profileImage,
-            userName: user.userName,
-            email: user.email,
-        });
+        // return apiSuccessRes(HTTP_STATUS.OK, res, "OTP verified, login successful", {
+        //     token,
+        //     userId: user._id,
+        //     roleId: user.roleId,
+        //     role: user.role,
+        //     profileImage: user.profileImage,
+        //     userName: user.userName,
+        //     email: user.email,
+        // });
+
+            return apiSuccessRes(HTTP_STATUS.OK, res, "OTP verified, login successful", {
+                token,
+                ...user.toJSON()
+            });
+
 
     } catch (err) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
