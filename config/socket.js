@@ -69,7 +69,7 @@ async function setupSocket(server) {
                 }
                 // Use your service to find or create 1-on-1 room
                 const { room, isNew } = await findOrCreateOneOnOneRoom(userId, data.otherUserId);
-                roomId = room._id.toString();
+                roomId = room._id?.toString();
                 isNewRoom = isNew || false;
                 socket.join(roomId); // join the socket room dynamically
             }
@@ -83,16 +83,17 @@ async function setupSocket(server) {
             });
             await newMessage.save();
             const updatedRoom = await ChatRoom.findByIdAndUpdate(roomId, { lastMessage: newMessage._id, updatedAt: new Date() }, { new: true }).populate('lastMessage').populate('participants', 'userName profileImage');
-            io.to(roomId).emit('newMessage', newMessage);
+            const messageWithRoom = { ...newMessage.toObject(), chatRoom: roomId };
+            io.to(roomId).emit('newMessage', messageWithRoom);
 
             const roomForSender = {
                 ...updatedRoom.toObject(),
-                participants: updatedRoom.participants.filter(p => p._id.toString() !== userId.toString())
+                participants: updatedRoom.participants.filter(p => p._id?.toString() !== userId?.toString())
             };
 
             const roomForReceiver = {
                 ...updatedRoom.toObject(),
-                participants: updatedRoom.participants.filter(p => p._id.toString() !== data.otherUserId.toString())
+                participants: updatedRoom.participants.filter(p => p._id?.toString() !== data.otherUserId?.toString())
             };
             if (isNewRoom) {
                 io.to(`user_${userId}`).emit('newChatRoom', {
@@ -114,7 +115,6 @@ async function setupSocket(server) {
                     ...roomForSender,
                     unreadCount: 0
                 });
-
                 const unreadCount = await ChatMessage.countDocuments({
                     chatRoom: roomId,
                     seenBy: { $ne: toObjectId(data.otherUserId) },
@@ -134,11 +134,6 @@ async function setupSocket(server) {
             try {
                 const userId = socket.user?.userId;
                 if (!roomId || !userId) return;
-                console.log("🔍 [markMessagesAsSeen]");
-                console.log("roomId:", roomId);
-                console.log("userId:", userId);
-                console.log("roomId as ObjectId:", toObjectId(roomId));
-                console.log("userId as ObjectId:", toObjectId(userId));
                 const unseenMessages = await ChatMessage.find({
                     chatRoom: toObjectId(roomId),
                     seenBy: { $ne: toObjectId(userId) },
@@ -177,7 +172,7 @@ async function setupSocket(server) {
 
                     // Notify each participant with updated unread count
                     await Promise.all(room.participants.map(async (participant) => {
-                        const participantId = participant._id.toString();
+                        const participantId = participant._id?.toString();
 
                         let unreadCount = 0;
                         if (participantId !== userId) {
@@ -190,7 +185,7 @@ async function setupSocket(server) {
 
                         io.to(`user_${participantId}`).emit('roomUpdated', {
                             ...roomObj,
-                            participants: roomObj.participants.filter(p => p._id.toString() !== participantId),
+                            participants: roomObj.participants.filter(p => p._id?.toString() !== participantId),
                             unreadCount
                         });
                     }));
@@ -237,7 +232,7 @@ async function setupSocket(server) {
                     });
                 }
 
-                const chatRoomId = room._id.toString();
+                const chatRoomId = room._id?.toString();
                 const page = parseInt(pageNo);
                 const limit = parseInt(size);
                 const skip = (page - 1) * limit;
