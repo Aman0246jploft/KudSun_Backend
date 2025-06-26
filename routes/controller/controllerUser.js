@@ -591,7 +591,13 @@ const loginStepTwoPassword = async (req, res) => {
 
 
 
-            return apiSuccessRes(HTTP_STATUS.OK, res, "Login successful", getUserResponse(user));
+            return apiSuccessRes(HTTP_STATUS.OK, res, "Login successful",
+
+                {
+                    token,
+                    ...user.toJSON()
+                }
+            );
 
 
 
@@ -610,7 +616,7 @@ const loginStepTwoPassword = async (req, res) => {
         }
 
 
-        
+
         return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Provide either password or loginWithCode=true");
 
     } catch (err) {
@@ -674,7 +680,17 @@ const loginStepThreeVerifyOtp = async (req, res) => {
         //     email: user.email,
         // });
 
-            return apiSuccessRes(HTTP_STATUS.OK, res, "OTP verified, login successful", getUserResponse(user));
+
+            return apiSuccessRes(HTTP_STATUS.OK, res, "OTP verified, login successful",
+
+                {
+                    token,
+                    ...user.toJSON()
+                }
+            );
+
+
+
 
 
     } catch (err) {
