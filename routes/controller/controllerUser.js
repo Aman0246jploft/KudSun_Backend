@@ -282,7 +282,7 @@ const uploadfile = async (req, res) => {
 
 //         const payload = {
 //             email: user.email,
-//             userId: user._id,
+//             userI = req.user.userIdd: user._id,
 //             roleId: user.roleId,
 //             role: user.role,
 //             userName: user.userName
@@ -1369,6 +1369,205 @@ const getProfile = async (req, res) => {
     }
 };
 
+const updateProfile = async (req, res) => {
+    try {
+        let { userName, email, phoneNumber, ...other } = req.body;
+        const userId = req.user.userId;
+
+        // Check for existing userName
+        if (userName && userName.trim() !== "") {
+            const normalizedUserName = userName.toLowerCase();
+            const userInfo = await getDocumentByQuery(User, {
+                userName: normalizedUserName,
+                _id: { $ne: toObjectId(userId) }
+            });
+            if (userInfo.statusCode === CONSTANTS.SUCCESS) {
+                return apiErrorRes(
+                    HTTP_STATUS.BAD_REQUEST,
+                    res,
+                    "userName Already Exist"
+                );
+            }
+        }
+
+        // Check for existing email
+        if (email && email.trim() !== "") {
+            const normalizedEmail = email.toLowerCase();
+            const userInfo = await getDocumentByQuery(User, {
+                email: normalizedEmail,
+                _id: { $ne: toObjectId(userId) }
+            });
+            if (userInfo.statusCode === CONSTANTS.SUCCESS) {
+                return apiErrorRes(
+                    HTTP_STATUS.BAD_REQUEST,
+                    res,
+                    "email Already Exist"
+                );
+            }
+        }
+
+        // Check for existing phoneNumber
+        if (phoneNumber && phoneNumber.trim() !== "") {
+            return apiErrorRes(
+                HTTP_STATUS.BAD_REQUEST,
+                res,
+                "phoneNumber Cannot be updated"
+            );
+        }
+
+        // Prepare update payload
+        const updateData = {
+            ...other,
+            ...(userName && { userName: userName.toLowerCase() }),
+            ...(email && { email: email.toLowerCase() })
+        };
+
+        const updatedUser = await User.findByIdAndUpdate(
+            userId,
+            updateData,
+            { new: true }
+        ).select('-password');
+
+        return apiSuccessRes(
+            HTTP_STATUS.OK,
+            res,
+            "Profile updated successfully",
+            updatedUser
+        );
+    } catch (error) {
+        return apiErrorRes(
+            HTTP_STATUS.INTERNAL_SERVER_ERROR,
+            res,
+            "Internal server error",
+            error.message
+        );
+    }
+};
+
+
+
+
+
+const requestPhoneNumberUpdateOtp = async (req, res) => {
+    try {
+        const { phoneNumber } = req.body;
+        const userId = req.user.userId;
+
+        if (!phoneNumber) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Phone number is required");
+        }
+
+        const existing = await getDocumentByQuery(User, { phoneNumber });
+        if (existing.statusCode === CONSTANTS.SUCCESS && existing.data._id.toString() !== userId) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Phone number already in use");
+        }
+
+        const otp = process.env.NODE_ENV !== 'production' ? '123456' : generateOTP();
+
+        await setKeyWithTime(`verify-update:${userId}:${phoneNumber}`, otp, 5);
+        console.log(`verify-update:${userId}:${phoneNumber}`)
+        return apiSuccessRes(HTTP_STATUS.OK, res, "OTP sent successfully");
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to send OTP", error.message);
+    }
+};
+
+const verifyPhoneNumberUpdateOtp = async (req, res) => {
+    try {
+        const { phoneNumber, otp } = req.body;
+        const userId = req.user.userId;
+
+        if (!phoneNumber || !otp) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Phone number and OTP are required");
+        }
+
+        const redisKey = `verify-update:${userId}:${phoneNumber}`;
+        const savedOtp = await getKey(redisKey);
+        console.log("redisKey",redisKey,savedOtp)
+
+
+        if (!savedOtp?.data) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "OTP expired or not requested");
+        }
+
+        if (savedOtp?.data !== otp) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid OTP");
+        }
+
+        // Update phone number
+        const updatedUser = await User.findByIdAndUpdate(
+            userId,
+            { phoneNumber: phoneNumber.toLowerCase() },
+            { new: true }
+        ).select('-password');
+
+        // Clean up OTP
+        await removeKey(redisKey);
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Phone number updated successfully", updatedUser);
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to verify OTP", error.message);
+    }
+};
+
+const resendPhoneNumberUpdateOtp = async (req, res) => {
+    try {
+        const { phoneNumber } = req.body;
+        const userId = req.user.userId;
+
+        if (!phoneNumber) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Phone number is required");
+        }
+
+        const formattedPhone = phoneNumber.toLowerCase();
+
+        // Check if phone number already exists for another user
+        const existingUser = await getDocumentByQuery(User, {
+            phoneNumber: formattedPhone,
+            _id: { $ne: toObjectId(userId) } // exclude current user
+        });
+
+        if (existingUser.statusCode === CONSTANTS.SUCCESS) {
+            return apiErrorRes(
+                HTTP_STATUS.BAD_REQUEST,
+                res,
+                "Phone number already exists"
+            );
+        }
+
+        const redisKey = `verify-update:${userId}:${formattedPhone}`;
+        const previousOtp = await getKey(redisKey);
+
+        if (!previousOtp) {
+            return apiErrorRes(
+                HTTP_STATUS.BAD_REQUEST,
+                res,
+                "No OTP request found for this phone number. Please initiate phone number update first."
+            );
+        }
+
+        // Generate and resend OTP
+        const newOtp = process.env.NODE_ENV !== 'production' ? '123457' : generateOTP();
+
+        await setKeyWithTime(redisKey, newOtp, 5); // 5-minute TTL
+
+        return apiSuccessRes(
+            HTTP_STATUS.OK,
+            res,
+            "OTP resent successfully"
+        );
+    } catch (error) {
+        return apiErrorRes(
+            HTTP_STATUS.INTERNAL_SERVER_ERROR,
+            res,
+            "Failed to resend OTP",
+            error.message
+        );
+    }
+};
+
+
+
 
 //upload api 
 router.post('/upload', upload.single('file'), uploadfile);
@@ -1403,7 +1602,13 @@ router.get('/getLikedProducts', perApiLimiter(), upload.none(), getLikedProducts
 router.get('/getLikedThreads', perApiLimiter(), upload.none(), getLikedThreads)
 //login_user 
 router.get('/getProfile', perApiLimiter(), upload.none(), getProfile);
-router.get('/countApi', perApiLimiter(), upload.none(), getProfile);
+router.post('/updateProfile', perApiLimiter(), upload.none(), updateProfile);
+// router.get('/countApi', perApiLimiter(), upload.none(), getProfile);
 
+
+//updatePhoneNumber 
+router.post('/requestPhoneNumberUpdateOtp', perApiLimiter(), upload.none(), requestPhoneNumberUpdateOtp);
+router.post('/verifyPhoneNumberUpdateOtp', perApiLimiter(), upload.none(), verifyPhoneNumberUpdateOtp);
+router.post('/resendPhoneNumberUpdateOtp', perApiLimiter(), upload.none(), resendPhoneNumberUpdateOtp);
 
 module.exports = router;
