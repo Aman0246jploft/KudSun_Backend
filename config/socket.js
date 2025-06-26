@@ -15,8 +15,6 @@ async function setupSocket(server) {
             origin: '*',
         }
     });
-
-
     io.use((socket, next) => {
         // 1. Try to get token from handshake.auth.token (browser clients)
         let token = socket.handshake.auth.token;
@@ -50,7 +48,7 @@ async function setupSocket(server) {
         connectedUsers[socket.id] = userId;
         if (userId) {
             liveStatusQueue.add({ userId, isLive: true });
-            io.to(`user_${userId}`).emit('userLiveStatus', { userId, isLive:true });
+            io.to(`user_${userId}`).emit('userLiveStatus', { userId, isLive: true });
 
         }
 
@@ -294,43 +292,47 @@ async function setupSocket(server) {
 
         socket.on('getMessagesWithUser', async ({ otherUserId, pageNo = 1, size = 20 }) => {
             try {
-                const userId = socket.user.userId;
+                const userId = socket.user?.userId;
 
                 if (!otherUserId) {
                     return socket.emit('error', { message: 'otherUserId is required' });
                 }
 
-                // Try to find existing one-on-one room (don't create)
+                const page = Math.max(1, parseInt(pageNo));
+                const limit = Math.min(100, parseInt(size));
+                const skip = (page - 1) * limit;
+
+                // Find existing one-on-one room
                 const room = await ChatRoom.findOne({
                     isGroup: false,
                     participants: { $all: [toObjectId(userId), toObjectId(otherUserId)], $size: 2 }
                 });
 
                 if (!room) {
-                    // No existing room, return empty result
                     return socket.emit('messageList', {
                         chatRoomId: null,
                         total: 0,
-                        pageNo: parseInt(pageNo),
-                        size: parseInt(size),
+                        pageNo: page,
+                        size: limit,
                         messages: [],
+                        hasMore: false,
                         isNewRoom: true
                     });
                 }
 
-                const chatRoomId = room._id?.toString();
-                const page = parseInt(pageNo);
-                const limit = parseInt(size);
-                const skip = (page - 1) * limit;
+                const chatRoomId = room._id.toString();
 
-                const messages = await ChatMessage.find({ chatRoom: chatRoomId })
+                let messages = await ChatMessage.find({ chatRoom: chatRoomId })
                     .populate('sender', 'userName profileImage')
-                    .sort({ createdAt: 1 })
+                    .sort({ createdAt: -1 }) // newest first
                     .skip(skip)
                     .limit(limit)
                     .lean();
 
                 const totalMessages = await ChatMessage.countDocuments({ chatRoom: chatRoomId });
+
+                // Optional: reverse to send oldest first
+                messages = messages.reverse();
 
                 socket.emit('messageList', {
                     chatRoomId,
@@ -338,6 +340,7 @@ async function setupSocket(server) {
                     pageNo: page,
                     size: limit,
                     messages,
+                    hasMore: totalMessages > page * limit,
                     isNewRoom: false
                 });
 
@@ -346,6 +349,7 @@ async function setupSocket(server) {
                 socket.emit('error', { message: 'Failed to get messages with user' });
             }
         });
+
 
         socket.on('disconnect', () => {
             console.log(`🔴 User ${userId} disconnected`);

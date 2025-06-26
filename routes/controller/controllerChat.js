@@ -85,41 +85,45 @@ async function handleGetChatRooms(socket, data) {
 
 async function handleGetMessageList(socket, data) {
     try {
-        const userId = socket.user.userId; // assuming user info is on socket
+        const userId = socket.user?.userId;
         const { chatRoomId, pageNo = 1, size = 20 } = data;
 
         if (!chatRoomId) {
             return socket.emit('error', { message: 'chatRoomId is required' });
         }
 
-        const page = parseInt(pageNo);
-        const limit = parseInt(size);
+        const page = Math.max(1, parseInt(pageNo));
+        const limit = Math.min(100, parseInt(size)); // limit max size
         const skip = (page - 1) * limit;
 
-        // Query messages for the chat room, sorted by createdAt ascending or descending (choose one)
-        const messages = await ChatMessage.find({ chatRoom: chatRoomId })
+        // Fetch messages sorted by newest first
+        let messages = await ChatMessage.find({ chatRoom: chatRoomId })
             .populate('sender', 'userName profileImage')
-            .sort({ createdAt: 1 }) // oldest messages first; change to -1 for newest first
+            .sort({ createdAt: -1 }) // newest first
             .skip(skip)
             .limit(limit)
             .lean();
 
-        // Count total messages in the chat room (for pagination info)
         const totalMessages = await ChatMessage.countDocuments({ chatRoom: chatRoomId });
+
+        // Optional: Reverse if client expects ascending order
+        messages = messages.reverse();
 
         socket.emit('messageList', {
             chatRoomId,
             total: totalMessages,
             pageNo: page,
             size: limit,
+            hasMore: totalMessages > page * limit,
             messages,
         });
 
     } catch (error) {
         console.error('Error fetching message list:', error);
-        socket.emit('error', { message: error.message });
+        socket.emit('error', { message: 'Failed to fetch messages' });
     }
 }
+
 
 
 

@@ -1483,7 +1483,7 @@ const verifyPhoneNumberUpdateOtp = async (req, res) => {
 
         const redisKey = `verify-update:${userId}:${phoneNumber}`;
         const savedOtp = await getKey(redisKey);
-        console.log("redisKey",redisKey,savedOtp)
+        console.log("redisKey", redisKey, savedOtp)
 
 
         if (!savedOtp?.data) {
