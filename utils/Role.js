@@ -1,6 +1,7 @@
 const roleId = {
     SUPER_ADMIN: 1,
-    USER: 2
+    USER: 2,
+    GUEST: 3
 }
 
 const conditions = {

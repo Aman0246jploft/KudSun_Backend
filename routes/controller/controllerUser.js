@@ -323,7 +323,7 @@ const requestOtp = async (req, res) => {
     // Check if user exists in main User collection
     const existingUser = await User.findOne({ phoneNumber });
     if (existingUser) {
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Phone number already registered", {
+        return apiErrorRes(HTTP_STATUS.OK, res, "Phone number already registered", {
             phoneNumber,
             step: existingUser.step || 5,  // 5 or whatever means completed
         });
@@ -680,13 +680,13 @@ const loginStepThreeVerifyOtp = async (req, res) => {
         // });
 
 
-            return apiSuccessRes(HTTP_STATUS.OK, res, "OTP verified, login successful",
+        return apiSuccessRes(HTTP_STATUS.OK, res, "OTP verified, login successful",
 
-                {
-                    token,
-                    ...user.toJSON()
-                }
-            );
+            {
+                token,
+                ...user.toJSON()
+            }
+        );
 
 
 
@@ -1223,6 +1223,90 @@ const login = async (req, res) => {
 };
 
 
+
+const loginAsGuest = async (req, res) => {
+    try {
+        const email = 'guestxyz@gmail11.com';
+        const userCheckEmail = await getDocumentByQuery(User, { email });
+        if (userCheckEmail.statusCode === CONSTANTS.SUCCESS) {
+            if (userCheckEmail.data.isDisable === true) {
+                return apiErrorRes(
+                    HTTP_STATUS.BAD_REQUEST,
+                    res,
+                    CONSTANTS_MSG.ACCOUNT_DISABLE,
+                    userCheckEmail.data
+                );
+            }
+
+            // ✅ Continue with password verification
+            const verifyPass = await verifyPassword(
+                userCheckEmail.data.password,
+                '0000000011'
+            );
+
+            if (!verifyPass) {
+                return apiErrorRes(
+                    HTTP_STATUS.UNAUTHORIZED,
+                    res,
+                    CONSTANTS_MSG.INVALID_PASSWORD
+                );
+            }
+
+
+
+            if (req.body?.fmcToken && req.body?.fmcToken !== "") {
+                userCheckEmail.data.fmcToken = req.body.fmcToken;
+                await userCheckEmail.data.save();
+            }
+
+            const payload = {
+                email: userCheckEmail.data.email,
+                userId: userCheckEmail.data._id,
+                roleId: userCheckEmail.data.roleId,
+                role: userCheckEmail.data.role,
+                profileImage: userCheckEmail.data.profileImage,
+                userName: userCheckEmail.data.userName
+            };
+
+            const token = signToken(payload);
+
+            const output = {
+                token,
+                userId: userCheckEmail.data._id,
+                roleId: userCheckEmail.data.roleId,
+                role: userCheckEmail.data.role,
+                profileImage: userCheckEmail.data.profileImage,
+                userName: userCheckEmail.data.userName,
+                email: userCheckEmail.data.email,
+
+            };
+
+            const userData = userCheckEmail?.data?.toObject ? userCheckEmail.data.toObject() : userCheckEmail?.data;
+
+            return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, {
+                ...userData,
+                ...output
+            });
+
+        } else {
+            return apiErrorRes(
+                HTTP_STATUS.BAD_REQUEST,
+                res,
+                CONSTANTS_MSG.EMAIL_NOTFOUND,
+                userCheckEmail.data
+            );
+        }
+    } catch (error) {
+        return apiErrorRes(
+            HTTP_STATUS.INTERNAL_SERVER_ERROR,
+            res,
+            error.message,
+            error.message
+        );
+    }
+};
+
+
 const getProfile = async (req, res) => {
     try {
         const userId = req.user.userId;
@@ -1304,6 +1388,8 @@ router.post('/loginStepTwo', perApiLimiter(), upload.none(), loginStepTwoPasswor
 router.post('/loginStepThree', perApiLimiter(), upload.none(), loginStepThreeVerifyOtp);
 router.post('/resendLoginOtp', perApiLimiter(), upload.none(), resendLoginOtp);
 router.post('/login', perApiLimiter(), upload.none(), validateRequest(loginSchema), login);
+router.post('/loginAsGuest', perApiLimiter(), upload.none(), loginAsGuest);
+
 //RESET PASSWORD 
 router.post('/requestResetOtp', perApiLimiter(), upload.none(), requestResetOtp);
 router.post('/verifyResetOtp', perApiLimiter(), upload.none(), verifyResetOtp);

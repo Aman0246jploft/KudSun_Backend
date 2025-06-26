@@ -1299,6 +1299,7 @@ const getProduct = async (req, res) => {
             }));
 
             product.auctionDetails = {
+                ...product.auctionSettings,
                 totalBids,
                 isReserveMet,
                 isLiveAuction: product.auctionSettings?.isBiddingOpen || false,
