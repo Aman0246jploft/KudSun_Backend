@@ -65,7 +65,10 @@ const getDocumentById = async (Model, id) => {
 
 const getDocumentByQuery = async (Model, data) => {
     try {
+        console.log("data",data)
         const doc = await Model.findOne({ ...data });
+        console.log("data",doc)
+
         if (!doc) return resultDb(NOT_FOUND, DATA_NULL);
         return resultDb(SUCCESS, doc);
     } catch (err) {
