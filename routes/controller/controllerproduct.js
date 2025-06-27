@@ -437,7 +437,9 @@ const showNormalProducts = async (req, res) => {
             specifics,
             isTrending = false,
             includeSold,
-            isSold = false
+            isSold = false,
+            minPrice,   // NEW
+            maxPrice    // NEW
         } = req.query;
 
         const page = parseInt(pageNo);
@@ -487,6 +489,17 @@ const showNormalProducts = async (req, res) => {
 
         if (!isAdmin) {
             filter.isDisable = false
+        }
+
+        // Price range filter:
+        if (minPrice != null || maxPrice != null) {
+            filter.fixedPrice = {};
+            if (minPrice != null) {
+                filter.fixedPrice.$gte = parseFloat(minPrice);
+            }
+            if (maxPrice != null) {
+                filter.fixedPrice.$lte = parseFloat(maxPrice);
+            }
         }
 
         if (includeSold == true || includeSold == "true") {
@@ -565,20 +578,20 @@ const showNormalProducts = async (req, res) => {
             }
         }
 
-        if (req.user?._id && products.length) {
+        if (req.user?.userId && products.length) {
             const productIds = products.map(p => p._id);
 
             const likedProducts = await ProductLike.find({
-                likeBy: req.user._id,
+                likeBy: req.user.userId,
                 productId: { $in: productIds },
                 isDeleted: false,
                 isDisable: false
             }).select("productId").lean();
 
             const likedProductIds = new Set(likedProducts.map(like => like.productId.toString()));
-
             for (const product of products) {
                 product.isLiked = likedProductIds.has(product._id.toString());
+                console.log("hii")
             }
         }
 
@@ -606,12 +619,13 @@ const showAuctionProducts = async (req, res) => {
             subCategoryId,
             tags,
             specifics,
+            deliveryFilter,
             isSold = false,
             includeSold = false,
             isTrending = false
         } = req.query;
 
-
+        let isAdmin = req.user.roleId == roleId?.SUPER_ADMIN || false
         const page = parseInt(pageNo);
         const limit = parseInt(size);
         const skip = (page - 1) * limit;
@@ -620,14 +634,24 @@ const showAuctionProducts = async (req, res) => {
         const filter = {
             saleType: SALE_TYPE.AUCTION,
             isDeleted: false,
-            isDisable: false,
+
         };
+
+        if (!isAdmin) {
+            filter.isDisable = false
+        }
 
         if (includeSold == true || includeSold == "true") {
             // Do not filter isSold — return both sold and unsold
         } else {
             filter['auctionSettings.isBiddingOpen'] = true
 
+        }
+
+   if (deliveryFilter === "free") {
+            filter.deliveryType = { $in: [DeliveryType.FREE_SHIPPING, DeliveryType.LOCAL_PICKUP] };
+        } else if (deliveryFilter === "charged") {
+            filter.deliveryType = DeliveryType.CHARGE_SHIPPING;
         }
 
         if (keyWord) {
@@ -667,7 +691,7 @@ const showAuctionProducts = async (req, res) => {
                 .sort({ 'auctionSettings.biddingEndsAt': 1 }) // Ending soonest first
                 .skip(skip)
                 .limit(limit)
-                .select("title productImages condition subCategoryId auctionSettings tags description specifics")
+                .select("title productImages condition isDisable subCategoryId auctionSettings tags description specifics")
                 .populate("categoryId", "name")
                 .populate("userId", "userName profileImage is_Id_verified isLive is_Preferred_seller")
                 .lean(),
@@ -714,11 +738,11 @@ const showAuctionProducts = async (req, res) => {
             const timeLeftMs = endTime - localNow;
             product.timeRemaining = timeLeftMs > 0 ? formatTimeRemaining(timeLeftMs) : 0;
         })
-        
+
         let likedProductIds = new Set();
-        if (req.user && req.user._id) {
+        if (req.user && req.user.userId) {
             const likes = await ProductLike.find({
-                likeBy: req.user._id,
+                likeBy: req.user.userId,
                 productId: { $in: productIds },
                 isDisable: false,
                 isDeleted: false,
@@ -1149,7 +1173,7 @@ const fetchUserProducts = async (req, res) => {
         const limit = parseInt(size);
         const skip = (page - 1) * limit;
 
-        // Get logged-in user ID from auth (assumes middleware sets req.user._id)
+        // Get logged-in user ID from auth (assumes middleware sets req.user.userId)
         const requesterId = req.user?._id?.toString();
 
         const isSelfProfile = userId && requesterId && userId === requesterId;
