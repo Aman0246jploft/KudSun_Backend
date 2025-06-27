@@ -10,7 +10,9 @@ const parameterValueSchema = new mongoose.Schema({
 // Parameter Schema
 const parameterSchema = new mongoose.Schema({
     key: { type: String, required: true, trim: true, lowercase: true },
-    values: [parameterValueSchema]
+    values: [parameterValueSchema],
+    isAddedByAdmin: { type: Boolean, default: true },
+    addedByUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }
 });
 
 // Subcategory Schema

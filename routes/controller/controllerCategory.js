@@ -721,6 +721,84 @@ const addUserParameterValue = async (req, res) => {
 };
 
 
+
+const addUserParameterAndValue = async (req, res) => {
+    try {
+        const { subCategoryId } = req.params;
+        const { key, values } = req.body;
+        const userId = req.user?.userId;
+
+        if (!subCategoryId || !key || !values) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Subcategory ID, key and values are required');
+        }
+
+        const paramKey = key.trim().toLowerCase();
+        const incomingValues = Array.isArray(values) ? values : [values];
+        const trimmedValues = incomingValues.map(v => v.trim().toLowerCase()).filter(Boolean);
+
+        if (trimmedValues.length === 0) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'No valid values provided');
+        }
+
+        const category = await Category.findOne({ 'subCategories._id': subCategoryId, isDeleted: false });
+        if (!category) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
+        }
+
+        const subCategory = category.subCategories.id(subCategoryId);
+        if (!subCategory) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found in category');
+        }
+
+        let parameter = subCategory.parameters.find(p => p.key === paramKey);
+
+        if (parameter) {
+            // ✅ Parameter exists — filter out existing values
+            const existingValuesSet = new Set(parameter.values.map(v => v.value));
+            const uniqueValuesToAdd = trimmedValues.filter(val => !existingValuesSet.has(val));
+
+            if (uniqueValuesToAdd.length === 0) {
+                return apiSuccessRes(HTTP_STATUS.OK, res, 'No new values to add, all already exist');
+            }
+
+            uniqueValuesToAdd.forEach(value => {
+                parameter.values.push({
+                    value,
+                    isAddedByAdmin: false,
+                    addedByUserId: userId
+                });
+            });
+        } else {
+            // ✅ Parameter does not exist — create a new one
+            const newParam = {
+                key: paramKey,
+                isAddedByAdmin: false,
+                addedByUserId: userId,
+                values: trimmedValues.map(value => ({
+                    value,
+                    isAddedByAdmin: false,
+                    addedByUserId: userId
+                }))
+            };
+
+            subCategory.parameters.push(newParam);
+        }
+
+        await category.save();
+
+        return apiSuccessRes(HTTP_STATUS.CREATED, res, 'Parameter and values added successfully', {
+            key: paramKey,
+            addedValues: trimmedValues
+        });
+
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    }
+};
+
+
+
+
 const acceptParameterValueByAdmin = async (req, res) => {
     try {
         console.log()
@@ -837,6 +915,8 @@ router.post('/rejectParameterValueByAdmin/:subCategoryId', upload.none(), reject
 
 
 router.post('/addUserParameterValue/:subCategoryId', perApiLimiter(), upload.none(), addUserParameterValue);
+router.post('/addUserParameterAndValue/:subCategoryId', perApiLimiter(), upload.none(), addUserParameterAndValue);
+
 
 router.get('/listCategoryNames', perApiLimiter(), listCategoryNames);
 router.get('/getSubCategoriesByCategoryId/:categoryId', perApiLimiter(), getSubCategoriesByCategoryId);
