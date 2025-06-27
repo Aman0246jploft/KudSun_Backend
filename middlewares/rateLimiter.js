@@ -3,7 +3,7 @@ const { apiErrorRes } = require('../utils/globalFunction');
 
 
 // Function that returns a limiter middleware
-const perApiLimiter = (maxRequests = 30) =>
+const perApiLimiter = (maxRequests = 100) =>
     rateLimit({
         windowMs: 60 * 1000, // 1 minute
         max: maxRequests,    // Default is 10 requests

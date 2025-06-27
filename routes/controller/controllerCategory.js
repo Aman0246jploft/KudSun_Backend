@@ -355,17 +355,27 @@ const listCategoryNames = async (req, res) => {
         };
 
         const [categories, total] = await Promise.all([
-            Category.find(query, { _id: 1, name: 1, image: 1 })
+            Category.find(query, { _id: 1, name: 1, image: 1 ,subCategories:1})
                 .skip(skip)
                 .limit(limit),
             Category.countDocuments(query)
         ]);
 
+        const enrichedCategories = categories.map(cat => {
+            return ({
+                _id: cat._id,
+                name: cat.name,
+                image: cat.image,
+                subCategoryCount: cat.subCategories?.length || 0
+            })
+        });
+
+
         return apiSuccessRes(HTTP_STATUS.OK, res, 'Category names fetched successfully', {
             total,
             pageNo: parseInt(pageNo),
             size: limit,
-            data: categories
+            data: enrichedCategories
         });
     } catch (error) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
