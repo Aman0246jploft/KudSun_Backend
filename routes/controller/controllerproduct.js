@@ -3,13 +3,13 @@ const express = require('express');
 const multer = require('multer');
 const upload = multer();
 const router = express.Router();
-const { SellProduct, Order, Bid, SearchHistory, Follow, User, ProductComment, SellProductDraft } = require('../../db');
+const { SellProduct, Order, Bid, SearchHistory, Follow, User, ProductComment, SellProductDraft, Category, ProductLike } = require('../../db');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const { apiErrorRes, apiSuccessRes, toObjectId, formatTimeRemaining } = require('../../utils/globalFunction');
 const HTTP_STATUS = require('../../utils/statusCode');
 const { uploadImageCloudinary, deleteImageCloudinary } = require('../../utils/cloudinary');
 const CONSTANTS_MSG = require('../../utils/constantsMessage');
-const { SALE_TYPE, DeliveryType, ORDER_STATUS } = require('../../utils/Role');
+const { SALE_TYPE, DeliveryType, ORDER_STATUS, roleId } = require('../../utils/Role');
 const { DateTime } = require('luxon');
 
 
@@ -230,7 +230,7 @@ const addSellerProduct = async (req, res) => {
 const updateSellerProduct = async (req, res) => {
     try {
         const productId = req.params.id;
-        const isDraftUpdate = req.body.isDraft === 'true' || req.body.isDraft === true;
+        const isDraftUpdate = req?.body?.isDraft === 'true' || req?.body?.isDraft === true || false
 
         // Find existing product - draft or published depending on isDraftUpdate flag
         const Model = isDraftUpdate ? SellProductDraft : SellProduct;
@@ -257,7 +257,8 @@ const updateSellerProduct = async (req, res) => {
             tags,
             auctionSettings,
             timezone,
-            removePhotos
+            removePhotos,
+            isDisable
         } = req.body;
 
         // Validate required fields ONLY for published (non-draft) products
@@ -379,6 +380,7 @@ const updateSellerProduct = async (req, res) => {
         if (specifics !== undefined) existingProduct.specifics = specifics;
         if (tags !== undefined) existingProduct.tags = Array.isArray(tags) ? tags : [tags];
         if (auctionSettings !== undefined) existingProduct.auctionSettings = auctionSettings;
+        if (isDisable !== undefined) existingProduct.isDisable = isDisable === 'true' || isDisable === true;
         existingProduct.productImages = photoUrls;
 
         // Save updated product
@@ -392,6 +394,36 @@ const updateSellerProduct = async (req, res) => {
 };
 
 
+
+const toggleProductDisable = async (req, res) => {
+    try {
+        const productId = req.params.id;
+        const isDraftUpdate = req.body.isDraft === 'true' || req.body.isDraft === true;
+
+        // Find the correct product model based on draft flag
+        const Model = isDraftUpdate ? SellProductDraft : SellProduct;
+        const product = await Model.findById(productId);
+
+        if (!product) {
+            return apiErrorRes(404, res, "Product not found");
+        }
+
+        if (typeof req.body.isDisable === 'undefined') {
+            return apiErrorRes(400, res, "Missing isDisable field");
+        }
+
+        product.isDisable = !product.isDisable
+
+        await product.save();
+
+        return apiSuccessRes(200, res, "Product disable status toggled successfully", product);
+    } catch (error) {
+        return apiErrorRes(500, res, error.message, error);
+    }
+};
+
+
+
 const showNormalProducts = async (req, res) => {
     try {
         const {
@@ -401,6 +433,7 @@ const showNormalProducts = async (req, res) => {
             categoryId,
             subCategoryId,
             tags,
+            deliveryFilter,
             specifics,
             isTrending = false,
             includeSold,
@@ -410,6 +443,7 @@ const showNormalProducts = async (req, res) => {
         const page = parseInt(pageNo);
         const limit = parseInt(size);
         const skip = (page - 1) * limit;
+        let isAdmin = req.user.roleId == roleId?.SUPER_ADMIN || false
 
         // Step 1: Get sold product IDs (products part of confirmed/pending orders etc.)
 
@@ -447,11 +481,13 @@ const showNormalProducts = async (req, res) => {
         const filter = {
             saleType: SALE_TYPE.FIXED,
             isDeleted: false,
-            isDisable: false,
             // isSold: false
             // _id: { $nin: soldProductIds }
         };
 
+        if (!isAdmin) {
+            filter.isDisable = false
+        }
 
         if (includeSold == true || includeSold == "true") {
             // Do not filter isSold — return both sold and unsold
@@ -461,9 +497,11 @@ const showNormalProducts = async (req, res) => {
             filter.isSold = false; // default
         }
 
-        console.log("filterfilter", filter, includeSold, includeSold == true || includeSold == "true")
-
-
+        if (deliveryFilter === "free") {
+            filter.deliveryType = { $in: [DeliveryType.FREE_SHIPPING, DeliveryType.LOCAL_PICKUP] };
+        } else if (deliveryFilter === "charged") {
+            filter.deliveryType = DeliveryType.CHARGE_SHIPPING;
+        }
 
         if (keyWord) {
             filter.$or = [
@@ -501,7 +539,7 @@ const showNormalProducts = async (req, res) => {
                 .sort({ createdAt: -1 })
                 .skip(skip)
                 .limit(limit)
-                .select("title fixedPrice productImages condition  isSold userId  tags originPriceView originPrice description specifics")
+                .select("title fixedPrice saleType shippingCharge deliveryType isTrending isDisable productImages condition subCategoryId isSold userId  tags originPriceView originPrice description specifics")
                 .populate("categoryId", "name")
                 .populate("userId", "userName profileImage is_Id_verified isLive is_Preferred_seller")
                 .lean(),
@@ -509,6 +547,40 @@ const showNormalProducts = async (req, res) => {
             SellProduct.countDocuments(filter)
         ]);
 
+        if (products.length) {
+            const categoryIds = [...new Set(products.map(p => p.categoryId?._id?.toString()))];
+
+            const categories = await Category.find({ _id: { $in: categoryIds } })
+                .select("subCategories.name subCategories._id")
+                .lean();
+
+            for (const product of products) {
+                const category = categories.find(cat => cat?._id.toString() === product?.categoryId?._id.toString());
+                const subCat = category?.subCategories?.find(sub => sub?._id.toString() === product?.subCategoryId?.toString());
+                if (subCat) {
+                    product["subCategoryName"] = subCat.name;
+                } else {
+                    product["subCategoryName"] = null;
+                }
+            }
+        }
+
+        if (req.user?._id && products.length) {
+            const productIds = products.map(p => p._id);
+
+            const likedProducts = await ProductLike.find({
+                likeBy: req.user._id,
+                productId: { $in: productIds },
+                isDeleted: false,
+                isDisable: false
+            }).select("productId").lean();
+
+            const likedProductIds = new Set(likedProducts.map(like => like.productId.toString()));
+
+            for (const product of products) {
+                product.isLiked = likedProductIds.has(product._id.toString());
+            }
+        }
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Products fetched successfully", {
             pageNo: page,
@@ -588,19 +660,38 @@ const showAuctionProducts = async (req, res) => {
             const parsedSpecifics = Array.isArray(specifics) ? specifics : [specifics];
             filter['specifics.valueId'] = { $all: parsedSpecifics.map(id => toObjectId(id)) };
         }
-        console.log("filter", filter)
+
         // Step 2: Query and paginate
         const [products, total] = await Promise.all([
             SellProduct.find(filter)
                 .sort({ 'auctionSettings.biddingEndsAt': 1 }) // Ending soonest first
                 .skip(skip)
                 .limit(limit)
-                .select("title productImages condition auctionSettings tags description specifics")
+                .select("title productImages condition subCategoryId auctionSettings tags description specifics")
                 .populate("categoryId", "name")
                 .populate("userId", "userName profileImage is_Id_verified isLive is_Preferred_seller")
                 .lean(),
             SellProduct.countDocuments(filter)
         ]);
+
+        if (products.length) {
+            const categoryIds = [...new Set(products.map(p => p.categoryId?._id?.toString()))];
+
+            const categories = await Category.find({ _id: { $in: categoryIds } })
+                .select("subCategories.name subCategories._id")
+                .lean();
+
+            for (const product of products) {
+                const category = categories.find(cat => cat?._id.toString() === product?.categoryId?._id.toString());
+                const subCat = category?.subCategories?.find(sub => sub?._id.toString() === product?.subCategoryId?.toString());
+                if (subCat) {
+                    product["subCategoryName"] = subCat.name;
+                } else {
+                    product["subCategoryName"] = null;
+                }
+            }
+        }
+
         const productIds = products.map(p => toObjectId(p._id));
         // Aggregate bids count grouped by productId
         const bidsCounts = await Bid.aggregate([
@@ -622,8 +713,22 @@ const showAuctionProducts = async (req, res) => {
             const endTime = new Date(product.auctionSettings.biddingEndsAt).getTime();
             const timeLeftMs = endTime - localNow;
             product.timeRemaining = timeLeftMs > 0 ? formatTimeRemaining(timeLeftMs) : 0;
-        });
+        })
+        
+        let likedProductIds = new Set();
+        if (req.user && req.user._id) {
+            const likes = await ProductLike.find({
+                likeBy: req.user._id,
+                productId: { $in: productIds },
+                isDisable: false,
+                isDeleted: false,
+            }).select("productId").lean();
 
+            likedProductIds = new Set(likes.map(like => like.productId.toString()));
+        }
+        products.forEach(product => {
+            product.isLiked = likedProductIds.has(product._id.toString());
+        });
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Auction products fetched successfully", {
             pageNo: page,
@@ -1644,18 +1749,23 @@ const deleteProduct = async (req, res) => {
     try {
         const { id } = req.params;
         const loginUserId = req.user?.userId;
+        const roleIds = req.user?.roleId;
 
         if (!id) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Product ID is required.");
         }
 
-        // Find product and check ownership
+        // Find product and check existence
         const product = await SellProduct.findOne({ _id: id, isDeleted: false });
         if (!product) {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Product not found.");
         }
 
-        if (product.userId.toString() !== loginUserId) {
+        // Check if user is owner or super admin
+        const isOwner = product.userId.toString() === loginUserId;
+        const isSuperAdmin = roleIds === roleId.SUPER_ADMIN;
+
+        if (!isOwner && !isSuperAdmin) {
             return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, "You are not authorized to delete this product.");
         }
 
@@ -1666,21 +1776,20 @@ const deleteProduct = async (req, res) => {
                     await deleteImageCloudinary(url);
                 } catch (err) {
                     console.error("Failed to delete image from Cloudinary:", url, err);
-                    // Continue deleting other images even if one fails
                 }
             }
         }
 
-        // Soft delete product
+        // Soft delete the product
         product.isDeleted = true;
         await product.save();
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Product deleted successfully.");
-
     } catch (error) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
     }
 };
+
 
 
 const trending = async (req, res) => {
@@ -1708,6 +1817,11 @@ const trending = async (req, res) => {
 router.post('/addSellerProduct', perApiLimiter(), upload.array('files', 10), addSellerProduct);
 
 router.post('/updateSellerProduct/:id', perApiLimiter(), upload.array('files', 10), updateSellerProduct);
+router.post('/toggleProductDisable/:id', perApiLimiter(), upload.none(), toggleProductDisable);
+
+
+
+
 router.get('/getDraftProducts', perApiLimiter(), getDraftProducts);
 router.post('/deleteProduct/:id', perApiLimiter(), deleteProduct);
 router.post('/trending/:id', perApiLimiter(), trending);

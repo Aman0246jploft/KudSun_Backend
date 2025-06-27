@@ -700,10 +700,24 @@ const getThreads = async (req, res) => {
         const likeMap = Object.fromEntries(likeCounts.map(l => [l._id.toString(), l.count]));
         const productMap = Object.fromEntries(productCounts.map(p => [p._id.toString(), p.count]));
 
+        let currentUserId = req.user?.userId?.toString();
+
+        // Get liked thread IDs by current user
+        let likedThreadSet = new Set();
+        if (currentUserId) {
+            const userLikes = await ThreadLike.find({
+                userId: currentUserId,
+                threadId: { $in: threadIds },
+                isDeleted: false,
+                isDisable: false
+            }).select('threadId').lean();
+
+            likedThreadSet = new Set(userLikes.map(like => like.threadId.toString()));
+        }
+
         const enrichedThreads = threads.map(thread => {
             const tid = thread._id.toString();
             const uid = thread.userId?._id?.toString() || '';
-            const currentUserId = req.user?.userId?.toString();
 
             // Remove populated category data
             delete thread.categoryId;
@@ -715,9 +729,11 @@ const getThreads = async (req, res) => {
                 totalComments: commentMap[tid] || 0,
                 totalLikes: likeMap[tid] || 0,
                 totalAssociatedProducts: productMap[tid] || 0,
-                myThread: currentUserId && uid === currentUserId
+                myThread: currentUserId && uid === currentUserId,
+                isLiked: likedThreadSet.has(tid)
             };
         });
+
 
         const total = await Thread.countDocuments(filters);
 
