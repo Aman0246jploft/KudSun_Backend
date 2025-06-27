@@ -11,7 +11,7 @@ let AppSettingSchema = new Schema({
         type: String,
         unique: true,
         require: true,
-        lowercase: true
+        // lowercase: true
     },
     value: {
         type: String,

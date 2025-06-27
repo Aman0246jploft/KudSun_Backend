@@ -59,6 +59,7 @@ const globalCrudController = {
 
   hardDelete: (model) => async (req, res) => {
     try {
+      console.log("asdsadasasd",req.body)
       const { id } = req.body;
       const modelData = await deleteDocument(model, id);
       if (modelData.statusCode === CONSTANTS.SUCCESS)
