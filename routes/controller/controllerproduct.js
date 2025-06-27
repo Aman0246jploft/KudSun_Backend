@@ -33,7 +33,7 @@ const addSellerProduct = async (req, res) => {
 
         let specifics = [];
         let auctionSettings = {};
-        console.log("req.body111", req.body)
+     
 
         // Parse JSON fields from form-data
         try {
@@ -591,7 +591,6 @@ const showNormalProducts = async (req, res) => {
             const likedProductIds = new Set(likedProducts.map(like => like.productId.toString()));
             for (const product of products) {
                 product.isLiked = likedProductIds.has(product._id.toString());
-                console.log("hii")
             }
         }
 
@@ -839,6 +838,7 @@ const getLimitedTimeDeals = async (req, res) => {
         // Step 3: Add time remaining and bid counts
         const productIds = products.map(p => toObjectId(p._id));
 
+
         const bidsCounts = await Bid.aggregate([
             { $match: { productId: { $in: productIds } } },
             { $group: { _id: "$productId", totalBidsPlaced: { $sum: 1 } } }
@@ -852,6 +852,7 @@ const getLimitedTimeDeals = async (req, res) => {
         const nowTimestamp = Date.now();
         products.forEach(product => {
             const endTime = new Date(product.auctionSettings.biddingEndsAt).getTime();
+            console.log("endTime",endTime)
             const timeLeftMs = endTime - nowTimestamp;
             product.timeRemaining = timeLeftMs > 0 ? timeLeftMs : 0;
             product.timeRemainingStr = formatTimeRemaining(product.timeRemaining);

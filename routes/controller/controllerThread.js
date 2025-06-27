@@ -39,7 +39,6 @@ const addThread = async (req, res) => {
             const raw = Array.isArray(tags)
                 ? tags
                 : [tags];
-            console.log("raw", raw)
             tagArray = raw
                 .map(id => id.trim?.())
                 .filter(id => id);
@@ -589,7 +588,7 @@ const getCommentByParentId = async (req, res) => {
             responseObj
         );
     } catch (error) {
-
+        console.error("Error in getCommentByParentId:", error);
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Server error");
     }
 };
@@ -705,8 +704,10 @@ const getThreads = async (req, res) => {
         // Get liked thread IDs by current user
         let likedThreadSet = new Set();
         if (currentUserId) {
+
             const userLikes = await ThreadLike.find({
                 likeBy: toObjectId(currentUserId),
+                threadId: { $in: threadIds.map(id => toObjectId(id)) }
             }).select('threadId').lean();
             likedThreadSet = new Set(userLikes.map(like => like.threadId.toString()));
         }
@@ -741,7 +742,7 @@ const getThreads = async (req, res) => {
         });
 
     } catch (error) {
-
+        console.error('Error in getThreads:', error);
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Something went wrong");
 
     }

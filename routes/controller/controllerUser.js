@@ -10,12 +10,12 @@ const CONSTANTS = require('../../utils/constants')
 const HTTP_STATUS = require('../../utils/statusCode');
 const { apiErrorRes, verifyPassword, apiSuccessRes, generateOTP, generateKey, toObjectId } = require('../../utils/globalFunction');
 const { signToken } = require('../../utils/jwtTokenUtils');
-const { loginSchema,  followSchema, threadLikeSchema, productLikeSchema, requestResetOtpSchema, verifyResetOtpSchema, resetPasswordSchema, loginStepOneSchema, loginStepTwoSchema, loginStepThreeSchema, otpTokenSchema, resendResetOtpSchema, resendOtpSchema } = require('../services/validations/userValidation');
+const { loginSchema, followSchema, threadLikeSchema, productLikeSchema, requestResetOtpSchema, verifyResetOtpSchema, resetPasswordSchema, loginStepOneSchema, loginStepTwoSchema, loginStepThreeSchema, otpTokenSchema, resendResetOtpSchema, resendOtpSchema } = require('../services/validations/userValidation');
 const validateRequest = require('../../middlewares/validateRequest');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const { setKeyWithTime, setKeyNoTime, getKey, removeKey } = require('../services/serviceRedis');
 const { uploadImageCloudinary } = require('../../utils/cloudinary');
-const { SALE_TYPE } = require('../../utils/Role');
+const { SALE_TYPE, roleId } = require('../../utils/Role');
 const SellProducts = require('../../db/models/SellProducts');
 
 const uploadfile = async (req, res) => {
@@ -753,8 +753,6 @@ const requestResetOtp = async (req, res) => {
     }
 };
 
-
-
 const verifyResetOtp = async (req, res) => {
     try {
         const { phoneNumber, otp } = req.body;
@@ -861,10 +859,6 @@ const resendResetOtp = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
-
-
-
-
 
 const login = async (req, res) => {
     try {
@@ -1288,6 +1282,54 @@ const resendPhoneNumberUpdateOtp = async (req, res) => {
 
 
 
+const userList = async (req, res) => {
+    try {
+
+        const { pageNo, size, keyWord } = req.body;
+
+        // Build query
+
+        const query = {
+            isDeleted: false,
+            roleId: { $ne: [roleId.SUPER_ADMIN,roleId.GUEST] },
+        };
+
+        if (keyWord) {
+            const regex = new RegExp(keyWord, 'i');
+            query.$or = [
+                { userName: regex },
+                { email: regex },
+                { phoneNumber: regex }
+            ];
+        }
+
+        const totalUsers = await User.countDocuments(query);
+
+        const users = await User.find(query)
+            .select("userName _id email phoneNumber gender dob isDisable createdAt")
+            .sort({ createdAt: -1 })
+            .skip((pageNo - 1) * size)
+            .limit(size);
+
+        return res.status(HTTP_STATUS.OK).json(apiSuccessRes("Users fetched successfully", {
+            users,
+            pagination: {
+                total: totalUsers,
+                pageNo,
+                size,
+                totalPages: Math.ceil(totalUsers / size)
+            }
+        }));
+
+    } catch (err) {
+        console.error("Error in listUsers:", err);
+        return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json(apiErrorRes("Something went wrong", err));
+    }
+}
+
+
+
+
 
 //upload api 
 router.post('/upload', upload.single('file'), uploadfile);
@@ -1321,6 +1363,7 @@ router.post('/productLike', perApiLimiter(), upload.none(), validateRequest(prod
 router.get('/getLikedProducts', perApiLimiter(), upload.none(), getLikedProducts)
 router.get('/getLikedThreads', perApiLimiter(), upload.none(), getLikedThreads)
 //login_user 
+router.get('/userList', perApiLimiter(), upload.none(), userList);
 router.get('/getProfile', perApiLimiter(), upload.none(), getProfile);
 router.post('/updateProfile', perApiLimiter(), upload.none(), updateProfile);
 // router.get('/countApi', perApiLimiter(), upload.none(), getProfile);

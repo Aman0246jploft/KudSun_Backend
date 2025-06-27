@@ -12,7 +12,7 @@ const { apiSuccessRes, apiErrorRes } = require('../../utils/globalFunction');
 const { getDocumentById } = require('../services/serviceGlobalCURD');
 const CONSTANTS = require('../../utils/constants');
 const { hasPermission } = require('../../middlewares/hasPermission');
-const { uploadImageCloudinary } = require('../../utils/cloudinary');
+const { uploadImageCloudinary, deleteImageCloudinary } = require('../../utils/cloudinary');
 
 
 
@@ -67,11 +67,26 @@ const createOrUpdateCategory = async (req, res) => {
             if (existing) {
                 return apiErrorRes(HTTP_STATUS.CONFLICT, res, 'Category already exists');
             }
+            const softDeleted = await Category.findOne({ name: normalizedName, isDeleted: true });
 
             let imageUrl = null;
             if (imageFile) {
                 imageUrl = await uploadImageCloudinary(imageFile, 'category-images');
             }
+
+
+            if (softDeleted) {
+                softDeleted.isDeleted = false;
+                if (imageUrl) softDeleted.image = imageUrl;
+                await softDeleted.save();
+
+                return apiSuccessRes(HTTP_STATUS.OK, res, "Category restored successfully", {
+                    _id: softDeleted._id,
+                    name: softDeleted.name,
+                    image: softDeleted.image,
+                });
+            }
+
 
             const newCategory = new Category({ name: normalizedName, image: imageUrl });
             await newCategory.save();
@@ -355,7 +370,7 @@ const listCategoryNames = async (req, res) => {
         };
 
         const [categories, total] = await Promise.all([
-            Category.find(query, { _id: 1, name: 1, image: 1 ,subCategories:1})
+            Category.find(query, { _id: 1, name: 1, image: 1, subCategories: 1, createdAt: 1 })
                 .skip(skip)
                 .limit(limit),
             Category.countDocuments(query)
@@ -366,6 +381,7 @@ const listCategoryNames = async (req, res) => {
                 _id: cat._id,
                 name: cat.name,
                 image: cat.image,
+                createdAt: cat.createdAt,
                 subCategoryCount: cat.subCategories?.length || 0
             })
         });
@@ -915,9 +931,50 @@ const rejectParameterValueByAdmin = async (req, res) => {
 };
 
 
+const deleteCategory = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid Category ID");
+        }
+
+        const category = await Category.findOne({ _id: id, isDeleted: false });
+
+
+
+        if (!category) {
+            return apiErrorRes(
+                HTTP_STATUS.NOT_FOUND,
+                res,
+                "Category not found or already deleted"
+            );
+        }
+        if (category.image) {
+            // Your image deletion utility, e.g. for Cloudinary
+            const deleted = await deleteImageCloudinary(category.image);
+            if (!deleted) {
+                // You can decide whether to proceed or fail here
+                console.warn('Failed to delete category image:', category.image);
+            } else {
+                // category.image = null;  // Remove image URL after deleting from cloud
+            }
+        }
+        category.isDeleted = true;
+        await category.save();
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Category deleted successfully");
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    }
+};
+
+
+
 // hasPermission([roleId.SUPER_ADMIN]),
 //admin
 router.post('/createCategory', perApiLimiter(), upload.single('file'), createOrUpdateCategory);
+router.post('/deleteCategory/:id', perApiLimiter(), upload.none(), deleteCategory);
 router.post('/addSubCategory/:categoryId', perApiLimiter(), upload.single('file'), addOrUpdateSubCategory);
 router.post('/addParameterToSubCategory/:subCategoryId', perApiLimiter(), upload.none(), addParameterToSubCategory);
 router.post('/acceptParameterValueByAdmin/:subCategoryId', perApiLimiter(), upload.none(), acceptParameterValueByAdmin);

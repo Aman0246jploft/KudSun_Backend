@@ -25,18 +25,22 @@ const HTTP_STATUS = require('../../utils/statusCode');
 
 const termAndPolicy = async (req, res) => {
   try {
-    // Get all documents first
-    const allSettings = await AppSetting.find();
+    // Only fetch documents matching the required keys
+    const keys = ["Term_Of_Service", "Privacy_Policy", "Auction_rules"];
+    const settings = await AppSetting.find({ key: { $in: keys } });
 
-    // Filter to find the specific documents
-    const term = allSettings.find(setting => setting.key === "Term_Of_Service");
-    const policy = allSettings.find(setting => setting.key === "Privacy_Policy");
+    const result = {
+      term: settings.find(setting => setting.key === "Term_Of_Service") || null,
+      policy: settings.find(setting => setting.key === "Privacy_Policy") || null,
+      auctionRule: settings.find(setting => setting.key === "Auction_rules") || null,
+    };
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Policy fetched successfully", { term, policy });
+    return apiSuccessRes(HTTP_STATUS.OK, res, "Policy fetched successfully", result);
   } catch (error) {
     return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
   }
 };
+
 
 
 
@@ -116,7 +120,9 @@ const getFAQs = async (req, res) => {
     // Transform to match your desired output format
     const faqs = sortedFaqs.map(faq => ({
       name: faq.name,
-      value: faq.value
+      value: faq.value,
+      key:faq.key,
+      _id:faq?._id
     }));
 
     return apiSuccessRes(HTTP_STATUS.OK, res, "FAQs fetched successfully", { faqs });
@@ -129,13 +135,12 @@ router.post('/create', upload.none(), globalCrudController.create(AppSetting));
 router.get('/termAndPolicy', termAndPolicy);
 router.get('/auctionRule', auctionRule);
 router.get('/getFAQs', getFAQs);
-
+router.post('/update', upload.none(), globalCrudController.update(AppSetting));
+router.post('/harddelete', upload.none(), globalCrudController.hardDelete(AppSetting));
 
 
 // router.post('/getById', perApiLimiter(), upload.none(), validateRequest(moduleSchemaForId), globalCrudController.getById(AppSetting));
-// router.post('/harddelete', perApiLimiter(), upload.none(), validateRequest(moduleSchemaForId), globalCrudController.hardDelete(AppSetting));
 // router.post('/softDelete', perApiLimiter(), upload.none(), validateRequest(moduleSchemaForId), globalCrudController.softDelete(AppSetting));
-// router.post('/update', perApiLimiter(), upload.none(), globalCrudController.update(AppSetting));
 // router.get('/getList', perApiLimiter(), globalCrudController.getList(AppSetting));
 
 
