@@ -33,7 +33,7 @@ const addSellerProduct = async (req, res) => {
 
         let specifics = [];
         let auctionSettings = {};
-     
+
 
         // Parse JSON fields from form-data
         try {
@@ -435,7 +435,7 @@ const showNormalProducts = async (req, res) => {
             tags,
             deliveryFilter,
             specifics,
-            isTrending = false,
+            isTrending,
             includeSold,
             isSold = false,
             minPrice,   // NEW
@@ -528,9 +528,11 @@ const showNormalProducts = async (req, res) => {
             filter.categoryId = toObjectId(categoryId);
         }
 
-        if (isTrending !== "") {
+        if (typeof isTrending !== "undefined" && isTrending !== "") {
             filter.isTrending = isTrending === true || isTrending === "true";
         }
+
+
 
         if (subCategoryId && subCategoryId !== "") {
             filter.subCategoryId = toObjectId(subCategoryId);
@@ -545,6 +547,10 @@ const showNormalProducts = async (req, res) => {
             const parsedSpecifics = Array.isArray(specifics) ? specifics : [specifics];
             filter['specifics.valueId'] = { $all: parsedSpecifics.map(id => toObjectId(id)) };
         }
+
+
+        console.log("filterfilter", filter)
+
 
         // Step 3: Query with pagination, sorting, projection
         const [products, total] = await Promise.all([
@@ -621,7 +627,7 @@ const showAuctionProducts = async (req, res) => {
             deliveryFilter,
             isSold = false,
             includeSold = false,
-            isTrending = false
+            isTrending 
         } = req.query;
 
         let isAdmin = req.user.roleId == roleId?.SUPER_ADMIN || false
@@ -647,7 +653,7 @@ const showAuctionProducts = async (req, res) => {
 
         }
 
-   if (deliveryFilter === "free") {
+        if (deliveryFilter === "free") {
             filter.deliveryType = { $in: [DeliveryType.FREE_SHIPPING, DeliveryType.LOCAL_PICKUP] };
         } else if (deliveryFilter === "charged") {
             filter.deliveryType = DeliveryType.CHARGE_SHIPPING;
@@ -669,7 +675,7 @@ const showAuctionProducts = async (req, res) => {
             filter.subCategoryId = toObjectId(subCategoryId);
         }
 
-        if (isTrending !== "") {
+        if (typeof isTrending !== "undefined" && isTrending !== "") {
             filter.isTrending = isTrending === true || isTrending === "true";
         }
 
@@ -852,7 +858,7 @@ const getLimitedTimeDeals = async (req, res) => {
         const nowTimestamp = Date.now();
         products.forEach(product => {
             const endTime = new Date(product.auctionSettings.biddingEndsAt).getTime();
-            console.log("endTime",endTime)
+            console.log("endTime", endTime)
             const timeLeftMs = endTime - nowTimestamp;
             product.timeRemaining = timeLeftMs > 0 ? timeLeftMs : 0;
             product.timeRemainingStr = formatTimeRemaining(product.timeRemaining);

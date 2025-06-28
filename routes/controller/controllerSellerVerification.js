@@ -32,6 +32,9 @@ const create = async (req, res) => {
             if (existing.verificationStatus === 'Approved') {
                 return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'You are already verified');
             }
+            if (existing.verificationStatus === 'Pending') {
+                return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'You already Applied wait for verification');
+            }
         }
 
         // Upload new files only if provided
