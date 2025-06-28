@@ -17,6 +17,8 @@ const { setKeyWithTime, setKeyNoTime, getKey, removeKey } = require('../services
 const { uploadImageCloudinary } = require('../../utils/cloudinary');
 const { SALE_TYPE, roleId } = require('../../utils/Role');
 const SellProducts = require('../../db/models/SellProducts');
+const { moduleSchemaForId } = require('../services/validations/globalCURDValidation');
+const globalCrudController = require('./globalCrudController');
 
 const uploadfile = async (req, res) => {
     try {
@@ -1284,50 +1286,265 @@ const resendPhoneNumberUpdateOtp = async (req, res) => {
 
 const userList = async (req, res) => {
     try {
-
-        const { pageNo, size, keyWord } = req.body;
-
-        // Build query
+        const {
+            pageNo = 1,
+            size = 10,
+            keyWord = "",
+            status,
+            showSellerRequests = false,
+            showReported = false,
+            registrationDateStart,
+            registrationDateEnd,
+        } = req.query;
 
         const query = {
             isDeleted: false,
-            roleId: { $ne: [roleId.SUPER_ADMIN,roleId.GUEST] },
+            roleId: { $nin: [roleId.SUPER_ADMIN, roleId.GUEST] },
         };
 
         if (keyWord) {
-            const regex = new RegExp(keyWord, 'i');
+            const regex = new RegExp(keyWord, "i");
             query.$or = [
                 { userName: regex },
                 { email: regex },
-                { phoneNumber: regex }
+                { phoneNumber: regex },
             ];
         }
 
-        const totalUsers = await User.countDocuments(query);
+        if (status) {
+            query.status = status;
+        }
 
-        const users = await User.find(query)
-            .select("userName _id email phoneNumber gender dob isDisable createdAt")
-            .sort({ createdAt: -1 })
-            .skip((pageNo - 1) * size)
-            .limit(size);
+        if (showReported === "true") {
+            query.reportCount = { $gt: 0 };
+        }
 
-        return res.status(HTTP_STATUS.OK).json(apiSuccessRes("Users fetched successfully", {
-            users,
-            pagination: {
-                total: totalUsers,
-                pageNo,
-                size,
-                totalPages: Math.ceil(totalUsers / size)
+        // Add registration date range filter
+        if (registrationDateStart || registrationDateEnd) {
+            query.createdAt = {};
+            if (registrationDateStart) {
+                const startDate = new Date(registrationDateStart);
+                if (!isNaN(startDate)) {
+                    query.createdAt.$gte = startDate;
+                }
             }
-        }));
+            if (registrationDateEnd) {
+                const endDate = new Date(registrationDateEnd);
+                if (!isNaN(endDate)) {
+                    // To include the entire day, set time to 23:59:59.999
+                    endDate.setHours(23, 59, 59, 999);
+                    query.createdAt.$lte = endDate;
+                }
+            }
+            // Remove createdAt if no valid dates
+            if (Object.keys(query.createdAt).length === 0) {
+                delete query.createdAt;
+            }
+        }
 
+        // Aggregation pipeline
+        const aggregation = [
+            { $match: query },
+            {
+                $lookup: {
+                    from: "SellerVerification",
+                    localField: "_id",
+                    foreignField: "userId",
+                    as: "sellerVerification",
+                },
+            },
+            {
+                $addFields: {
+                    sellerVerificationStatus: {
+                        $ifNull: [{ $arrayElemAt: ["$sellerVerification.verificationStatus", 0] }, null],
+                    },
+                },
+            },
+        ];
+
+        if (showSellerRequests === "true") {
+            aggregation.push({
+                $match: {
+                    sellerVerificationStatus: "Pending",
+                },
+            });
+        }
+
+        aggregation.push({
+            $project: {
+                userName: 1,
+                _id: 1,
+                email: 1,
+                phoneNumber: 1,
+                gender: 1,
+                dob: 1,
+                isDisable: 1,
+                createdAt: 1,
+                sellerVerificationStatus: 1,
+                sellerVerification: 1,
+            },
+        });
+
+        const totalUsersAgg = await User.aggregate([...aggregation, { $count: "total" }]);
+        const total = totalUsersAgg[0]?.total || 0;
+
+        const users = await User.aggregate([
+            ...aggregation,
+            { $sort: { createdAt: -1 } },
+            { $skip: (pageNo - 1) * size },
+            { $limit: parseInt(size) },
+        ]);
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Users fetched successfully", {
+            total,
+            pageNo,
+            size,
+            users,
+        });
     } catch (err) {
         console.error("Error in listUsers:", err);
-        return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json(apiErrorRes("Something went wrong", err));
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to fetch user list", err.message);
     }
-}
+};
 
 
+
+const getDashboardSummary = async (req, res) => {
+    try {
+        const [
+            totalUsers,
+            totalThreads,
+            totalFixedProducts,
+            totalSoldProducts,
+            totalUnsoldProducts,
+            liveAuctions
+        ] = await Promise.all([
+            // Users (excluding SUPER_ADMIN, GUEST)
+            User.countDocuments({
+                isDeleted: false,
+                isDisable: false,
+                roleId: { $nin: [roleId.SUPER_ADMIN, roleId.GUEST] }
+            }),
+
+            // Threads
+            Thread.countDocuments({
+                isDeleted: false,
+                isDisable: false
+            }),
+
+            // Total fixed-type products (regardless of sold status)
+            SellProduct.countDocuments({
+                isDeleted: false,
+                isDisable: false,
+                saleType: SALE_TYPE.FIXED
+            }),
+
+            // Sold products
+            SellProduct.countDocuments({
+                isDeleted: false,
+                isDisable: false,
+                saleType: SALE_TYPE.FIXED,
+                isSold: true
+            }),
+
+            // Unsold products
+            SellProduct.countDocuments({
+                isDeleted: false,
+                isDisable: false,
+                saleType: SALE_TYPE.FIXED,
+                isSold: false
+            }),
+
+            // Live auctions
+            SellProduct.countDocuments({
+                saleType: SALE_TYPE.AUCTION,
+                "auctionSettings.isBiddingOpen": true,
+                isDeleted: false,
+                isDisable: false
+            })
+        ]);
+
+        const summary = {
+            totalUsers,
+            totalThreads,
+            totalFixedProducts,
+            totalSoldProducts,
+            totalUnsoldProducts,
+            liveAuctions
+        };
+
+        return apiSuccessRes(
+            HTTP_STATUS.OK,
+            res,
+            "Dashboard summary fetched successfully",
+            summary
+        );
+
+    } catch (error) {
+        console.error("getDashboardSummary error:", error);
+        return apiErrorRes(
+            HTTP_STATUS.INTERNAL_SERVER_ERROR,
+            res,
+            "Failed to fetch dashboard summary",
+            error.message
+        );
+    }
+};
+
+const adminChangeUserPassword = async (req, res) => {
+    try {
+        const { userId, newPassword } = req.body;
+
+
+        if (!userId || !newPassword) {
+            return apiErrorRes(
+                HTTP_STATUS.NOT_FOUND,
+                res,
+                "User ID and new password are required"
+            );
+        }
+
+        if (newPassword.length < 6) {
+            return apiErrorRes(
+                HTTP_STATUS.BAD_REQUEST,
+                res,
+                "Password must be at least 6 characters long"
+            );
+
+        }
+
+        const user = await User.findById(userId);
+
+        if (!user) {
+            return apiErrorRes(
+                HTTP_STATUS.NOT_FOUND,
+                res,
+                "User not found",
+                error.message
+            );
+        }
+
+        // Update password field and save (pre 'save' hook will hash the password)
+        user.password = newPassword;
+        await user.save();
+
+
+        return apiSuccessRes(
+            HTTP_STATUS.OK,
+            res,
+            "Password updated successfully"
+        );
+
+    } catch (error) {
+        console.error("Error in adminChangeUserPassword:", error);
+        return apiErrorRes(
+            HTTP_STATUS.INTERNAL_SERVER_ERROR,
+            res,
+            "Failed to update password",
+            error.message
+        );
+    }
+};
 
 
 
@@ -1373,5 +1590,16 @@ router.post('/updateProfile', perApiLimiter(), upload.none(), updateProfile);
 router.post('/requestPhoneNumberUpdateOtp', perApiLimiter(), upload.none(), requestPhoneNumberUpdateOtp);
 router.post('/verifyPhoneNumberUpdateOtp', perApiLimiter(), upload.none(), verifyPhoneNumberUpdateOtp);
 router.post('/resendPhoneNumberUpdateOtp', perApiLimiter(), upload.none(), resendPhoneNumberUpdateOtp);
+
+router.post('/hardDelete', perApiLimiter(), upload.none(), validateRequest(moduleSchemaForId), globalCrudController.hardDelete(User));
+router.post('/softDelete', perApiLimiter(), upload.none(), validateRequest(moduleSchemaForId), globalCrudController.softDelete(User));
+router.post('/update', perApiLimiter(), upload.none(), globalCrudController.update(User));
+router.get('/getDashboardSummary', perApiLimiter(), upload.none(), getDashboardSummary);
+
+
+
+router.post('/adminChangeUserPassword', perApiLimiter(), upload.none(), adminChangeUserPassword);
+
+
 
 module.exports = router;
