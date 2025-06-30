@@ -4,16 +4,20 @@ const Schema = mongoose.Schema;
 
 const ReportUserSchema = new Schema({
     userId: {
-        type: Schema.Types.ObjectId, ref: 'User', index: true, trim: true
+        type: Schema.Types.ObjectId, ref: 'User', index: true
     },
-    title:{
-        type:String
+    reportedBy: {
+        type: Schema.Types.ObjectId, ref: 'User', index: true
     },
-    description:{
-        type:String
+    title: {
+        type: String
     },
-    image:[{type:String}],
+    description: {
+        type: String
+    },
+    image: [{ type: String }],
     isDisable: { type: Boolean, default: false },
+
 })
 
 

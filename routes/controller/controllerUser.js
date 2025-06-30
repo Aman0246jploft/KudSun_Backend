@@ -14,7 +14,7 @@ const { loginSchema, followSchema, threadLikeSchema, productLikeSchema, requestR
 const validateRequest = require('../../middlewares/validateRequest');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const { setKeyWithTime, setKeyNoTime, getKey, removeKey } = require('../services/serviceRedis');
-const { uploadImageCloudinary } = require('../../utils/cloudinary');
+const { uploadImageCloudinary, deleteImageCloudinary } = require('../../utils/cloudinary');
 const { SALE_TYPE, roleId } = require('../../utils/Role');
 const SellProducts = require('../../db/models/SellProducts');
 const { moduleSchemaForId } = require('../services/validations/globalCURDValidation');
@@ -1131,11 +1131,22 @@ const updateProfile = async (req, res) => {
             );
         }
 
+
+        let profileImage = null;
+        if (req.file) {
+            const user = await User.findById(userId);
+            if (user?.profileImage) {
+                await deleteImageCloudinary(user.profileImage);
+            }
+            profileImage = await uploadImageCloudinary(req.file, "user-profiles");
+        }
+
         // Prepare update payload
         const updateData = {
             ...other,
             ...(userName && { userName: userName.toLowerCase() }),
-            ...(email && { email: email.toLowerCase() })
+            ...(email && { email: email.toLowerCase() }),
+            ...(profileImage && { profileImage })
         };
 
         const updatedUser = await User.findByIdAndUpdate(
@@ -1298,6 +1309,7 @@ const userList = async (req, res) => {
             sortBy = "createdAt",
             sortOrder = "asc",
             registrationDateEnd,
+            reported,
         } = req.query;
 
         const sortStage = {};
@@ -1393,7 +1405,41 @@ const userList = async (req, res) => {
                     userAddress: { $arrayElemAt: ["$userAddress", 0] },
                 },
             },
+
+
+
+            {
+                $lookup: {
+                    from: "ReportUser",
+                    let: { userId: "$_id" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: { $eq: ["$userId", "$$userId"] },
+                                isDisable: false,
+                            },
+                        },
+                    ],
+                    as: "reports",
+                },
+            },
+            {
+                $addFields: {
+                    reportCount: { $size: "$reports" },
+                },
+            },
+
+
         ];
+
+        if (reported === "true") {
+            aggregation.push({
+                $match: {
+                    reportCount: { $gt: 0 },
+                },
+            });
+        }
+
 
         if (showSellerRequests === "true") {
             aggregation.push({
@@ -1416,6 +1462,7 @@ const userList = async (req, res) => {
                 sellerVerificationStatus: 1,
                 sellerVerification: 1,
                 userAddress: 1,
+                reportCount: 1,
             },
         });
 
@@ -1618,7 +1665,7 @@ router.get('/getLikedThreads', perApiLimiter(), upload.none(), getLikedThreads)
 //login_user 
 router.get('/userList', perApiLimiter(), upload.none(), userList);
 router.get('/getProfile', perApiLimiter(), upload.none(), getProfile);
-router.post('/updateProfile', perApiLimiter(), upload.none(), updateProfile);
+router.post('/updateProfile', perApiLimiter(), upload.single("profileImage"), updateProfile);
 // router.get('/countApi', perApiLimiter(), upload.none(), getProfile);
 
 
