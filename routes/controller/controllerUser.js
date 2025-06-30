@@ -1291,6 +1291,7 @@ const userList = async (req, res) => {
             size = 10,
             keyWord = "",
             status,
+            isDisable,
             showSellerRequests = false,
             showReported = false,
             registrationDateStart,
@@ -1302,7 +1303,6 @@ const userList = async (req, res) => {
         const sortStage = {};
         const order = sortOrder === "desc" ? -1 : 1;
         sortStage[sortBy] = order;
-
 
         const query = {
             isDeleted: false,
@@ -1318,6 +1318,11 @@ const userList = async (req, res) => {
             ];
         }
 
+
+        if (typeof isDisable !== "undefined") {
+            query.isDisable = isDisable === "true"; // 👈 added this block
+        }
+
         if (status) {
             query.status = status;
         }
@@ -1326,7 +1331,6 @@ const userList = async (req, res) => {
             query.reportCount = { $gt: 0 };
         }
 
-        // Add registration date range filter
         if (registrationDateStart || registrationDateEnd) {
             query.createdAt = {};
             if (registrationDateStart) {
@@ -1338,18 +1342,16 @@ const userList = async (req, res) => {
             if (registrationDateEnd) {
                 const endDate = new Date(registrationDateEnd);
                 if (!isNaN(endDate)) {
-                    // To include the entire day, set time to 23:59:59.999
                     endDate.setHours(23, 59, 59, 999);
                     query.createdAt.$lte = endDate;
                 }
             }
-            // Remove createdAt if no valid dates
             if (Object.keys(query.createdAt).length === 0) {
                 delete query.createdAt;
             }
         }
 
-        // Aggregation pipeline
+
         const aggregation = [
             { $match: query },
             {
@@ -1367,10 +1369,6 @@ const userList = async (req, res) => {
                     },
                 },
             },
-
-
-
-
             {
                 $lookup: {
                     from: "UserLocation",
@@ -1381,23 +1379,20 @@ const userList = async (req, res) => {
                                 $expr: { $eq: ["$userId", "$$userId"] },
                                 isDeleted: false,
                                 isDisable: false,
-                                isActive: true
-                            }
+                                isActive: true,
+                            },
                         },
                         { $sort: sortStage },
-                        { $limit: 1 } // Get the most recent or default address
+                        { $limit: 1 },
                     ],
-                    as: "userAddress"
-                }
+                    as: "userAddress",
+                },
             },
-
-
             {
                 $addFields: {
-                    userAddress: { $arrayElemAt: ["$userAddress", 0] }
-                }
-            }
-
+                    userAddress: { $arrayElemAt: ["$userAddress", 0] },
+                },
+            },
         ];
 
         if (showSellerRequests === "true") {
@@ -1420,7 +1415,7 @@ const userList = async (req, res) => {
                 createdAt: 1,
                 sellerVerificationStatus: 1,
                 sellerVerification: 1,
-                userAddress: 1
+                userAddress: 1,
             },
         });
 
@@ -1429,15 +1424,15 @@ const userList = async (req, res) => {
 
         const users = await User.aggregate([
             ...aggregation,
-            { $sort: { createdAt: -1 } },
-            { $skip: (pageNo - 1) * size },
-            { $limit: parseInt(size) },
+            { $sort: sortStage },
+            { $skip: (parseInt(pageNo, 10) - 1) * parseInt(size, 10) },
+            { $limit: parseInt(size, 10) },
         ]);
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Users fetched successfully", {
             total,
-            pageNo,
-            size,
+            pageNo: parseInt(pageNo, 10),
+            size: parseInt(size, 10),
             users,
         });
     } catch (err) {
@@ -1445,6 +1440,8 @@ const userList = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to fetch user list", err.message);
     }
 };
+
+
 
 
 

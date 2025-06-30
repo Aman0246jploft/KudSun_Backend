@@ -15,6 +15,7 @@ module.exports = {
     idVerifiy: require("./controller/controllerAccountVerification"),
     feeSetting: require("./controller/controllerFeeSetting"),
     userLocation: require('./controller/controllerUserAddressLocation'),
+    reportUser: require('./controller/controllerReportUser'),
     // chat: require("./controller/controllerChat"),
 
 
