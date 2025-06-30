@@ -117,10 +117,53 @@ const getReports = async (req, res) => {
 };
 
 
+const getReportsByUserId = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { pageNo = 1, size = 10 } = req.query;
+
+        if (!userId) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'User ID is required');
+        }
+
+        const page = parseInt(pageNo);
+        const limit = parseInt(size);
+        const skip = (page - 1) * limit;
+
+        const filter = { isDisable: false, userId };
+
+        const [totalCount, reports] = await Promise.all([
+            ReportUser.countDocuments(filter),
+            ReportUser.find(filter)
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .populate('reportedBy', 'userName profileImage')
+        ]);
+
+        const response = {
+            totalCount,
+            pageNo: page,
+            size: limit,
+            reports,
+        };
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Reports fetched successfully", response);
+    } catch (err) {
+        console.error('Error fetching reports by userId:', err);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, CONSTANTS_MSG.INTERNAL_SERVER_ERROR);
+    }
+};
+
+
+
+
 
 router.post('/create', perApiLimiter(), upload.array("image"), create);
 router.post('/delete/:id', perApiLimiter(), upload.none(), softDelete);
 router.get('/getList', perApiLimiter(), getReports);
+router.get('/byUser/:userId', perApiLimiter(), getReportsByUserId);
+
 
 
 module.exports = router;

@@ -1224,7 +1224,7 @@ const requestPhoneNumberUpdateOtp = async (req, res) => {
         const otp = process.env.NODE_ENV !== 'production' ? '123456' : generateOTP();
 
         await setKeyWithTime(`verify-update:${userId}:${phoneNumber}`, otp, 5);
-        console.log(`verify-update:${userId}:${phoneNumber}`)
+        console.log(`verify-update:${userId}:${phoneNumber}`,otp)
         return apiSuccessRes(HTTP_STATUS.OK, res, "OTP sent successfully");
     } catch (error) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to send OTP", error.message);
@@ -1242,7 +1242,7 @@ const verifyPhoneNumberUpdateOtp = async (req, res) => {
 
         const redisKey = `verify-update:${userId}:${phoneNumber}`;
         const savedOtp = await getKey(redisKey);
-        console.log("redisKey", redisKey, savedOtp)
+        console.log("redisKeysss", redisKey, savedOtp)
 
 
         if (!savedOtp?.data) {
