@@ -658,17 +658,22 @@ const getLikedThreads = async (req, res) => {
             {
                 $lookup: {
                     from: "User",
-                    localField: "userId",
-                    foreignField: "_id",
+                    let: { userId: "$userId" },
+                    pipeline: [
+                        { $match: { $expr: { $eq: ["$_id", "$$userId"] } } },
+                        { $project: { _id: 0, userName: 1, profileImage: 1 } }
+                    ],
                     as: "user"
                 }
             },
             {
                 $addFields: {
-                    userName: { $arrayElemAt: ["$user.userName", 0] }
+                    userId: { $arrayElemAt: ["$user", 0] }  // Replace user array with single object in userId field
                 }
             },
-
+            {
+                $unset: "user"  // Remove the original array
+            },
 
             // Lookup all comments for the thread
             {
