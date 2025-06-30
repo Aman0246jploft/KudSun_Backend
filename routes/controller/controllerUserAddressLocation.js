@@ -14,20 +14,30 @@ const { toObjectId, apiSuccessRes, apiErrorRes } = require('../../utils/globalFu
 
 const createAddress = async (req, res) => {
     try {
-        let value = { ...req.body, userId: req?.user?.userId }
+        const userId = req?.user?.userId;
+        let value = { ...req.body, userId };
+
+        // Convert isActive string to boolean if needed
         if (typeof req.body.isActive === 'string') {
             value["isActive"] = req.body.isActive.toLowerCase() === 'true';
         }
-        if (value.isActive === true) {
+
+        // Check if this is the first address for the user
+        const existingAddressCount = await UserLocation.countDocuments({ userId: toObjectId(userId), isDeleted: false });
+
+        if (existingAddressCount === 0) {
+            // First address — force it to be active
+            value.isActive = true;
+        } else if (value.isActive === true) {
+            // If this is not the first address and the new one is to be active,
+            // deactivate all other addresses
             await UserLocation.updateMany(
-                { userId: toObjectId(value.userId), isDeleted: false },
+                { userId: toObjectId(userId), isDeleted: false },
                 { $set: { isActive: false } }
             );
         }
-        const address = new UserLocation({
-            ...value
-        });
 
+        const address = new UserLocation(value);
         await address.save();
 
         return apiSuccessRes(HTTP_STATUS.CREATED, res, "Address created", address);
@@ -35,6 +45,7 @@ const createAddress = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
     }
 };
+
 
 
 const updateAddress = async (req, res) => {
