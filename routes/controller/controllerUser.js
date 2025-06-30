@@ -3,7 +3,7 @@ const express = require('express');
 const multer = require('multer');
 const upload = multer();
 const router = express.Router();
-const { User, Follow, ThreadLike, ProductLike, SellProduct, Thread, Order, SellProductDraft, ThreadDraft, TempUser, Bid } = require('../../db');
+const { User, Follow, ThreadLike, ProductLike, SellProduct, Thread, Order, SellProductDraft, ThreadDraft, TempUser, Bid, UserLocation, ProductReview } = require('../../db');
 const { getDocumentByQuery } = require('../services/serviceGlobalCURD');
 const CONSTANTS_MSG = require('../../utils/constantsMessage');
 const CONSTANTS = require('../../utils/constants')
@@ -19,6 +19,7 @@ const { SALE_TYPE, roleId } = require('../../utils/Role');
 const SellProducts = require('../../db/models/SellProducts');
 const { moduleSchemaForId } = require('../services/validations/globalCURDValidation');
 const globalCrudController = require('./globalCrudController');
+const { default: mongoose } = require('mongoose');
 
 const uploadfile = async (req, res) => {
     try {
@@ -1650,6 +1651,67 @@ const adminChangeUserPassword = async (req, res) => {
     }
 };
 
+const getOtherProfile = async (req, res) => {
+    try {
+        const userId = req.params.id;
+
+        if (!mongoose.Types.ObjectId.isValid(userId)) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid userId");
+        }
+
+        // 1. Get user basic info
+        const user = await User.findById(userId).select('-password -otp -__v');
+        if (!user) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
+        }
+
+        // 2. Get follower and following counts
+        const [totalFollowers, totalFollowing] = await Promise.all([
+            Follow.countDocuments({ userId: userId, isDeleted: false, isDisable: false }),
+            Follow.countDocuments({ followedBy: userId, isDeleted: false, isDisable: false })
+        ]);
+
+        // 3. Get active location
+        const location = await UserLocation.findOne({
+            userId: userId,
+            isDeleted: false,
+            isDisable: false,
+            isActive: true
+        }).select('-__v');
+
+        const [totalThreads, totalProducts, totalReviews] = await Promise.all([
+            Thread.countDocuments({ userId, isDeleted: false, isDisable: false }),
+            SellProduct.countDocuments({ userId, isDeleted: false, isDisable: false }),
+            ProductReview.countDocuments({ userId, isDeleted: false, isDisable: false })
+        ]);
+        return apiSuccessRes(
+            HTTP_STATUS.OK,
+            res,
+            "User Info",
+            {
+                 _id: user._id,
+                userName: user.userName,
+                profileImage: user.profileImage,
+                is_Id_verified: user.is_Id_verified,
+                totalFollowers,
+                totalFollowing,
+                totalThreads,
+                totalProducts,
+                totalReviews,
+                location
+            }
+        );
+
+    } catch (error) {
+        console.error("Error in adminChangeUserPassword:", error);
+        return apiErrorRes(
+            HTTP_STATUS.INTERNAL_SERVER_ERROR,
+            res,
+            "Failed to update password",
+            error.message
+        );
+    }
+};
 
 
 //upload api 
@@ -1688,6 +1750,9 @@ router.get('/userList', perApiLimiter(), upload.none(), userList);
 router.get('/getProfile', perApiLimiter(), upload.none(), getProfile);
 router.post('/updateProfile', perApiLimiter(), upload.single("profileImage"), updateProfile);
 // router.get('/countApi', perApiLimiter(), upload.none(), getProfile);
+
+
+router.get('/getOtherProfile/:id', perApiLimiter(), upload.none(), getOtherProfile);
 
 
 //updatePhoneNumber 
