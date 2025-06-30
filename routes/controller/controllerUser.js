@@ -3,7 +3,7 @@ const express = require('express');
 const multer = require('multer');
 const upload = multer();
 const router = express.Router();
-const { User, Follow, ThreadLike, ProductLike, SellProduct, Thread, Order, SellProductDraft, ThreadDraft, TempUser } = require('../../db');
+const { User, Follow, ThreadLike, ProductLike, SellProduct, Thread, Order, SellProductDraft, ThreadDraft, TempUser, Bid } = require('../../db');
 const { getDocumentByQuery } = require('../services/serviceGlobalCURD');
 const CONSTANTS_MSG = require('../../utils/constantsMessage');
 const CONSTANTS = require('../../utils/constants')
@@ -599,6 +599,7 @@ const getLikedProducts = async (req, res) => {
             .sort({ [sortBy]: sortOrder })
             .skip(skip)
             .limit(limit)
+            .populate({ path: "userId", select: "userName profileImage" })
             .lean();
 
         // For each product that is auction, fetch bid count
@@ -653,6 +654,21 @@ const getLikedThreads = async (req, res) => {
 
         const pipeline = [
             { $match: { _id: { $in: likedThreadIds } } },
+
+            {
+                $lookup: {
+                    from: "User",
+                    localField: "userId",
+                    foreignField: "_id",
+                    as: "user"
+                }
+            },
+            {
+                $addFields: {
+                    userName: { $arrayElemAt: ["$user.userName", 0] }
+                }
+            },
+
 
             // Lookup all comments for the thread
             {
