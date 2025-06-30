@@ -8,24 +8,15 @@ const { ReportUser } = require('../../db');
 const validateRequest = require('../../middlewares/validateRequest');
 const { moduleSchemaForId } = require('../services/validations/globalCURDValidation');
 const perApiLimiter = require('../../middlewares/rateLimiter');
-const { uploadImageCloudinary } = require('../../utils/cloudinary');
-
-
-
-
+const { uploadImageCloudinary, deleteImageCloudinary } = require('../../utils/cloudinary');
+const { apiSuccessRes, apiErrorRes } = require('../../utils/globalFunction');
+const HTTP_STATUS = require('../../utils/statusCode');
+const CONSTANTS_MSG = require("../../utils/constantsMessage")
 
 const create = async (req, res) => {
     try {
-        // Validate request body
-        const schema = Joi.object({
-            title: Joi.string().required(),
-            description: Joi.string().required()
-        });
 
-        const { error, value } = schema.validate(req.body);
-        if (error) return apiErrorRes(res, HTTP_STATUS.BAD_REQUEST, error.details[0].message);
-
-        const { title, description } = value;
+        const { title, description, userId } = req.body;
 
         // Handle image uploads (if any)
         let imageUrls = [];
@@ -37,16 +28,17 @@ const create = async (req, res) => {
         }
 
         const newReport = await ReportUser.create({
-            userId: req.user?.userId,
+            reportedBy: req.user?.userId,
+            userId,
             title,
             description,
             image: imageUrls
         });
 
-        return apiSuccessRes(res, HTTP_STATUS.CREATED, CONSTANTS_MSG.CREATED, newReport);
+        return apiSuccessRes(HTTP_STATUS.CREATED, res, "Reported", newReport);
     } catch (err) {
         console.error('Error creating report:', err);
-        return apiErrorRes(res, HTTP_STATUS.INTERNAL_SERVER_ERROR, CONSTANTS_MSG.INTERNAL_SERVER_ERROR);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, CONSTANTS_MSG.INTERNAL_SERVER_ERROR);
     }
 };
 
@@ -56,14 +48,14 @@ const softDelete = async (req, res) => {
         const reportId = req.params.id;
 
         if (!reportId) {
-            return apiErrorRes(res, HTTP_STATUS.BAD_REQUEST, 'Report ID is required');
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Report ID is required');
         }
 
         // Find the report
         const report = await ReportUser.findOne({ _id: reportId, isDisable: false });
 
         if (!report) {
-            return apiErrorRes(res, HTTP_STATUS.NOT_FOUND, 'Report not found or already deleted');
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Report not found or already deleted');
         }
 
         // Delete images from Cloudinary
@@ -82,24 +74,53 @@ const softDelete = async (req, res) => {
         report.isDisable = true;
         await report.save();
 
-        return apiSuccessRes(res, HTTP_STATUS.OK, 'Report soft-deleted successfully', null);
+        return apiSuccessRes(HTTP_STATUS.OK, res, 'Report soft-deleted successfully', null);
     } catch (err) {
         console.error('Error during soft delete:', err);
-        return apiErrorRes(res, HTTP_STATUS.INTERNAL_SERVER_ERROR, CONSTANTS_MSG.INTERNAL_SERVER_ERROR);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, CONSTANTS_MSG.INTERNAL_SERVER_ERROR);
+    }
+};
+
+
+const getReports = async (req, res) => {
+    try {
+        const { pageNo = 1, size = 10, userId } = req.query;
+
+        const page = parseInt(pageNo);
+        const limit = parseInt(size);
+        const skip = (page - 1) * limit;
+
+        const filter = { isDisable: false };
+        if (userId) filter.userId = userId;
+
+        const [totalCount, reports] = await Promise.all([
+            ReportUser.countDocuments(filter),
+            ReportUser.find(filter)
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+        ]);
+
+        const response = {
+            totalCount,
+            pageNo: page,
+            size: limit,
+            totalPages: Math.ceil(totalCount / limit),
+            reports,
+        };
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Reports fetched successfully", response);
+    } catch (err) {
+        console.error('Error fetching reports:', err);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, CONSTANTS_MSG.INTERNAL_SERVER_ERROR);
     }
 };
 
 
 
-
-
-router.post('/create', perApiLimiter(), upload.none(), create);
-router.post('/update', perApiLimiter(), upload.none(), globalCrudController.update(ReportUser));
-router.post('/softDelete', perApiLimiter(), upload.none(), validateRequest(moduleSchemaForId), softDelete);
-
-
-router.post('/getById', perApiLimiter(), upload.none(), validateRequest(moduleSchemaForId), globalCrudController.getById(ReportUser));
-router.get('/getList', perApiLimiter(), globalCrudController.getList(ReportUser));
+router.post('/create', perApiLimiter(), upload.array("image"), create);
+router.post('/delete/:id', perApiLimiter(), upload.none(), softDelete);
+router.get('/getList', perApiLimiter(), getReports);
 
 
 module.exports = router;

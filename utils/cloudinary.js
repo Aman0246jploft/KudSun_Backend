@@ -49,54 +49,27 @@ async function uploadImageCloudinary(file, userId) {
   });
 }
 
-function parseCloudinaryUrl(url) {
-  try {
-    // Example Cloudinary URL format:
-    // https://res.cloudinary.com/<cloud_name>/image/upload/v1234567890/userId/fileName.jpg
-
-    const urlObj = new URL(url);
-    const parts = urlObj.pathname.split('/'); // ['', 'image', 'upload', 'v1234567890', 'userId', 'fileName.jpg']
-
-    // folder (userId) is at index -2, filename at index -1
-    const userId = parts[parts.length - 2];
-    const fileWithExt = parts[parts.length - 1];
-
-    // split filename and ext
-    const dotIndex = fileWithExt.lastIndexOf('.');
-    const fileName = dotIndex !== -1 ? fileWithExt.substring(0, dotIndex) : fileWithExt;
-    const ext = dotIndex !== -1 ? fileWithExt.substring(dotIndex) : '';
-
-    return { userId, fileName, ext };
-  } catch (err) {
-    console.error("Failed to parse Cloudinary URL:", url, err);
-    return null;
-  }
-}
 
 async function deleteImageCloudinary(url) {
   try {
     console.log("🔍 Starting Cloudinary image deletion process...");
     console.log("📸 Input URL:", url);
 
-    // Parse the Cloudinary URL to get public_id and folder (userId)
     const urlObj = new URL(url);
     const parts = urlObj.pathname.split('/');
     console.log("🧩 URL path segments:", parts);
 
-    // Example path: /image/upload/v1234567890/userId/filename.jpg
     if (parts.length < 5) {
       throw new Error("Invalid Cloudinary URL format.");
     }
 
-    const userId = parts[parts.length - 2];
-    const fileWithExt = parts[parts.length - 1];
+    const fileWithExt = decodeURIComponent(parts[parts.length - 1]);
     const dotIndex = fileWithExt.lastIndexOf('.');
     const publicId = dotIndex !== -1 ? fileWithExt.substring(0, dotIndex) : fileWithExt;
+    const folder = parts[parts.length - 2];
+    const fullPublicId = `${folder}/${publicId}`;
 
-    const fullPublicId = `${userId}/${publicId}`;
-    console.log("🆔 Extracted public_id:", fullPublicId);
 
-    // Call Cloudinary delete API
     return new Promise((resolve, reject) => {
       cloudinary.uploader.destroy(fullPublicId, { resource_type: 'image' }, (error, result) => {
         if (error) {
@@ -113,6 +86,7 @@ async function deleteImageCloudinary(url) {
     throw err;
   }
 }
+
 
 module.exports = {
   uploadImageCloudinary,
