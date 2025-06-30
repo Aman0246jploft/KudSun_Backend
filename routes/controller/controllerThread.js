@@ -896,6 +896,103 @@ const getFollowedUsersThreads = async (req, res) => {
 };
 
 
+// const getRecentFollowedUsers = async (req, res) => {
+//     try {
+//         const currentUserId = toObjectId(req.user.userId);
+//         const pageNo = parseInt(req.query.pageNo) || 1;
+//         const size = parseInt(req.query.size) || 10;
+//         const skip = (pageNo - 1) * size;
+
+//         // Get followed user IDs
+//         const follows = await Follow.find({
+//             followedBy: currentUserId,
+//             isDeleted: false,
+//             isDisable: false
+//         }).select('userId');
+
+//         const followedUserIds = follows.map(f => f.userId);
+//         if (!followedUserIds.length) {
+//             return apiSuccessRes(HTTP_STATUS.OK, res, "No followed users.", {
+//                 pageNo,
+//                 size,
+//                 total: 0,
+//                 users: []
+//             });
+//         }
+
+//         // Aggregate user info + latest thread
+//         const users = await User.aggregate([
+//             {
+//                 $match: {
+//                     _id: { $in: followedUserIds },
+//                     isDeleted: false,
+//                     isDisable: false
+//                 }
+//             },
+//             {
+//                 $lookup: {
+//                     from: 'Thread',
+//                     let: { userId: '$_id' },
+//                     pipeline: [
+//                         {
+//                             $match: {
+//                                 $expr: { $eq: ['$userId', '$$userId'] },
+//                                 isDeleted: false,
+//                                 isDisable: false
+//                             }
+//                         },
+//                         { $sort: { createdAt: -1 } },
+//                         { $limit: 1 },
+//                         {
+//                             $project: {
+//                                 _id: 1,
+//                                 title: 1,
+//                                 createdAt: 1
+//                             }
+//                         }
+//                     ],
+//                     as: 'latestThread'
+//                 }
+//             },
+//             {
+//                 $addFields: {
+//                     latestThread: { $arrayElemAt: ['$latestThread', 0] },
+//                     latestThreadDate: {
+//                         $ifNull: [{ $arrayElemAt: ['$latestThread.createdAt', 0] }, null]
+//                     }
+//                 }
+//             },
+//             {
+//                 $sort: {
+//                     latestThreadDate: -1
+//                 }
+//             },
+//             {
+//                 $project: {
+//                     _id: 1,
+//                     userName: 1,
+//                     profileImage: 1,
+//                     isLive: 1,
+//                     latestThread: 1
+//                 }
+//             },
+//             { $skip: skip },
+//             { $limit: size }
+//         ]);
+
+//         return apiSuccessRes(HTTP_STATUS.OK, res, "Recent followed users fetched successfully.", {
+//             pageNo,
+//             size,
+//             total: followedUserIds.length,
+//             users
+//         });
+
+//     } catch (err) {
+//         console.error("Error in getRecentFollowedUsers:", err);
+//         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Something went wrong");
+//     }
+// };
+
 const getRecentFollowedUsers = async (req, res) => {
     try {
         const currentUserId = toObjectId(req.user.userId);
@@ -920,7 +1017,7 @@ const getRecentFollowedUsers = async (req, res) => {
             });
         }
 
-        // Aggregate user info + latest thread
+        // Aggregate user info + latest thread + total followers
         const users = await User.aggregate([
             {
                 $match: {
@@ -931,7 +1028,7 @@ const getRecentFollowedUsers = async (req, res) => {
             },
             {
                 $lookup: {
-                    from: 'thread',
+                    from: 'Thread',
                     let: { userId: '$_id' },
                     pipeline: [
                         {
@@ -955,10 +1052,30 @@ const getRecentFollowedUsers = async (req, res) => {
                 }
             },
             {
+                $lookup: {
+                    from: 'Follow',
+                    let: { userId: '$_id' },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: { $eq: ['$userId', '$$userId'] },
+                                isDeleted: false,
+                                isDisable: false
+                            }
+                        },
+                        { $count: 'count' }
+                    ],
+                    as: 'followersCount'
+                }
+            },
+            {
                 $addFields: {
                     latestThread: { $arrayElemAt: ['$latestThread', 0] },
                     latestThreadDate: {
                         $ifNull: [{ $arrayElemAt: ['$latestThread.createdAt', 0] }, null]
+                    },
+                    totalFollowers: {
+                        $ifNull: [{ $arrayElemAt: ['$followersCount.count', 0] }, 0]
                     }
                 }
             },
@@ -973,7 +1090,8 @@ const getRecentFollowedUsers = async (req, res) => {
                     userName: 1,
                     profileImage: 1,
                     isLive: 1,
-                    latestThread: 1
+                    latestThread: 1,
+                    totalFollowers: 1
                 }
             },
             { $skip: skip },
