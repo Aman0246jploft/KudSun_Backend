@@ -548,10 +548,6 @@ const showNormalProducts = async (req, res) => {
             filter['specifics.valueId'] = { $all: parsedSpecifics.map(id => toObjectId(id)) };
         }
 
-
-        console.log("filterfilter", filter)
-
-
         // Step 3: Query with pagination, sorting, projection
         const [products, total] = await Promise.all([
             SellProduct.find(filter)

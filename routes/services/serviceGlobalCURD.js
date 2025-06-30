@@ -205,7 +205,6 @@ const getAllDocuments = async (
         }
 
 
-        console.log('finalQuery1', finalQuery, options)
 
 
         // Query builder
