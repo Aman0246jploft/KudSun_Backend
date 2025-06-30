@@ -1294,8 +1294,15 @@ const userList = async (req, res) => {
             showSellerRequests = false,
             showReported = false,
             registrationDateStart,
+            sortBy = "createdAt",
+            sortOrder = "asc",
             registrationDateEnd,
         } = req.query;
+
+        const sortStage = {};
+        const order = sortOrder === "desc" ? -1 : 1;
+        sortStage[sortBy] = order;
+
 
         const query = {
             isDeleted: false,
@@ -1360,6 +1367,37 @@ const userList = async (req, res) => {
                     },
                 },
             },
+
+
+
+
+            {
+                $lookup: {
+                    from: "UserLocation",
+                    let: { userId: "$_id" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: { $eq: ["$userId", "$$userId"] },
+                                isDeleted: false,
+                                isDisable: false,
+                                isActive: true
+                            }
+                        },
+                        { $sort: sortStage },
+                        { $limit: 1 } // Get the most recent or default address
+                    ],
+                    as: "userAddress"
+                }
+            },
+
+
+            {
+                $addFields: {
+                    userAddress: { $arrayElemAt: ["$userAddress", 0] }
+                }
+            }
+
         ];
 
         if (showSellerRequests === "true") {
@@ -1382,6 +1420,7 @@ const userList = async (req, res) => {
                 createdAt: 1,
                 sellerVerificationStatus: 1,
                 sellerVerification: 1,
+                userAddress: 1
             },
         });
 

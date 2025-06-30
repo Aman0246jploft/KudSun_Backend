@@ -1044,7 +1044,14 @@ const getRecentFollowedUsers = async (req, res) => {
                             $project: {
                                 _id: 1,
                                 title: 1,
-                                createdAt: 1
+                                createdAt: 1,
+                                description:1,
+                                budgetFlexible:1,
+                                isClosed:1,
+                                budgetRange:1,
+                                tags:1,
+                                photos:1,
+                                isTrending:1
                             }
                         }
                     ],
