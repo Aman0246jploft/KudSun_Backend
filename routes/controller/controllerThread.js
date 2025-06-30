@@ -1031,33 +1031,84 @@ const getRecentFollowedUsers = async (req, res) => {
                     from: 'Thread',
                     let: { userId: '$_id' },
                     pipeline: [
-                        {
-                            $match: {
-                                $expr: { $eq: ['$userId', '$$userId'] },
-                                isDeleted: false,
-                                isDisable: false
-                            }
-                        },
+                        { $match: { $expr: { $eq: ['$userId', '$$userId'] }, isDeleted: false, isDisable: false } },
                         { $sort: { createdAt: -1 } },
                         { $limit: 1 },
+                        {
+                            $lookup: {
+                                from: 'ThreadComment',
+                                let: { threadId: '$_id' },
+                                pipeline: [
+                                    { $match: { $expr: { $eq: ['$thread', '$$threadId'] }, isDeleted: false, isDisable: false } },
+                                    { $unwind: '$associatedProducts' },
+                                    { $group: { _id: null, count: { $sum: 1 } } }
+                                ],
+                                as: 'associatedProductCountInfo'
+                            }
+                        },
+                        {
+                            $lookup: {
+                                from: 'ThreadComment',
+                                let: { threadId: '$_id' },
+                                pipeline: [
+                                    { $match: { $expr: { $eq: ['$thread', '$$threadId'] }, isDeleted: false, isDisable: false } },
+                                    { $count: 'totalComments' }
+                                ],
+                                as: 'commentsCountInfo'
+                            }
+                        },
+                        {
+                            $lookup: {
+                                from: 'ThreadLike',
+                                let: { threadId: '$_id' },
+                                pipeline: [
+                                    { $match: { $expr: { $eq: ['$threadId', '$$threadId'] }, isDeleted: false, isDisable: false } },
+                                    {
+                                        $group: {
+                                            _id: null,
+                                            totalLikes: { $sum: 1 },
+                                            likedByCurrentUser: {
+                                                $sum: {
+                                                    $cond: [{ $eq: ['$likeBy', currentUserId] }, 1, 0]
+                                                }
+                                            }
+                                        }
+                                    }
+                                ],
+                                as: 'likesInfo'
+                            }
+                        },
+                        {
+                            $addFields: {
+                                associatedProductCount: { $ifNull: [{ $arrayElemAt: ['$associatedProductCountInfo.count', 0] }, 0] },
+                                totalComments: { $ifNull: [{ $arrayElemAt: ['$commentsCountInfo.totalComments', 0] }, 0] },
+                                totalLikes: { $ifNull: [{ $arrayElemAt: ['$likesInfo.totalLikes', 0] }, 0] },
+                                isLiked: { $gt: [{ $ifNull: [{ $arrayElemAt: ['$likesInfo.likedByCurrentUser', 0] }, 0] }, 0] }
+                            }
+                        },
                         {
                             $project: {
                                 _id: 1,
                                 title: 1,
                                 createdAt: 1,
-                                description:1,
-                                budgetFlexible:1,
-                                isClosed:1,
-                                budgetRange:1,
-                                tags:1,
-                                photos:1,
-                                isTrending:1
+                                description: 1,
+                                budgetFlexible: 1,
+                                isClosed: 1,
+                                budgetRange: 1,
+                                tags: 1,
+                                photos: 1,
+                                isTrending: 1,
+                                associatedProductCount: 1,
+                                totalComments: 1,
+                                totalLikes: 1,
+                                isLiked: 1
                             }
                         }
                     ],
                     as: 'latestThread'
                 }
             },
+
             {
                 $lookup: {
                     from: 'Follow',
