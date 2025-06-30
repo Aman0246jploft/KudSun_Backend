@@ -81,10 +81,26 @@ const updateAddress = async (req, res) => {
 };
 
 
+const getList = async (req, res) => {
+    try {
+        const userId = toObjectId(req.user.userId);
+
+        const addresses = await UserLocation.find({
+            userId,
+            isDeleted: false
+        }).sort({ createdAt: -1 });
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Address list fetched", addresses);
+    } catch (err) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
+    }
+};
+
+
 router.post('/create', perApiLimiter(), upload.none(), createAddress);
 router.post('/update', perApiLimiter(), upload.none(), updateAddress);
 router.post('/getById', perApiLimiter(), upload.none(), validateRequest(moduleSchemaForId), globalCrudController.getById(UserLocation));
-router.get('/getList', perApiLimiter(), globalCrudController.getList(UserLocation));
+router.get('/getList', perApiLimiter(), getList);
 router.post('/delete', perApiLimiter(), upload.none(), validateRequest(moduleSchemaForId), globalCrudController.softDelete(UserLocation));
 
 
