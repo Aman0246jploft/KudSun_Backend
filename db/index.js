@@ -14,6 +14,7 @@ mongoose.connect(DB_STRING)
     });
 
 module.exports = {
+    AppSetting: require('./models/AppSetting'),
     User: require("./models/User"),
     Follow: require("./models/Follow"),
     Category: require('./models/Category'),
@@ -42,8 +43,8 @@ module.exports = {
     SellProductDraft: require('./models/SellProductDraft'),
     FeeSetting: require("./models/FeeSetting"),
     TempUser: require("./models/TempUser"),
+    UserLocation:require("./models/UserLocation"),
     //rbac---->
-    AppSetting: require('./models/AppSetting'),
     Module: require("./models/Rbac/Module"),
     Role: require("./models/Rbac/Role"),
     ModulePermission: require("./models/Rbac/ModulePermission"),

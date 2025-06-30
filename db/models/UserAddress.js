@@ -1,6 +1,8 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
+// is FOR  DELIVERY ONLY
+
 const UserAddressSchema = new Schema({
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     label: { type: String, enum: ['home', 'work', 'other'], default: 'home' },
@@ -14,7 +16,10 @@ const UserAddressSchema = new Schema({
     country: { type: String, required: true },
     postalCode: { type: String, required: true,trim: true },
     isDisable: { type: Boolean, default: false },
-    isDeleted: { type: Boolean, default: false }
+    isDeleted: { type: Boolean, default: false },
+    notes:{
+        type:String
+    }
 }, {
     timestamps: true
 });
