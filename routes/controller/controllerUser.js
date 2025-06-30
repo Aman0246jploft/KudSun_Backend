@@ -1058,8 +1058,14 @@ const getProfile = async (req, res) => {
             );
         }
 
-        const [myThreadCount, productListed, boughtCount, sellCount, ThreadDraftCount, ProductDraftCount, ThreadLikes, productLike] = await Promise.all([
-            Thread.countDocuments({ userId, isDeleted: false }),
+        const [location, myThreadCount, productListed, boughtCount, sellCount, ThreadDraftCount, ProductDraftCount, ThreadLikes, productLike] = await Promise.all([
+            UserLocation.findOne({
+                userId: userId,
+                isDeleted: false,
+                isDisable: false,
+                isActive: true
+            }).select('-__v'),
+        Thread.countDocuments({ userId, isDeleted: false }),
             SellProducts.countDocuments({ userId, isDeleted: false }),
             Order.countDocuments({ userId, isDeleted: false }),
             SellProducts.countDocuments({ userId, isDeleted: false, isSold: true }),
@@ -1072,39 +1078,43 @@ const getProfile = async (req, res) => {
 
         ]);
 
-        const output = {
-            userId: user._id,
-            roleId: user.roleId,
-            role: user.role,
-            profileImage: user.profileImage,
-            userName: user.userName,
-            email: user.email,
-            phoneNumber: user.phoneNumber,
-            dob: user.dob,
-            gender: user.gender,
-            language: user.language,
-            is_Verified_Seller: user.is_Verified_Seller,
-            is_Id_verified: user.is_Id_verified,
-            is_Preferred_seller: user.is_Preferred_seller,
-            myThreadCount,
-            productListedCount: productListed,
-            boughtCount,
-            sellCount,
-            ThreadDraftCount,
-            ProductDraftCount,
-            ThreadLikes,
-            productLike,
-        };
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, output);
+
+
+const output = {
+    userId: user._id,
+    roleId: user.roleId,
+    role: user.role,
+    profileImage: user.profileImage,
+    userName: user.userName,
+    email: user.email,
+    phoneNumber: user.phoneNumber,
+    dob: user.dob,
+    gender: user.gender,
+    language: user.language,
+    is_Verified_Seller: user.is_Verified_Seller,
+    is_Id_verified: user.is_Id_verified,
+    is_Preferred_seller: user.is_Preferred_seller,
+    myThreadCount,
+    productListedCount: productListed,
+    boughtCount,
+    sellCount,
+    ThreadDraftCount,
+    ProductDraftCount,
+    ThreadLikes,
+    productLike,
+    location
+};
+
+return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, output);
     } catch (error) {
-        return apiErrorRes(
-            HTTP_STATUS.INTERNAL_SERVER_ERROR,
-            res,
-            "Internal server error",
-            error.message
-        );
-    }
+    return apiErrorRes(
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        res,
+        "Internal server error",
+        error.message
+    );
+}
 };
 
 const updateProfile = async (req, res) => {
@@ -1689,7 +1699,7 @@ const getOtherProfile = async (req, res) => {
             res,
             "User Info",
             {
-                 _id: user._id,
+                _id: user._id,
                 userName: user.userName,
                 profileImage: user.profileImage,
                 is_Id_verified: user.is_Id_verified,
