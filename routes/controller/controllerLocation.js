@@ -77,21 +77,21 @@ const all = async (req, res) => {
 
 const update = async (req, res) => {
     try {
-        const { locationId, value, parentId, isDisable, isDeleted } = req.body;
+      let {id } = req.body
 
-        if (!locationId) {
+        if (!id) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Location ID is required");
         }
 
-        const location = await Location.findById(locationId);
+        const location = await Location.findById(id);
         if (!location) {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Location not found");
         }
 
-        if (value !== undefined) location.value = value;
-        if (typeof isDisable !== 'undefined') location.isDisable = isDisable === 'true' || isDisable === true;
-        if (typeof isDeleted !== 'undefined') location.isDeleted = isDeleted === 'true' || isDeleted === true;
-        if (typeof parentId !== 'undefined') location.parentId = parentId || null;
+        if (req.body.value !== undefined) location.value = req.body.value;
+        if (typeof req.body.isDisable !== 'undefined') location.isDisable = req.body.isDisable === 'true' || req.body.isDisable === true;
+        if (typeof req.body.isDeleted !== 'undefined') location.isDeleted = req.body.isDeleted === 'true' || req.body.isDeleted === true;
+        if (typeof req.body.parentId !== 'undefined') location.parentId = req.body.parentId || null;
 
         await location.save();
 

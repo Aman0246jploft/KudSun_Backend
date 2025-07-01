@@ -106,7 +106,7 @@ const getList = async (req, res) => {
 
         const [data, total] = await Promise.all([
             UserAddress.find(filter)
-                .populate([{ path: "provinceId", select: '_id value' }, { path: "districtId", select: '_id value' }])
+            .populate([{path:"provinceId",select:'_id value'},{path:"districtId",select:'_id value'}])
                 .sort({ createdAt: -1 }) // Newest first
                 .skip(skip)
                 .limit(size),
@@ -126,8 +126,8 @@ const getList = async (req, res) => {
 
 router.post('/create', perApiLimiter(), upload.none(), createAddress);
 router.post('/update', perApiLimiter(), upload.none(), updateAddress);
-router.post('/getById', perApiLimiter(), upload.none(), validateRequest(moduleSchemaForId), globalCrudController.getById(UserAddress));
 router.get('/getList', perApiLimiter(), getList);
+router.post('/getById', perApiLimiter(), upload.none(), validateRequest(moduleSchemaForId), globalCrudController.getById(UserAddress));
 router.post('/delete', perApiLimiter(), upload.none(), validateRequest(moduleSchemaForId), globalCrudController.softDelete(UserAddress));
 
 
