@@ -75,6 +75,33 @@ const all = async (req, res) => {
 };
 
 
+const update = async (req, res) => {
+    try {
+        const { locationId, value, parentId, isDisable, isDeleted } = req.body;
+
+        if (!locationId) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Location ID is required");
+        }
+
+        const location = await Location.findById(locationId);
+        if (!location) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Location not found");
+        }
+
+        if (value !== undefined) location.value = value;
+        if (typeof isDisable !== 'undefined') location.isDisable = isDisable === 'true' || isDisable === true;
+        if (typeof isDeleted !== 'undefined') location.isDeleted = isDeleted === 'true' || isDeleted === true;
+        if (typeof parentId !== 'undefined') location.parentId = parentId || null;
+
+        await location.save();
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Location updated successfully", location);
+
+    } catch (error) {
+        console.error("update error:", error);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Something went wrong");
+    }
+};
 
 
 router.get('/getProvince', perApiLimiter(), getParent);
@@ -83,7 +110,7 @@ router.get('/all', perApiLimiter(), all);
 
 
 // router.get('/getList', perApiLimiter(), globalCrudController.getList(Location));
-router.post('/update', perApiLimiter(), upload.none(), globalCrudController.update(Location));
+router.post('/update', perApiLimiter(), upload.none(), update);
 router.post('/create', perApiLimiter(), upload.none(), globalCrudController.create(Location));
 router.post('/getById', perApiLimiter(), upload.none(), validateRequest(moduleSchemaForId), globalCrudController.getById(Location));
 router.post('/harddelete', perApiLimiter(), upload.none(), validateRequest(moduleSchemaForId), globalCrudController.hardDelete(Location));
