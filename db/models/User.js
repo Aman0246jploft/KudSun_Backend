@@ -118,12 +118,12 @@ const UserSchema = new Schema({
         type: Boolean,
         default: false
     },
-    locationKey: {
+    provinceId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Location"
 
     },
-    locationValue: {
+    districtId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Location"
     }

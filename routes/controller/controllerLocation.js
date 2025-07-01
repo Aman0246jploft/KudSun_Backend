@@ -77,8 +77,8 @@ const all = async (req, res) => {
 
 
 
-router.get('/getParent', perApiLimiter(), getParent);
-router.get('/getList/:parentId', perApiLimiter(), getListById);
+router.get('/getProvince', perApiLimiter(), getParent);
+router.get('/getDistrict/:parentId', perApiLimiter(), getListById);
 router.get('/all', perApiLimiter(), all);
 
 

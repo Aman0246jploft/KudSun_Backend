@@ -1049,7 +1049,7 @@ const getProfile = async (req, res) => {
     try {
         const userId = req.user.userId;
 
-        const user = await User.findById(userId).lean();
+        const user = await User.findById(userId).populate([{ path: "provinceId", select: "value" }, { path: "districtId", select: "value" }]).lean();
         if (!user) {
             return apiErrorRes(
                 HTTP_STATUS.NOT_FOUND,
@@ -1058,14 +1058,11 @@ const getProfile = async (req, res) => {
             );
         }
 
-        const [location, myThreadCount, productListed, boughtCount, sellCount, ThreadDraftCount, ProductDraftCount, ThreadLikes, productLike] = await Promise.all([
-            UserLocation.findOne({
-                userId: userId,
-                isDeleted: false,
-                isDisable: false,
-                isActive: true
-            }).select('-__v'),
-        Thread.countDocuments({ userId, isDeleted: false }),
+        console.log("user", user)
+
+        const [myThreadCount, productListed, boughtCount, sellCount, ThreadDraftCount, ProductDraftCount, ThreadLikes, productLike] = await Promise.all([
+
+            Thread.countDocuments({ userId, isDeleted: false }),
             SellProducts.countDocuments({ userId, isDeleted: false }),
             Order.countDocuments({ userId, isDeleted: false }),
             SellProducts.countDocuments({ userId, isDeleted: false, isSold: true }),
@@ -1081,40 +1078,43 @@ const getProfile = async (req, res) => {
 
 
 
-const output = {
-    userId: user._id,
-    roleId: user.roleId,
-    role: user.role,
-    profileImage: user.profileImage,
-    userName: user.userName,
-    email: user.email,
-    phoneNumber: user.phoneNumber,
-    dob: user.dob,
-    gender: user.gender,
-    language: user.language,
-    is_Verified_Seller: user.is_Verified_Seller,
-    is_Id_verified: user.is_Id_verified,
-    is_Preferred_seller: user.is_Preferred_seller,
-    myThreadCount,
-    productListedCount: productListed,
-    boughtCount,
-    sellCount,
-    ThreadDraftCount,
-    ProductDraftCount,
-    ThreadLikes,
-    productLike,
-    location
-};
+        const output = {
+            userId: user._id,
+            roleId: user.roleId,
+            role: user.role,
+            profileImage: user.profileImage,
+            userName: user.userName,
+            email: user.email,
+            phoneNumber: user.phoneNumber,
+            dob: user.dob,
+            gender: user.gender,
+            language: user.language,
+            is_Verified_Seller: user.is_Verified_Seller,
+            is_Id_verified: user.is_Id_verified,
+            is_Preferred_seller: user.is_Preferred_seller,
+            myThreadCount,
+            productListedCount: productListed,
+            boughtCount,
+            sellCount,
+            ThreadDraftCount,
+            ProductDraftCount,
+            ThreadLikes,
+            productLike,
+            province: user?.provinceId?.value,
+            district: user?.districtId?.value
 
-return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, output);
+
+        };
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, output);
     } catch (error) {
-    return apiErrorRes(
-        HTTP_STATUS.INTERNAL_SERVER_ERROR,
-        res,
-        "Internal server error",
-        error.message
-    );
-}
+        return apiErrorRes(
+            HTTP_STATUS.INTERNAL_SERVER_ERROR,
+            res,
+            "Internal server error",
+            error.message
+        );
+    }
 };
 
 const updateProfile = async (req, res) => {
@@ -1224,7 +1224,7 @@ const requestPhoneNumberUpdateOtp = async (req, res) => {
         const otp = process.env.NODE_ENV !== 'production' ? '123456' : generateOTP();
 
         await setKeyWithTime(`verify-update:${userId}:${phoneNumber}`, otp, 5);
-        console.log(`verify-update:${userId}:${phoneNumber}`,otp)
+        console.log(`verify-update:${userId}:${phoneNumber}`, otp)
         return apiSuccessRes(HTTP_STATUS.OK, res, "OTP sent successfully");
     } catch (error) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to send OTP", error.message);
@@ -1324,6 +1324,7 @@ const resendPhoneNumberUpdateOtp = async (req, res) => {
         );
     }
 };
+
 
 
 
@@ -1671,10 +1672,11 @@ const getOtherProfile = async (req, res) => {
         }
 
         // 1. Get user basic info
-        const user = await User.findById(userId).select('-password -otp -__v');
+        const user = await User.findById(userId).populate([{ path: "provinceId", select: "value" }, { path: "districtId", select: "value" }]).select('-password -otp -__v');
         if (!user) {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
         }
+
 
         // 2. Get follower and following counts
         const [totalFollowers, totalFollowing] = await Promise.all([
@@ -1682,13 +1684,7 @@ const getOtherProfile = async (req, res) => {
             Follow.countDocuments({ followedBy: userId, isDeleted: false, isDisable: false })
         ]);
 
-        // 3. Get active location
-        const location = await UserLocation.findOne({
-            userId: userId,
-            isDeleted: false,
-            isDisable: false,
-            isActive: true
-        }).select('-__v');
+
 
         const [totalThreads, totalProducts, totalReviews] = await Promise.all([
             Thread.countDocuments({ userId, isDeleted: false, isDisable: false }),
@@ -1709,7 +1705,9 @@ const getOtherProfile = async (req, res) => {
                 totalThreads,
                 totalProducts,
                 totalReviews,
-                location
+                province: user?.provinceId?.value,
+                district: user?.districtId?.value||null
+
             }
         );
 
