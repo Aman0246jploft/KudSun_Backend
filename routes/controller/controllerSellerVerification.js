@@ -178,8 +178,8 @@ const changeVerificationStatus = async (req, res) => {
 router.post('/create', perApiLimiter(),
     upload.fields([
         { name: 'idDocumentFront', maxCount: 1 },
-        { name: 'selfieWithId', maxCount: 1 },
-        { name: 'bankBook', maxCount: 1 }
+        { name: 'selfieWithId', maxCount: 1 }
+        // { name: 'bankBook', maxCount: 1 }
     ]),
     validateRequest(sellerVerificationSchema),
     create
