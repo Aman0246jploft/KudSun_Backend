@@ -30,17 +30,6 @@ const OrderSchema = new Schema({
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
 
     addressId: { type: Schema.Types.ObjectId, ref: 'UserAddress' }, // foreign key
-    addressSnapshot: {
-        fullName: String,
-        phone: String,
-        line1: String,
-        line2: String,
-        city: String,
-        state: String,
-        country: String,
-        postalCode: String
-    },
-
     items: [{
         productId: { type: Schema.Types.ObjectId, ref: 'SellProduct', required: true },
         quantity: { type: Number, default: 1 },

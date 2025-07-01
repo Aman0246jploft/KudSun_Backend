@@ -99,16 +99,7 @@ mongoose.connect(process.env.DB_STRING, {
                     };
                     if (userAddressInfo && userAddressInfo !== "") {
                         orderPayload["addressId"] = userAddressInfo?._id;
-                        orderPayload["addressSnapshot"] = userAddressInfo && {
-                            fullName: userAddressInfo.fullName,
-                            phone: userAddressInfo.phone,
-                            line1: userAddressInfo.line1,
-                            line2: userAddressInfo.line2,
-                            city: userAddressInfo.city,
-                            state: userAddressInfo.state,
-                            country: userAddressInfo.country,
-                            postalCode: userAddressInfo.postalCode,
-                        }
+                 
                     }
                     const existingOrder = await Order.findOne({
                         userId: highestBid.userId,
