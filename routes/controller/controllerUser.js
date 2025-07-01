@@ -1100,8 +1100,8 @@ const getProfile = async (req, res) => {
             ProductDraftCount,
             ThreadLikes,
             productLike,
-            province: user?.provinceId?.value,
-            district: user?.districtId?.value
+            provinceId: user?.provinceId,
+            districtId: user?.districtId
 
 
         };
