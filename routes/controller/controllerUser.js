@@ -1495,6 +1495,7 @@ const userList = async (req, res) => {
                 sellerVerification: 1,
                 userAddress: 1,
                 reportCount: 1,
+                isFlagedReported: 1
             },
         });
 
