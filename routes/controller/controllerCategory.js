@@ -256,12 +256,116 @@ const addParameterToSubCategory = async (req, res) => {
     }
 };
 
+const updateParameterForSubCategory = async (req, res) => {
+    try {
+        const { subCategoryId, paramKey } = req.params;
+        const { newKey, newValues } = req.body;
+        const userId = req.user?.userId;
+        const roleId = req.user?.roleId;
+
+
+        console.log( req.params)
+
+        if (!newKey && !newValues) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Nothing to update');
+        }
+
+        if (roleId !== 1) {
+            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, 'Only admin can update parameters');
+        }
+
+        const category = await Category.findOne({ 'subCategories._id': subCategoryId, isDeleted: false });
+        if (!category) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
+        }
+
+        const subCategory = category.subCategories.id(subCategoryId);
+        const parameter = subCategory.parameters.find(p => p.key === paramKey.trim().toLowerCase());
+
+        if (!parameter) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Parameter not found');
+        }
+
+        if (newKey) {
+            parameter.key = newKey.trim().toLowerCase();
+        }
+
+        if (newValues) {
+            const valuesArray = Array.isArray(newValues) ? newValues : [newValues];
+            parameter.values = valuesArray.map(val => ({
+                value: val.trim().toLowerCase(),
+                isAddedByAdmin: true,
+                addedByUserId: null
+            }));
+        }
+
+        await category.save();
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, 'Parameter updated successfully', {
+            key: parameter.key,
+            values: parameter.values.map(v => v.value)
+        });
+
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    }
+};
 
 
 
+const deleteParameterFromSubCategory = async (req, res) => {
+    try {
+        const { subCategoryId, paramKey } = req.params;
+        const { value } = req.body; // optional - if provided, delete only that value
 
+        const roleId = req.user?.roleId;
+        if (roleId !== 1) {
+            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, 'Only admin can delete parameters');
+        }
 
+        const category = await Category.findOne({ 'subCategories._id': subCategoryId, isDeleted: false });
+        if (!category) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
+        }
 
+        const subCategory = category.subCategories.id(subCategoryId);
+        const paramKeyTrimmed = paramKey.trim().toLowerCase();
+        const parameterIndex = subCategory.parameters.findIndex(p => p.key === paramKeyTrimmed);
+
+        if (parameterIndex === -1) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Parameter not found');
+        }
+
+        const parameter = subCategory.parameters[parameterIndex];
+
+        if (value) {
+            const valueTrimmed = value.trim().toLowerCase();
+            const initialLength = parameter.values.length;
+            parameter.values = parameter.values.filter(v => v.value !== valueTrimmed);
+
+            if (parameter.values.length === initialLength) {
+                return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Value not found in parameter');
+            }
+
+            // If no values left, remove the entire parameter
+            if (parameter.values.length === 0) {
+                subCategory.parameters.splice(parameterIndex, 1);
+            }
+
+            await category.save();
+            return apiSuccessRes(HTTP_STATUS.OK, res, 'Value deleted from parameter');
+        }
+
+        // Delete the entire parameter
+        subCategory.parameters.splice(parameterIndex, 1);
+        await category.save();
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, 'Parameter deleted successfully');
+
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    }
+};
 
 
 
@@ -372,7 +476,8 @@ const listCategoryNames = async (req, res) => {
         const [categories, total] = await Promise.all([
             Category.find(query, { _id: 1, name: 1, image: 1, subCategories: 1, createdAt: 1 })
                 .skip(skip)
-                .limit(limit),
+                .limit(limit)
+                .sort({ 'createdAt': -1 }),
             Category.countDocuments(query)
         ]);
 
@@ -571,7 +676,8 @@ const getSubCategoriesByCategoryId = async (req, res) => {
             _id: subCat._id,
             name: subCat.name,
             slug: subCat.slug,
-            image: subCat.image
+            image: subCat.image,
+            parameterCount: subCat.parameters?.length || 0
         }));
 
         return apiSuccessRes(HTTP_STATUS.OK, res, 'Subcategories fetched successfully', {
@@ -979,6 +1085,11 @@ router.post('/addSubCategory/:categoryId', perApiLimiter(), upload.single('file'
 router.post('/addParameterToSubCategory/:subCategoryId', perApiLimiter(), upload.none(), addParameterToSubCategory);
 router.post('/acceptParameterValueByAdmin/:subCategoryId', perApiLimiter(), upload.none(), acceptParameterValueByAdmin);
 router.post('/rejectParameterValueByAdmin/:subCategoryId', upload.none(), rejectParameterValueByAdmin);
+
+
+router.post('/updateParameterForSubCategory/:subCategoryId/:paramKey', upload.none(), updateParameterForSubCategory);
+router.post('/deleteParameterFromSubCategory/:subCategoryId/:paramKey', upload.none(), deleteParameterFromSubCategory);
+
 
 
 router.post('/addUserParameterValue/:subCategoryId', perApiLimiter(), upload.none(), addUserParameterValue);

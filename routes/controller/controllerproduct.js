@@ -1172,14 +1172,17 @@ const fetchUserProducts = async (req, res) => {
             sortOrder = 'desc',   // 'asc' or 'desc'
         } = req.query;
 
+        console.log("req.queryreq.query",req.query)
+
         const page = parseInt(pageNo);
         const limit = parseInt(size);
         const skip = (page - 1) * limit;
 
         // Get logged-in user ID from auth (assumes middleware sets req.user.userId)
-        const requesterId = req.user?._id?.toString();
+        const requesterId = req.user?.userId?.toString();
 
-        const isSelfProfile = userId && requesterId && userId === requesterId;
+        const isSelfProfile = userId && requesterId && userId === requesterId || false ;
+
 
         // Base filter
         let filter = {};
@@ -1204,6 +1207,7 @@ const fetchUserProducts = async (req, res) => {
             sortConfig = { createdAt: sortOrder === 'desc' ? -1 : 1 };
         }
 
+        console.log("filter",filter)
 
 
         // Fetch Products

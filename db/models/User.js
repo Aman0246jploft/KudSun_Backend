@@ -113,6 +113,10 @@ const UserSchema = new Schema({
     isLive: {
         type: Boolean,
         default: false
+    },
+    isFlagedReported:{
+        type: Boolean,
+        default:false
     }
 
 }, {
