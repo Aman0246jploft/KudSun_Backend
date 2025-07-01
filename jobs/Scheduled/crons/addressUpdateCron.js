@@ -29,19 +29,9 @@ mongoose.connect(process.env.DB_STRING, {
                 }).lean();
 
                 if (userAddress) {
-                    const addressSnapshot = {
-                        fullName: userAddress.fullName,
-                        phone: userAddress.phone,
-                        line1: userAddress.line1,
-                        line2: userAddress.line2,
-                        city: userAddress.city,
-                        state: userAddress.state,
-                        country: userAddress.country,
-                        postalCode: userAddress.postalCode,
-                    };
 
                     order.addressId = userAddress._id;
-                    order.addressSnapshot = addressSnapshot;
+     
 
                     await order.save({ session });
                     console.log(`✅ Updated address for Order: ${order._id} (User: ${order.userId})`);

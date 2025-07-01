@@ -176,16 +176,6 @@ const createOrder = async (req, res) => {
         const order = new Order({
             userId,
             addressId: address._id,
-            addressSnapshot: {
-                fullName: address.fullName,
-                phone: address.phone,
-                line1: address.line1,
-                line2: address.line2,
-                city: address.city,
-                state: address.state,
-                country: address.country,
-                postalCode: address.postalCode
-            },
             items: orderItems,
             totalAmount,
             shippingCharge,
@@ -255,17 +245,6 @@ const updateOrderById = async (req, res) => {
             if (!address) {
                 return res.status(HTTP_STATUS.BAD_REQUEST).json(apiErrorRes("Invalid addressId"));
             }
-
-            value.addressSnapshot = {
-                fullName: address.fullName,
-                phone: address.phone,
-                line1: address.line1,
-                line2: address.line2,
-                city: address.city,
-                state: address.state,
-                country: address.country,
-                postalCode: address.postalCode
-            };
         }
 
         // ---------------------------
