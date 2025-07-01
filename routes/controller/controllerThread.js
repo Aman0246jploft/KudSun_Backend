@@ -458,7 +458,7 @@ const getThreadComments = async (req, res) => {
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit)
-            .populate('author', 'username profilePic')
+            .populate('author', 'userName profileImage')
             .populate('associatedProducts')
             .lean();
 
@@ -533,7 +533,7 @@ const getCommentByParentId = async (req, res) => {
             .sort({ createdAt: 1 })
             .skip(skip)
             .limit(limit)
-            .populate("author", "username profilePic")
+            .populate("author", "userName profileImage")
             .populate(
                 "associatedProducts",
                 "title _id description productImages condition saleType"
@@ -551,7 +551,7 @@ const getCommentByParentId = async (req, res) => {
                     parent: reply._id,
                 })
                     .sort({ createdAt: 1 })
-                    .populate("author", "username profilePic")
+                    .populate("author", "userName profileImage")
                     .lean();
 
                 return {
