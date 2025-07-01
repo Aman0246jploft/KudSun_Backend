@@ -114,10 +114,20 @@ const UserSchema = new Schema({
         type: Boolean,
         default: false
     },
-    isFlagedReported:{
+    isFlagedReported: {
         type: Boolean,
-        default:false
+        default: false
+    },
+    locationKey: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Location"
+
+    },
+    locationValue: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Location"
     }
+
 
 }, {
     timestamps: true
