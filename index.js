@@ -18,6 +18,13 @@ app.use(express.json());
 app.use(jwtVerification())
 // app.use(requestLogger);
 
+
+// In your Express app (e.g., app.js or routes file)
+app.get('/ping', (req, res) => {
+    res.status(200).json({ message: 'pong' });
+});
+
+
 // Loop through the controllers and register routes
 for (const [route, controller] of Object.entries(controllers)) {
     console.log(`${API_END_POINT_V1}${route}`);

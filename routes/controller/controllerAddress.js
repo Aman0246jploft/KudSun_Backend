@@ -15,20 +15,27 @@ const { toObjectId, apiSuccessRes, apiErrorRes } = require('../../utils/globalFu
 
 const createAddress = async (req, res) => {
     try {
-        let value = { ...req.body, userId: req?.user?.userId }
+        let value = { ...req.body, userId: req?.user?.userId };
+
+        // Normalize isActive from string if provided
         if (typeof req.body.isActive === 'string') {
-            value["isActive"] = req.body.isActive.toLowerCase() === 'true';
+            value.isActive = req.body.isActive.toLowerCase() === 'true';
         }
+
+        // Default isActive to true if not provided
+        if (value.isActive === undefined) {
+            value.isActive = true;
+        }
+
+        // If new address is active, deactivate all others for the user
         if (value.isActive === true) {
             await UserAddress.updateMany(
                 { userId: toObjectId(value.userId), isDeleted: false },
                 { $set: { isActive: false } }
             );
         }
-        const address = new UserAddress({
-            ...value
-        });
 
+        const address = new UserAddress(value);
         await address.save();
 
         return apiSuccessRes(HTTP_STATUS.CREATED, res, "Address created", address);
@@ -36,6 +43,7 @@ const createAddress = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
     }
 };
+
 
 
 const updateAddress = async (req, res) => {

@@ -16,6 +16,8 @@ module.exports = {
     feeSetting: require("./controller/controllerFeeSetting"),
     userLocation: require('./controller/controllerUserAddressLocation'),
     reportUser: require('./controller/controllerReportUser'),
+    location: require('./controller/controllerLocation'),
+
     // chat: require("./controller/controllerChat"),
 
 
