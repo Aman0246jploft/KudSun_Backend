@@ -90,10 +90,44 @@ const updateAddress = async (req, res) => {
 };
 
 
-router.post('/create', perApiLimiter(), upload.none(), validateRequest(addressSchema), createAddress);
+
+const getList = async (req, res) => {
+    try {
+        const userId = req?.user?.userId;
+        const pageNo = parseInt(req.query.pageNo) || 1;
+        const size = parseInt(req.query.size) || 10;
+
+        const skip = (pageNo - 1) * size;
+
+        const filter = {
+            userId: toObjectId(userId),
+            isDeleted: false
+        };
+
+        const [data, total] = await Promise.all([
+            UserAddress.find(filter)
+                .populate([{ path: "provinceId", select: '_id value' }, { path: "districtId", select: '_id value' }])
+                .sort({ createdAt: -1 }) // Newest first
+                .skip(skip)
+                .limit(size),
+            UserAddress.countDocuments(filter)
+        ]);
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Addresses fetched", {
+            total,
+            pageNo,
+            size,
+            data
+        });
+    } catch (err) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
+    }
+};
+
+router.post('/create', perApiLimiter(), upload.none(), createAddress);
 router.post('/update', perApiLimiter(), upload.none(), updateAddress);
 router.post('/getById', perApiLimiter(), upload.none(), validateRequest(moduleSchemaForId), globalCrudController.getById(UserAddress));
-router.get('/getList', perApiLimiter(), globalCrudController.getList(UserAddress));
+router.get('/getList', perApiLimiter(), getList);
 router.post('/delete', perApiLimiter(), upload.none(), validateRequest(moduleSchemaForId), globalCrudController.softDelete(UserAddress));
 
 
