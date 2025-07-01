@@ -19,4 +19,4 @@ const UserlocationSchema = new Schema({
 
 UserlocationSchema.index({ userId: 1, isDefault: 1 });
 
-module.exports = mongoose.model("UserLocation", UserlocationSchema, 'UserLocation');
+// module.exports = mongoose.model("UserLocation", UserlocationSchema, 'UserLocation');

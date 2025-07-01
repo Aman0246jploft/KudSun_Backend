@@ -45,6 +45,7 @@ module.exports = {
     TempUser: require("./models/TempUser"),
     UserLocation: require("./models/UserLocation"),
     ReportUser: require('./models/ReportUser'),
+    Location:require('./models/Location'),
     //rbac---->
     Module: require("./models/Rbac/Module"),
     Role: require("./models/Rbac/Role"),
