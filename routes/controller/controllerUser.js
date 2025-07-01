@@ -1185,7 +1185,7 @@ const updateProfile = async (req, res) => {
             userId,
             updateData,
             { new: true }
-        ).select('-password');
+        ).populate([{path:"provinceId", select:"value"},{path:"districtId", select:"value" }]).select('-password');
 
         return apiSuccessRes(
             HTTP_STATUS.OK,
