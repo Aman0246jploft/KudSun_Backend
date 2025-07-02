@@ -4,14 +4,23 @@ const { DB_STRING } = process.env;
 
 const startTime = Date.now();
 
-mongoose.connect(DB_STRING)
-    .then(() => {
-        const endTime = Date.now();
-        console.log(`✅ DB Connected successfully in ${endTime - startTime}ms`);
-    })
-    .catch((err) => {
-        console.error('❌ DB Connection Error:', err.message);
-    });
+async function connectToDatabase() {
+    const startTime = Date.now();
+    try {
+        await mongoose.connect(DB_STRING, {
+            useNewUrlParser: true,
+            useUnifiedTopology: true,
+        });
+        const duration = Date.now() - startTime;
+        console.log(`✅ MongoDB connected successfully in ${duration}ms`);
+    } catch (error) {
+        console.error('❌ Failed to connect to MongoDB:', error.message);
+        process.exit(1); // Exit the process if the DB connection fails
+    }
+}
+
+connectToDatabase();
+
 
 module.exports = {
     AppSetting: require('./models/AppSetting'),
@@ -45,7 +54,7 @@ module.exports = {
     TempUser: require("./models/TempUser"),
     UserLocation: require("./models/UserLocation"),
     ReportUser: require('./models/ReportUser'),
-    Location:require('./models/Location'),
+    Location: require('./models/Location'),
     //rbac---->
     Module: require("./models/Rbac/Module"),
     Role: require("./models/Rbac/Role"),
