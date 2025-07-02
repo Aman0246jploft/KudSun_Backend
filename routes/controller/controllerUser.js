@@ -20,6 +20,7 @@ const SellProducts = require('../../db/models/SellProducts');
 const { moduleSchemaForId } = require('../services/validations/globalCURDValidation');
 const globalCrudController = require('./globalCrudController');
 const { default: mongoose } = require('mongoose');
+const Joi = require('joi');
 
 const uploadfile = async (req, res) => {
     try {
@@ -1891,7 +1892,68 @@ const getFollowersList = async (req, res) => {
 };
 
 
+const updatePassword = async (req, res) => {
+    try {
+        const schema = Joi.object({
+            oldPassword: Joi.string().required(),
+            newPassword: Joi.string().min(6).required(),
+            confirmPassword: Joi.ref('newPassword'),
+        }).with('newPassword', 'confirmPassword');
 
+        const { error, value } = schema.validate(req.body);
+        if (error) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, error.details[0].message);
+        }
+
+        const { oldPassword, newPassword } = value;
+        const userId = req.user?.userId; // Assuming `req.user` is set by auth middleware
+
+        const user = await getDocumentByQuery(User, { _id: toObjectId(userId) });
+        if (!user) {
+            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, 'User not found');
+        }
+
+        console.log("111111", user, user?.password)
+
+        // ✅ Continue with password verification
+        const isMatch = await verifyPassword(
+            user?.data?.password,
+            oldPassword
+        );
+        if (!isMatch) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Old password is incorrect');
+        }
+
+        if (oldPassword === newPassword) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'New password must be different from old password');
+        }
+
+        user.data.password = newPassword;
+        await user?.data?.save();
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, 'Password updated successfully');
+    } catch (err) {
+        console.error('updatePassword error:', err);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Something went wrong');
+    }
+};
+
+
+const deleteAccount = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        const user = await getDocumentByQuery(User, { _id: userId, isDeleted: false });
+        if (user.statusCode !== CONSTANTS.SUCCESS) {
+            return apiErrorRes(res, HTTP_STATUS.NOT_FOUND, 'User not found or already deleted');
+        }
+        user.data.isDeleted = true
+        await user.save();
+        return apiSuccessRes(res, HTTP_STATUS.OK, 'Account deleted successfully');
+    } catch (err) {
+        console.error('updatePassword error:', err);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Something went wrong');
+    }
+}
 
 
 //upload api 
@@ -1919,6 +1981,11 @@ router.post('/requestResetOtp', perApiLimiter(), upload.none(), requestResetOtp)
 router.post('/verifyResetOtp', perApiLimiter(), upload.none(), verifyResetOtp);
 router.post('/resetPassword', perApiLimiter(), upload.none(), resetPassword);
 router.post('/resendResetOtp', perApiLimiter(), upload.none(), resendResetOtp);
+//
+router.post('/updatePassword', perApiLimiter(), upload.none(), updatePassword);
+router.post('/deleteAccount', perApiLimiter(), upload.none(), deleteAccount);
+
+
 //Follow //Like
 router.post('/follow', perApiLimiter(), upload.none(), validateRequest(followSchema), follow);
 router.post('/threadlike', perApiLimiter(), upload.none(), validateRequest(threadLikeSchema), threadlike);
