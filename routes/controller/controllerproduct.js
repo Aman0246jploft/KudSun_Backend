@@ -623,7 +623,7 @@ const showAuctionProducts = async (req, res) => {
             deliveryFilter,
             isSold = false,
             includeSold = false,
-            isTrending 
+            isTrending
         } = req.query;
 
         let isAdmin = req.user.roleId == roleId?.SUPER_ADMIN || false
@@ -1168,60 +1168,58 @@ const fetchUserProducts = async (req, res) => {
             pageNo = 1,
             size = 20,
             userId,
-            sortBy = 'createdAt', // only allowed: 'createdAt', 'price'
-            sortOrder = 'desc',   // 'asc' or 'desc'
+            saleType = 'fixed',
+            sortBy = 'createdAt',
+            sortOrder = 'desc',
         } = req.query;
-
-        console.log("req.queryreq.query",req.query)
 
         const page = parseInt(pageNo);
         const limit = parseInt(size);
         const skip = (page - 1) * limit;
 
-        // Get logged-in user ID from auth (assumes middleware sets req.user.userId)
         const requesterId = req.user?.userId?.toString();
+        const isSelfProfile = userId && requesterId && userId === requesterId || false;
 
-        const isSelfProfile = userId && requesterId && userId === requesterId || false ;
-
-
-        // Base filter
         let filter = {};
+        if (saleType === 'auction') {
+            filter.saleType = SALE_TYPE.AUCTION;
+        } else if (saleType === 'all') {
+            filter.saleType = { $in: [SALE_TYPE.FIXED, SALE_TYPE.AUCTION] };
+        } else {
+            filter.saleType = SALE_TYPE.FIXED;
+        }
 
         if (userId) {
             filter.userId = toObjectId(userId);
         }
 
-        // For other users, show all products even if sold, deleted, or disabled
         if (isSelfProfile) {
             filter.isDeleted = false;
             filter.isDisable = false;
         }
 
-        // Allowed sorting options
         let sortConfig = {};
         if (sortBy === 'price') {
-            // Sort by normalized price
             sortConfig = { fixedPrice: sortOrder === 'desc' ? -1 : 1 };
         } else {
-            // Default or createdAt
             sortConfig = { createdAt: sortOrder === 'desc' ? -1 : 1 };
         }
 
-        console.log("filter",filter)
-
-
-        // Fetch Products
+        // Fetch products and total count
         const [products, total] = await Promise.all([
             SellProduct.find(filter)
                 .select(`
                     title 
+                    description
                     fixedPrice 
+                    originPrice
+                    specifics
                     saleType    
                     condition 
                     productImages 
                     auctionSettings 
                     createdAt
-            isSold
+                    isSold
                 `)
                 .sort(sortConfig)
                 .skip(skip)
@@ -1230,12 +1228,34 @@ const fetchUserProducts = async (req, res) => {
             SellProduct.countDocuments(filter)
         ]);
 
-        // Enhance products with isSold flag
-        const finalProducts = products.map(product => {
-            return {
-                ...product
-            };
-        });
+        // Get all product IDs for auction products
+        const auctionProductIds = products
+            .filter(p => p.saleType === SALE_TYPE.AUCTION)
+            .map(p => p._id);
+
+        let bidCountsMap = {};
+        if (auctionProductIds.length > 0) {
+            // Aggregate bid counts grouped by productId
+            const bidCounts = await Bid.aggregate([
+                { $match: { productId: { $in: auctionProductIds } } },
+                { $group: { _id: "$productId", count: { $sum: 1 } } }
+            ]);
+            // Map productId to count
+            bidCountsMap = bidCounts.reduce((acc, curr) => {
+                acc[curr._id.toString()] = curr.count;
+                return acc;
+            }, {});
+        }
+        const ONE_DAY_MS = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+        const now = Date.now();
+        // Enhance products with totalBidCount for auctions
+        const finalProducts = products.map(product => ({
+            ...product,
+            totalBidCount: product.saleType === SALE_TYPE.AUCTION
+                ? (bidCountsMap[product._id.toString()] || 0)
+                : undefined,
+            isNew: now - new Date(product.createdAt).getTime() <= ONE_DAY_MS
+        }));
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "User products fetched successfully", {
             pageNo: page,
@@ -1243,6 +1263,7 @@ const fetchUserProducts = async (req, res) => {
             total,
             products: finalProducts
         });
+
     } catch (error) {
         console.error("fetchUserProducts error:", error);
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Something went wrong");
@@ -1615,9 +1636,9 @@ const getProductComment = async (req, res) => {
 
         // Fetch all replies for these top-level comments
         const replies = await ProductComment.find({
-                parent: { $in: commentIds },
-                isDeleted: false
-            })
+            parent: { $in: commentIds },
+            isDeleted: false
+        })
             .sort({ createdAt: 1 })
             .populate('author', 'userName profileImage isLive')
             .populate('associatedProducts')
