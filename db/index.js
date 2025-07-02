@@ -57,6 +57,7 @@ module.exports = {
     Location: require('./models/Location'),
     Supportkey: require("./models/SupportKey"),
     SellerBank:require("./models/SellerBank"),
+    BlockUser:require("./models/BlockUser"),
     //rbac---->
     Module: require("./models/Rbac/Module"),
     Role: require("./models/Rbac/Role"),

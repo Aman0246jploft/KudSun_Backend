@@ -3,7 +3,7 @@ const express = require('express');
 const multer = require('multer');
 const upload = multer();
 const router = express.Router();
-const { User, Follow, ThreadLike, ProductLike, SellProduct, Thread, Order, SellProductDraft, ThreadDraft, TempUser, Bid, UserLocation, ProductReview } = require('../../db');
+const { User, Follow, ThreadLike, ProductLike, SellProduct, Thread, Order, SellProductDraft, ThreadDraft, TempUser, Bid, UserLocation, ProductReview, BlockUser } = require('../../db');
 const { getDocumentByQuery } = require('../services/serviceGlobalCURD');
 const CONSTANTS_MSG = require('../../utils/constantsMessage');
 const CONSTANTS = require('../../utils/constants')
@@ -1118,9 +1118,9 @@ const getProfile = async (req, res) => {
             productLike,
             provinceId: user?.provinceId,
             districtId: user?.districtId,
-        dealChatnotification:user?.dealChatnotification,
-        activityNotification:user?.activityNotification,
-        alertNotification:user?.alertNotification,
+            dealChatnotification: user?.dealChatnotification,
+            activityNotification: user?.activityNotification,
+            alertNotification: user?.alertNotification,
 
         };
 
@@ -1973,16 +1973,117 @@ const deleteAccount = async (req, res) => {
         const userId = req.user?.userId;
         const user = await getDocumentByQuery(User, { _id: userId, isDeleted: false });
         if (user.statusCode !== CONSTANTS.SUCCESS) {
-            return apiErrorRes(res, HTTP_STATUS.NOT_FOUND, 'User not found or already deleted');
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'User not found or already deleted');
         }
         user.data.isDeleted = true
         await user.save();
-        return apiSuccessRes(res, HTTP_STATUS.OK, 'Account deleted successfully');
+        return apiSuccessRes(HTTP_STATUS.OK, res, 'Account deleted successfully');
     } catch (err) {
         console.error('updatePassword error:', err);
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Something went wrong');
     }
 }
+
+
+const blockUser = async (req, res) => {
+    try {
+        const blockBy = req.user.userId; // from auth middleware
+        const { userId } = req.body;
+        if (!mongoose.Types.ObjectId.isValid(blockBy) || !mongoose.Types.ObjectId.isValid(userId)) {
+            return res.status(400).json({ status: false, message: "Invalid user IDs." });
+        }
+        if (blockBy === userId) {
+            return res.status(400).json({ status: false, message: "You cannot block yourself." });
+        }
+        const existingBlock = await BlockUser.findOne({ blockBy, userId });
+        if (existingBlock) {
+            await BlockUser.deleteOne({ _id: existingBlock._id });
+            return apiSuccessRes(HTTP_STATUS.OK, res, 'User unblocked successfully.');
+        } else {
+            const newBlock = new BlockUser({ blockBy, userId });
+            await newBlock.save();
+            return apiSuccessRes(HTTP_STATUS.OK, res, 'User blocked successfully.');
+        }
+
+    } catch (err) {
+        console.error('updatePassword error:', err);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Something went wrong');
+    }
+}
+
+
+
+
+
+
+const getBlockedUsers = async (req, res) => {
+    try {
+        const blockBy = req.user.userId;
+
+        if (!mongoose.Types.ObjectId.isValid(blockBy)) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid user ID.");
+        }
+
+        // Step 1: Get blocked users
+        const blockedList = await BlockUser.find({ blockBy }).populate({
+            path: "userId",
+            select: "name username email profileImage provinceId districtId",
+            populate: [
+                { path: "provinceId", select: "value" },
+                { path: "districtId", select: "value" },
+            ],
+        });
+
+        // Step 2: Get follower counts
+        const userIds = blockedList.map(item => item.userId?._id).filter(Boolean);
+
+        const followerCounts = await Follow.aggregate([
+            {
+                $match: {
+                    userId: { $in: userIds },
+                    isDisable: false,
+                    isDeleted: false,
+                },
+            },
+            {
+                $group: {
+                    _id: "$userId",
+                    count: { $sum: 1 },
+                },
+            },
+        ]);
+
+        const countMap = {};
+        followerCounts.forEach(fc => {
+            countMap[fc._id.toString()] = fc.count;
+        });
+
+        // Step 3: Build response
+        const result = blockedList.map((item) => {
+            const user = item.userId;
+            const userIdStr = user?._id?.toString();
+            return {
+                _id: user?._id,
+                name: user?.name,
+                username: user?.username,
+                email: user?.email,
+                profileImage: user?.profileImage,
+                province: user?.provinceId?.value || null,
+                district: user?.districtId?.value || null,
+                followerCount: countMap[userIdStr] || 0,
+                blockedAt: item.createdAt,
+            };
+        });
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Blocked users fetched successfully", result);
+    } catch (err) {
+        console.error("getBlockedUsers error:", err);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Something went wrong");
+    }
+};
+
+
+
 
 
 //upload api 
@@ -2047,6 +2148,12 @@ router.get('/getDashboardSummary', perApiLimiter(), upload.none(), getDashboardS
 
 
 router.post('/adminChangeUserPassword', perApiLimiter(), upload.none(), adminChangeUserPassword);
+
+
+//Block User
+
+router.post('/blockUser', perApiLimiter(), upload.none(), blockUser);
+router.get('/getBlockedUsers', perApiLimiter(), upload.none(), getBlockedUsers);
 
 
 
