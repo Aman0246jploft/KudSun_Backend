@@ -45,6 +45,31 @@ const createAddress = async (req, res) => {
 };
 
 
+const getById = async (req, res) => {
+    try {
+        const { id } = req.body;
+        const userId = req?.user?.userId;
+
+        const address = await UserAddress.findOne({
+            _id: toObjectId(id),
+            userId: toObjectId(userId),
+            isDeleted: false
+        }).populate([
+            { path: "provinceId", select: "_id value" },
+            { path: "districtId", select: "_id value" }
+        ]);
+
+        if (!address) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Address not found");
+        }
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Address details fetched", address);
+    } catch (err) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
+    }
+};
+
+
 
 const updateAddress = async (req, res) => {
     try {
@@ -127,7 +152,10 @@ const getList = async (req, res) => {
 router.post('/create', perApiLimiter(), upload.none(), createAddress);
 router.post('/update', perApiLimiter(), upload.none(), updateAddress);
 router.get('/getList', perApiLimiter(), getList);
-router.post('/getById', perApiLimiter(), upload.none(), validateRequest(moduleSchemaForId), globalCrudController.getById(UserAddress));
+
+
+
+router.post('/getById', perApiLimiter(), upload.none(), validateRequest(moduleSchemaForId),getById);
 router.post('/delete', perApiLimiter(), upload.none(), validateRequest(moduleSchemaForId), globalCrudController.softDelete(UserAddress));
 
 
