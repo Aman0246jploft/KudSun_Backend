@@ -1185,7 +1185,7 @@ const updateProfile = async (req, res) => {
             userId,
             updateData,
             { new: true }
-        ).populate([{path:"provinceId", select:"value"},{path:"districtId", select:"value" }]).select('-password');
+        ).populate([{ path: "provinceId", select: "value" }, { path: "districtId", select: "value" }]).select('-password');
 
         return apiSuccessRes(
             HTTP_STATUS.OK,
@@ -1706,7 +1706,7 @@ const getOtherProfile = async (req, res) => {
                 totalProducts,
                 totalReviews,
                 province: user?.provinceId?.value,
-                district: user?.districtId?.value||null
+                district: user?.districtId?.value || null
 
             }
         );
@@ -1738,7 +1738,17 @@ const getFollowingList = async (req, res) => {
             isDisable: false
         }).populate({
             path: 'userId',
-            select: '_id userName profileImage'
+            select: '_id userName profileImage',
+                 populate: [
+                {
+                    path: 'provinceId',
+                    select: '_id value' // change `name` to the correct field in your Location schema
+                },
+                {
+                    path: 'districtId',
+                    select: '_id value' // change `name` as needed
+                }
+            ]
         });
 
         const result = [];
@@ -1794,7 +1804,17 @@ const getFollowersList = async (req, res) => {
             isDisable: false
         }).populate({
             path: 'followedBy',
-            select: '_id userName profileImage'
+            select: '_id userName profileImage',
+            populate: [
+                {
+                    path: 'provinceId',
+                    select: '_id value' // change `name` to the correct field in your Location schema
+                },
+                {
+                    path: 'districtId',
+                    select: '_id value' // change `name` as needed
+                }
+            ]
         });
 
         const result = [];
