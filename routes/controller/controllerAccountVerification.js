@@ -28,7 +28,7 @@ const create = async (req, res) => {
         const selfieFile = req.files?.selfieWithId?.[0];
         // const idBackFile = req.files?.idDocumentBack?.[0];
 
-        const hasNewDocs = idFrontFile && selfieFile ;
+        const hasNewDocs = idFrontFile && selfieFile;
 
         // Case: existing record but no new docs
         if (existing) {
@@ -45,7 +45,7 @@ const create = async (req, res) => {
         let selfieWithIdUrl = selfieFile ? await uploadImageCloudinary(selfieFile, 'seller-verification') : null;
         // let idDocumentBackUrl = idBackFile ? await uploadImageCloudinary(idBackFile, 'seller-verification') : null;
 
-        if (!idDocumentFrontUrl || !selfieWithIdUrl ) {
+        if (!idDocumentFrontUrl || !selfieWithIdUrl) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'All documents are required to submit verification');
         }
 

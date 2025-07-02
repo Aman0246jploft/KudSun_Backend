@@ -10,6 +10,9 @@ const SellerBankSchema = new Schema({
     bankName: { type: String },         // e.g. Bangkok Bank
     accountNumber: { type: String },
     accountHolderName: { type: String },
+    PromptPay: {
+        type: String, default:null
+    },
     isActive: {
         type: Boolean, default: false
     },
