@@ -140,6 +140,72 @@ router.post('/create', perApiLimiter(),
     ]),
     create
 );
+
+
+
+
+
+
+
+
+const getMyVerificationList = async (req, res) => {
+    try {
+        const userId = req.user.userId;
+
+        // Get query parameters for filtering
+        const {
+            status,
+            sortBy = 'createdAt',
+            sortOrder = 'desc'
+        } = req.query;
+
+        // Build filter object
+        const filter = { userId };
+
+        // Add status filter if provided
+        if (status && ['Pending', 'Approved', 'Rejected'].includes(status)) {
+            filter.verificationStatus = status;
+        }
+
+        // Build sort object
+        const sort = {};
+        sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
+
+        // Get only the top/latest verification record
+        const verification = await AccountVerification.findOne(filter)
+            .sort(sort)
+            .select('-__v') // Exclude version field
+            .lean();
+
+        if (!verification) {
+            return apiSuccessRes(
+                HTTP_STATUS.OK,
+                res,
+                'No verification found',
+                null
+            );
+        }
+
+        return apiSuccessRes(
+            HTTP_STATUS.OK,
+            res,
+            'My verification retrieved successfully',
+            verification
+        );
+
+    } catch (err) {
+        console.error('getMyVerificationList error:', err);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Something went wrong');
+    }
+};
+
+router.get('/getMyVerificationList', perApiLimiter(),
+    getMyVerificationList
+);
+
+
+
+
 router.get('/getVerificationIdList', perApiLimiter(), getVerificationIdList);
 
 router.get('/getList', perApiLimiter(), globalCrudController.getList(SellerVerification));
