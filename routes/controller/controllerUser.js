@@ -1117,10 +1117,13 @@ const getProfile = async (req, res) => {
             ThreadLikes,
             productLike,
             provinceId: user?.provinceId,
-            districtId: user?.districtId
-
+            districtId: user?.districtId,
+        dealChatnotification:user?.dealChatnotification,
+        activityNotification:user?.activityNotification,
+        alertNotification:user?.alertNotification,
 
         };
+
 
         return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, output);
     } catch (error) {
@@ -1723,8 +1726,8 @@ const getOtherProfile = async (req, res) => {
                 _id: user._id,
                 userName: user.userName,
                 profileImage: user.profileImage,
-                dob:user?.dob,
-                gender:user?.gender,
+                dob: user?.dob,
+                gender: user?.gender,
                 is_Id_verified: user.is_Id_verified,
                 totalFollowers,
                 totalFollowing,

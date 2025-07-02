@@ -126,8 +126,19 @@ const UserSchema = new Schema({
     districtId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Location"
+    },
+    dealChatnotification: {
+        type: Boolean,
+        defaut: true
+    },
+    activityNotification: {
+        type: Boolean,
+        defaut: true
+    },
+    alertNotification: {
+        type: Boolean,
+        defaut: true
     }
-
 
 }, {
     timestamps: true
