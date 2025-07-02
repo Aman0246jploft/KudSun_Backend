@@ -263,6 +263,9 @@ const loginStepOne = async (req, res) => {
         if (user.isDisable) {
             return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, CONSTANTS_MSG.ACCOUNT_DISABLE);
         }
+        if (user.isDeleted) {
+            return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, CONSTANTS_MSG.ACCOUNT_DELETED);
+        }
 
         // No token needed here, frontend just proceeds with step 2
 
@@ -298,6 +301,12 @@ const loginStepTwoPassword = async (req, res) => {
         const user = await User.findOne(query).select('+password +loginOtp +loginOtpExpiresAt');
         if (!user) {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
+        }
+        if (user.isDisable) {
+            return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, CONSTANTS_MSG.ACCOUNT_DISABLE);
+        }
+        if (user.isDeleted) {
+            return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, CONSTANTS_MSG.ACCOUNT_DELETED);
         }
 
         if (password && password !== "") {
@@ -376,6 +385,12 @@ const loginStepThreeVerifyOtp = async (req, res) => {
         const user = await User.findOne(query).select('+loginOtp +loginOtpExpiresAt');
         if (!user) {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
+        }
+        if (user.isDisable) {
+            return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, CONSTANTS_MSG.ACCOUNT_DISABLE);
+        }
+        if (user.isDeleted) {
+            return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, CONSTANTS_MSG.ACCOUNT_DELETED);
         }
 
         if (!user.loginOtp || user.loginOtp !== otp) {

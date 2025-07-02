@@ -4,6 +4,7 @@ module.exports = Object.freeze({
     REGISTRATION_DEVICE_ID_FAIL: "Please Register With Same Device as You Verified Earliar.",
     LOGIN_SUCCESS: "Login Successful.",
     ACCOUNT_DISABLE:'Account Disable',
+    ACCOUNT_DELETED:'Account Deleted',
     LOGIN_FAILURE: "Sorry for inconvenience! Facing something wrong while processing your request.",
     EMAIL_NOTFOUND:'Email not Found',
     INVALID_PASSWORD:'Invalid Password',
