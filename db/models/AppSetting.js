@@ -13,6 +13,12 @@ let AppSettingSchema = new Schema({
         require: true,
         // lowercase: true
     },
+
+    SupportKey: {
+        type: Schema.Types.ObjectId,
+        ref: 'SupportKey',
+        required: true,
+    },
     value: {
         type: String,
         require: true
