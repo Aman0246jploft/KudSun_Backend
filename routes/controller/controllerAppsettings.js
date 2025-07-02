@@ -61,92 +61,42 @@ const auctionRule = async (req, res) => {
 };
 
 
-// const getFAQs = async (req, res) => {
-//   try {
-//     // Get all documents first
-//     const allSettings = await AppSetting.find();
-
-//     // Filter for FAQ documents
-//     const faqSettings = allSettings.filter(setting => {
-//       // Check if key matches faq pattern (faq followed by digits)
-//       const isFaqKey = /^faq\d+$/i.test(setting.key);
-//       const isNotDeleted = setting.isDeleted === false;
-//       const isNotDisabled = setting.isDisable === false;
-
-//       return isFaqKey && isNotDeleted && isNotDisabled;
-//     });
-
-//     // Sort by FAQ number (extract number from key and sort)
-//     const sortedFaqs = faqSettings.sort((a, b) => {
-//       const numA = parseInt(a.key.substring(3)); // extract number after 'faq'
-//       const numB = parseInt(b.key.substring(3));
-//       return numA - numB;
-//     });
-
-//     // Transform to match your desired output format
-//     const faqs = sortedFaqs.map(faq => ({
-//       name: faq.name,
-//       value: faq.value,
-//       key: faq.key,
-//       _id: faq?._id
-//     }));
-
-//     return apiSuccessRes(HTTP_STATUS.OK, res, "FAQs fetched successfully", { faqs });
-//   } catch (error) {
-//     return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
-//   }
-// };
-
-
-
 const getFAQs = async (req, res) => {
   try {
-    const { keyWord } = req.query;
-    const keyWordRegex = keyWord ? new RegExp(keyWord, 'i') : null;
+    // Get all documents first
+    const allSettings = await AppSetting.find();
 
-    // Filter SupportKeys only by keyWord on name
-    const supportKeyFilter = {
-      isDeleted: false,
-      isDisable: false,
-      ...(keyWordRegex && { name: keyWordRegex })
-    };
-    const supportKeys = await Supportkey.find(supportKeyFilter);
+    // Filter for FAQ documents
+    const faqSettings = allSettings.filter(setting => {
+      // Check if key matches faq pattern (faq followed by digits)
+      const isFaqKey = /^faq\d+$/i.test(setting.key);
+      const isNotDeleted = setting.isDeleted === false;
+      const isNotDisabled = setting.isDisable === false;
 
-    const data = await Promise.all(
-      supportKeys.map(async (supportKey) => {
-        // Fetch all FAQs for this SupportKey WITHOUT keyWord filtering on FAQs
-        let relatedFAQs = await AppSetting.find({
-          supportKey: supportKey._id,
-          isDeleted: false,
-          isDisable: false,
-        });
+      return isFaqKey && isNotDeleted && isNotDisabled;
+    });
 
-        // Sort FAQs by number extracted from key (faq<number>)
-        relatedFAQs = relatedFAQs.sort((a, b) => {
-          const numA = parseInt(a.key.replace(/^faq/i, ''), 10);
-          const numB = parseInt(b.key.replace(/^faq/i, ''), 10);
-          return numA - numB;
-        });
+    // Sort by FAQ number (extract number from key and sort)
+    const sortedFaqs = faqSettings.sort((a, b) => {
+      const numA = parseInt(a.key.substring(3)); // extract number after 'faq'
+      const numB = parseInt(b.key.substring(3));
+      return numA - numB;
+    });
 
-        return {
-          supportKey,
-          faqs: relatedFAQs.map(faq => ({
-            _id: faq._id,
-            name: faq.name,
-            key: faq.key,
-            value: faq.value,
-          }))
-        };
-      })
-    );
+    // Transform to match your desired output format
+    const faqs = sortedFaqs.map(faq => ({
+      name: faq.name,
+      value: faq.value,
+      key: faq.key,
+      _id: faq?._id
+    }));
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "FAQs fetched successfully", data);
-
+    return apiSuccessRes(HTTP_STATUS.OK, res, "FAQs fetched successfully", { faqs });
   } catch (error) {
-    console.error('Error fetching FAQss:', error);
     return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
   }
 };
+
 
 
 
