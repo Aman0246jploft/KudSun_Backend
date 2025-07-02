@@ -1666,39 +1666,31 @@ const adminChangeUserPassword = async (req, res) => {
 const getOtherProfile = async (req, res) => {
     try {
         const userId = req.params.id;
-        const currentUser = req.user.userId;
 
         if (!mongoose.Types.ObjectId.isValid(userId)) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid userId");
         }
 
         // 1. Get user basic info
-        const user = await User.findById(userId)
-            .populate([
-                { path: "provinceId", select: "value" },
-                { path: "districtId", select: "value" }
-            ])
-            .select('-password -otp -__v');
-
+        const user = await User.findById(userId).populate([{ path: "provinceId", select: "value" }, { path: "districtId", select: "value" }]).select('-password -otp -__v');
         if (!user) {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
         }
 
-        // 2. Follower and following lists + counts
-        const [followers, following, totalThreads, totalProducts, totalReviews, isFollowing] = await Promise.all([
-            Follow.find({ userId, isDeleted: false, isDisable: false })
-                .populate({ path: "followedBy", select: "_id userName profileImage" }),
-            
-            Follow.find({ followedBy: userId, isDeleted: false, isDisable: false })
-                .populate({ path: "userId", select: "_id userName profileImage" }),
 
-            Thread.countDocuments({ userId, isDeleted: false, isDisable: false }),
-            SellProduct.countDocuments({ userId, isDeleted: false, isDisable: false }),
-            ProductReview.countDocuments({ userId, isDeleted: false, isDisable: false }),
-
-            Follow.exists({ userId, followedBy: currentUser, isDeleted: false, isDisable: false })
+        // 2. Get follower and following counts
+        const [totalFollowers, totalFollowing] = await Promise.all([
+            Follow.countDocuments({ userId: userId, isDeleted: false, isDisable: false }),
+            Follow.countDocuments({ followedBy: userId, isDeleted: false, isDisable: false })
         ]);
 
+
+
+        const [totalThreads, totalProducts, totalReviews] = await Promise.all([
+            Thread.countDocuments({ userId, isDeleted: false, isDisable: false }),
+            SellProduct.countDocuments({ userId, isDeleted: false, isDisable: false }),
+            ProductReview.countDocuments({ userId, isDeleted: false, isDisable: false })
+        ]);
         return apiSuccessRes(
             HTTP_STATUS.OK,
             res,
@@ -1708,32 +1700,117 @@ const getOtherProfile = async (req, res) => {
                 userName: user.userName,
                 profileImage: user.profileImage,
                 is_Id_verified: user.is_Id_verified,
-                totalFollowers: followers.length,
-                totalFollowing: following.length,
+                totalFollowers,
+                totalFollowing,
                 totalThreads,
                 totalProducts,
                 totalReviews,
-                isFollowing: Boolean(isFollowing),
-                followers: followers.map(f => ({
-                    _id: f._id,
-                    followedBy: f.followedBy
-                })),
-                following: following.map(f => ({
-                    _id: f._id,
-                    userId: f.userId
-                })),
-                province: user?.provinceId?.value || null,
-                district: user?.districtId?.value || null
+                province: user?.provinceId?.value,
+                district: user?.districtId?.value||null
+
             }
         );
+
     } catch (error) {
-        console.error("Error in getOtherProfile:", error);
+        console.error("Error in adminChangeUserPassword:", error);
         return apiErrorRes(
             HTTP_STATUS.INTERNAL_SERVER_ERROR,
             res,
-            "Failed to fetch user profile",
+            "Failed to update password",
             error.message
         );
+    }
+};
+
+
+const getFollowingList = async (req, res) => {
+    try {
+        const targetUserId = req.params.id;
+        const currentUserId = req.user._id;
+
+        if (!mongoose.Types.ObjectId.isValid(targetUserId)) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid userId");
+        }
+
+        const followings = await Follow.find({
+            followedBy: targetUserId,
+            isDeleted: false,
+            isDisable: false
+        }).populate({
+            path: 'userId',
+            select: '_id userName profileImage'
+        });
+
+        const result = [];
+
+        for (const follow of followings) {
+            const user = follow.userId;
+            if (!user) continue;
+
+            const isFollowed = await Follow.exists({
+                userId: user._id,
+                followedBy: currentUserId,
+                isDeleted: false,
+                isDisable: false
+            });
+
+            result.push({
+                _id: user._id,
+                userName: user.userName,
+                profileImage: user.profileImage,
+                isFollowed: !!isFollowed
+            });
+        }
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Following list", result);
+    } catch (error) {
+        console.error("Error in getFollowingList:", error);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to fetch followings", error.message);
+    }
+};
+const getFollowersList = async (req, res) => {
+    try {
+        const targetUserId = req.params.id;
+        const currentUserId = req.user._id;
+
+        if (!mongoose.Types.ObjectId.isValid(targetUserId)) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid userId");
+        }
+
+        const followers = await Follow.find({
+            userId: targetUserId,
+            isDeleted: false,
+            isDisable: false
+        }).populate({
+            path: 'followedBy',
+            select: '_id userName profileImage'
+        });
+
+        const result = [];
+
+        for (const follow of followers) {
+            const user = follow.followedBy;
+            if (!user) continue;
+
+            const isFollowed = await Follow.exists({
+                userId: user._id,
+                followedBy: currentUserId,
+                isDeleted: false,
+                isDisable: false
+            });
+
+            result.push({
+                _id: user._id,
+                userName: user.userName,
+                profileImage: user.profileImage,
+                isFollowed: !!isFollowed
+            });
+        }
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Followers list", result);
+    } catch (error) {
+        console.error("Error in getFollowersList:", error);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to fetch followers", error.message);
     }
 };
 
@@ -1778,6 +1855,9 @@ router.post('/updateProfile', perApiLimiter(), upload.single("profileImage"), up
 
 
 router.get('/getOtherProfile/:id', perApiLimiter(), upload.none(), getOtherProfile);
+router.get('/getFollowersList/:id', perApiLimiter(), upload.none(), getFollowersList);
+router.get('/getFollowingList/:id', perApiLimiter(), upload.none(), getFollowingList);
+
 
 
 //updatePhoneNumber 

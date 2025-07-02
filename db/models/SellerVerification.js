@@ -20,7 +20,7 @@ const SellerVerificationSchema = new Schema({
 
     // For Bank Transfer method
     bankDetails: {
-        bankName: { type: Schema.Types.ObjectId, ref: 'Bank' },         // e.g. Bangkok Bank
+        bankName: { type: String },         // e.g. Bangkok Bank
         accountNumber: { type: String },
         accountHolderName: { type: String },
         bankBookUrl: { type: String },      // URL for uploaded bank book image
