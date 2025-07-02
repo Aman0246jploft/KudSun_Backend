@@ -1745,7 +1745,17 @@ const getFollowingList = async (req, res) => {
 
         for (const follow of followings) {
             const user = follow.userId;
-            if (!user) continue;
+
+            if (!user) {
+                // userId is null, include entry with null fields and isFollowed false
+                result.push({
+                    _id: null,
+                    userName: null,
+                    profileImage: null,
+                    isFollowed: false
+                });
+                continue;
+            }
 
             const isFollowed = await Follow.exists({
                 userId: user._id,
@@ -1755,9 +1765,9 @@ const getFollowingList = async (req, res) => {
             });
 
             result.push({
-                _id: user._id,
-                userName: user.userName,
-                profileImage: user.profileImage,
+                _id: user._id || null,
+                userName: user.userName || null,
+                profileImage: user.profileImage || null,
                 isFollowed: !!isFollowed
             });
         }
@@ -1768,6 +1778,7 @@ const getFollowingList = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to fetch followings", error.message);
     }
 };
+
 const getFollowersList = async (req, res) => {
     try {
         const targetUserId = req.params.id;
@@ -1790,7 +1801,17 @@ const getFollowersList = async (req, res) => {
 
         for (const follow of followers) {
             const user = follow.followedBy;
-            if (!user) continue;
+
+            if (!user) {
+                // followedBy is null, include with null fields and isFollowed false
+                result.push({
+                    _id: null,
+                    userName: null,
+                    profileImage: null,
+                    isFollowed: false
+                });
+                continue;
+            }
 
             const isFollowed = await Follow.exists({
                 userId: user._id,
@@ -1800,9 +1821,9 @@ const getFollowersList = async (req, res) => {
             });
 
             result.push({
-                _id: user._id,
-                userName: user.userName,
-                profileImage: user.profileImage,
+                _id: user._id || null,
+                userName: user.userName || null,
+                profileImage: user.profileImage || null,
                 isFollowed: !!isFollowed
             });
         }
@@ -1813,6 +1834,7 @@ const getFollowersList = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to fetch followers", error.message);
     }
 };
+
 
 
 
