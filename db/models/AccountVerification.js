@@ -10,7 +10,7 @@ const AccountVerificationSchema = new Schema({
     idNumber: { type: String, required: true },
 
     idDocumentFrontUrl: { type: String, required: true }, // URL of ID front image
-    idDocumentBackUrl: { type: String, required: true }, // URL of ID back image
+    idDocumentBackUrl: { type: String}, // URL of ID back image
     selfieWithIdUrl: { type: String, required: true },    // URL of selfie with ID image
 
     verificationStatus: {
