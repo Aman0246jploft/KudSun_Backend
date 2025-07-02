@@ -3,7 +3,7 @@ const express = require('express');
 const multer = require('multer');
 const upload = multer();
 const router = express.Router();
-const { Thread, ThreadComment, SellProduct, Bid, Follow, ThreadLike, ThreadDraft, User } = require('../../db');
+const { Thread, ThreadComment, SellProduct, Bid, Follow, ThreadLike, ThreadDraft, User, Category } = require('../../db');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const { apiErrorRes, apiSuccessRes, toObjectId } = require('../../utils/globalFunction');
 const HTTP_STATUS = require('../../utils/statusCode');
@@ -631,13 +631,13 @@ const getThreads = async (req, res) => {
 
         const threads = await Thread.find(filters)
             .populate('userId', 'userName profileImage isLive is_Id_verified is_Preferred_seller')
-            .populate('categoryId', 'name') // populate but remove later
-            .populate('subCategoryId', 'name') // populate but remove later
+            .populate('categoryId', 'name subCategoryId') // populate but remove later
             .sort(sortStage)
             .skip((page - 1) * limit)
             .limit(limit)
             .select(' -__v')
             .lean();
+
 
         const threadIds = threads.map(t => t._id);
         const userIds = [...new Set(threads.map(t => t.userId?._id?.toString()).filter(Boolean))];
@@ -697,13 +697,24 @@ const getThreads = async (req, res) => {
             likedThreadSet = new Set(userLikes.map(like => like.threadId.toString()));
         }
 
+        const subCategoryNameMap = {};
+
+        const categories = await Category.find({
+            'subCategories._id': { $in: threads.map(t => t.subCategoryId) }
+        }).lean();
+
+        categories.forEach(category => {
+            category.subCategories.forEach(sub => {
+                subCategoryNameMap[sub._id.toString()] = sub.name;
+            });
+        });
+            
+
         const enrichedThreads = threads.map(thread => {
             const tid = thread._id.toString();
             const uid = thread.userId?._id?.toString() || '';
 
-            // Remove populated category data
-            delete thread.categoryId;
-            delete thread.subCategoryId;
+
 
             return {
                 ...thread,
@@ -712,7 +723,8 @@ const getThreads = async (req, res) => {
                 totalLikes: likeMap[tid] || 0,
                 totalAssociatedProducts: productMap[tid] || 0,
                 myThread: currentUserId && uid === currentUserId,
-                isLiked: likedThreadSet.has(tid)
+                isLiked: likedThreadSet.has(tid),
+                subCategoryId: subCategoryNameMap[thread.subCategoryId] || null
             };
         });
 
@@ -907,7 +919,7 @@ const getRecentFollowedUsers = async (req, res) => {
             });
         }
 
-   
+
 
         // Aggregate user info + latest thread + total followers
         const users = await User.aggregate([
