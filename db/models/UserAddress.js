@@ -13,7 +13,8 @@ const UserAddressSchema = new Schema({
     isDisable: { type: Boolean, default: false },
     isDeleted: { type: Boolean, default: false },
     notes: {
-        type: String
+        type: String,
+        default:null
     },
     isActive: { type: Boolean, default: false },
     
@@ -25,7 +26,7 @@ const UserAddressSchema = new Schema({
     districtId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Location"
-    }
+    },
 
 
 }, {
