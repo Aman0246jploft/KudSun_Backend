@@ -5,19 +5,19 @@ const Schema = mongoose.Schema;
 let AppSettingSchema = new Schema({
     name: {
         type: String,
-        unique: true,
+        // unique: true,
     },
     key: {
         type: String,
-        unique: true,
+        // unique: true,
         require: true,
         // lowercase: true
     },
 
-    SupportKey: {
+    supportKey: {
         type: Schema.Types.ObjectId,
         ref: 'SupportKey',
-        required: true,
+        defalut:null
     },
     value: {
         type: String,
