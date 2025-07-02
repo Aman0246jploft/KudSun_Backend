@@ -1751,11 +1751,13 @@ const getFollowingList = async (req, res) => {
             ]
         });
 
+
+
         const result = [];
 
         for (const follow of followings) {
             const user = follow.userId;
-
+    
             if (!user) {
                 // userId is null, include entry with null fields and isFollowed false
                 result.push({
@@ -1778,7 +1780,10 @@ const getFollowingList = async (req, res) => {
                 _id: user._id || null,
                 userName: user.userName || null,
                 profileImage: user.profileImage || null,
-                isFollowed: !!isFollowed
+                isFollowed: !!isFollowed,
+                province:follow?.userId?.provinceId?.value||null,
+                district:follow?.userId?.districtId?.value||null
+
             });
         }
 
@@ -1844,7 +1849,9 @@ const getFollowersList = async (req, res) => {
                 _id: user._id || null,
                 userName: user.userName || null,
                 profileImage: user.profileImage || null,
-                isFollowed: !!isFollowed
+                isFollowed: !!isFollowed,
+                 province:follow?.provinceId?.value||null,
+                district:follow?.userId?.districtId?.value||null
             });
         }
 
