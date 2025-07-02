@@ -17,7 +17,8 @@ module.exports = {
     userLocation: require('./controller/controllerUserAddressLocation'),
     reportUser: require('./controller/controllerReportUser'),
     location: require('./controller/controllerLocation'),
-
+    supportKey: require("./controller/controllerSupportKey"),
+    
     // chat: require("./controller/controllerChat"),
 
 

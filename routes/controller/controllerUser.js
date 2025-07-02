@@ -1726,7 +1726,7 @@ const getOtherProfile = async (req, res) => {
 const getFollowingList = async (req, res) => {
     try {
         const targetUserId = req.params.id;
-        const currentUserId = req.user._id;
+        const currentUserId = req.user.userId;
 
         if (!mongoose.Types.ObjectId.isValid(targetUserId)) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid userId");
@@ -1810,7 +1810,7 @@ const getFollowingList = async (req, res) => {
 const getFollowersList = async (req, res) => {
     try {
         const targetUserId = req.params.id;
-        const currentUserId = req.user._id;
+        const currentUserId = req.user.userId;
 
         if (!mongoose.Types.ObjectId.isValid(targetUserId)) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid userId");
