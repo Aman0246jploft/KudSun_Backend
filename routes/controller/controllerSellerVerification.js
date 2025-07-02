@@ -62,14 +62,12 @@ const create = async (req, res) => {
         }
 
         if (paymentPayoutMethod === SELLER_PAYOUT_METHOD.BANK_TRANSFER) {
-            const bankBookFile = req.files?.bankBook?.[0];
-            if (!existing && (!bankName || !accountNumber || !accountHolderName || !bankBookFile)) {
+  
+            if (!existing && (!bankName || !accountNumber || !accountHolderName)) {
                 return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'All bank details and bank book image are required for Bank Transfer');
             }
 
-            if (bankBookFile) {
-                bankBookUrl = await uploadImageCloudinary(bankBookFile, 'seller-verification');
-            }
+         
         }
 
         const payload = {

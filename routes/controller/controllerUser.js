@@ -1666,31 +1666,39 @@ const adminChangeUserPassword = async (req, res) => {
 const getOtherProfile = async (req, res) => {
     try {
         const userId = req.params.id;
+        const currentUser = req.user.userId;
 
         if (!mongoose.Types.ObjectId.isValid(userId)) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid userId");
         }
 
         // 1. Get user basic info
-        const user = await User.findById(userId).populate([{ path: "provinceId", select: "value" }, { path: "districtId", select: "value" }]).select('-password -otp -__v');
+        const user = await User.findById(userId)
+            .populate([
+                { path: "provinceId", select: "value" },
+                { path: "districtId", select: "value" }
+            ])
+            .select('-password -otp -__v');
+
         if (!user) {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
         }
 
+        // 2. Follower and following lists + counts
+        const [followers, following, totalThreads, totalProducts, totalReviews, isFollowing] = await Promise.all([
+            Follow.find({ userId, isDeleted: false, isDisable: false })
+                .populate({ path: "followedBy", select: "_id userName profileImage" }),
+            
+            Follow.find({ followedBy: userId, isDeleted: false, isDisable: false })
+                .populate({ path: "userId", select: "_id userName profileImage" }),
 
-        // 2. Get follower and following counts
-        const [totalFollowers, totalFollowing] = await Promise.all([
-            Follow.countDocuments({ userId: userId, isDeleted: false, isDisable: false }),
-            Follow.countDocuments({ followedBy: userId, isDeleted: false, isDisable: false })
-        ]);
-
-
-
-        const [totalThreads, totalProducts, totalReviews] = await Promise.all([
             Thread.countDocuments({ userId, isDeleted: false, isDisable: false }),
             SellProduct.countDocuments({ userId, isDeleted: false, isDisable: false }),
-            ProductReview.countDocuments({ userId, isDeleted: false, isDisable: false })
+            ProductReview.countDocuments({ userId, isDeleted: false, isDisable: false }),
+
+            Follow.exists({ userId, followedBy: currentUser, isDeleted: false, isDisable: false })
         ]);
+
         return apiSuccessRes(
             HTTP_STATUS.OK,
             res,
@@ -1700,27 +1708,35 @@ const getOtherProfile = async (req, res) => {
                 userName: user.userName,
                 profileImage: user.profileImage,
                 is_Id_verified: user.is_Id_verified,
-                totalFollowers,
-                totalFollowing,
+                totalFollowers: followers.length,
+                totalFollowing: following.length,
                 totalThreads,
                 totalProducts,
                 totalReviews,
-                province: user?.provinceId?.value,
-                district: user?.districtId?.value||null
-
+                isFollowing: Boolean(isFollowing),
+                followers: followers.map(f => ({
+                    _id: f._id,
+                    followedBy: f.followedBy
+                })),
+                following: following.map(f => ({
+                    _id: f._id,
+                    userId: f.userId
+                })),
+                province: user?.provinceId?.value || null,
+                district: user?.districtId?.value || null
             }
         );
-
     } catch (error) {
-        console.error("Error in adminChangeUserPassword:", error);
+        console.error("Error in getOtherProfile:", error);
         return apiErrorRes(
             HTTP_STATUS.INTERNAL_SERVER_ERROR,
             res,
-            "Failed to update password",
+            "Failed to fetch user profile",
             error.message
         );
     }
 };
+
 
 
 //upload api 
