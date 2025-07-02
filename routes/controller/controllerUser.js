@@ -1738,61 +1738,74 @@ const getFollowingList = async (req, res) => {
             isDisable: false
         }).populate({
             path: 'userId',
-            select: '_id userName profileImage',
-                 populate: [
+            select: '_id userName profileImage provinceId districtId',
+            populate: [
                 {
                     path: 'provinceId',
-                    select: '_id value' // change `name` to the correct field in your Location schema
+                    select: '_id value'
                 },
                 {
                     path: 'districtId',
-                    select: '_id value' // change `name` as needed
+                    select: '_id value'
                 }
             ]
         });
-
-
 
         const result = [];
 
         for (const follow of followings) {
             const user = follow.userId;
-    
+
             if (!user) {
-                // userId is null, include entry with null fields and isFollowed false
                 result.push({
                     _id: null,
                     userName: null,
                     profileImage: null,
-                    isFollowed: false
+                    isFollowed: false,
+                    province: null,
+                    district: null,
+                    totalFollowers: 0
                 });
                 continue;
             }
 
-            const isFollowed = await Follow.exists({
-                userId: user._id,
-                followedBy: currentUserId,
-                isDeleted: false,
-                isDisable: false
-            });
+            const [isFollowed, totalFollowers] = await Promise.all([
+                Follow.exists({
+                    userId: user._id,
+                    followedBy: currentUserId,
+                    isDeleted: false,
+                    isDisable: false
+                }),
+                Follow.countDocuments({
+                    userId: user._id,
+                    isDeleted: false,
+                    isDisable: false
+                })
+            ]);
 
             result.push({
                 _id: user._id || null,
                 userName: user.userName || null,
                 profileImage: user.profileImage || null,
                 isFollowed: !!isFollowed,
-                province:follow?.userId?.provinceId?.value||null,
-                district:follow?.userId?.districtId?.value||null
-
+                province: user.provinceId?.value || null,
+                district: user.districtId?.value || null,
+                totalFollowers
             });
         }
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Following list", result);
     } catch (error) {
         console.error("Error in getFollowingList:", error);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to fetch followings", error.message);
+        return apiErrorRes(
+            HTTP_STATUS.INTERNAL_SERVER_ERROR,
+            res,
+            "Failed to fetch followings",
+            error.message
+        );
     }
 };
+
 
 const getFollowersList = async (req, res) => {
     try {
@@ -1809,15 +1822,15 @@ const getFollowersList = async (req, res) => {
             isDisable: false
         }).populate({
             path: 'followedBy',
-            select: '_id userName profileImage',
+            select: '_id userName profileImage provinceId districtId',
             populate: [
                 {
                     path: 'provinceId',
-                    select: '_id value' // change `name` to the correct field in your Location schema
+                    select: '_id value'
                 },
                 {
                     path: 'districtId',
-                    select: '_id value' // change `name` as needed
+                    select: '_id value'
                 }
             ]
         });
@@ -1828,39 +1841,55 @@ const getFollowersList = async (req, res) => {
             const user = follow.followedBy;
 
             if (!user) {
-                // followedBy is null, include with null fields and isFollowed false
                 result.push({
                     _id: null,
                     userName: null,
                     profileImage: null,
-                    isFollowed: false
+                    isFollowed: false,
+                    province: null,
+                    district: null,
+                    totalFollowers: 0
                 });
                 continue;
             }
 
-            const isFollowed = await Follow.exists({
-                userId: user._id,
-                followedBy: currentUserId,
-                isDeleted: false,
-                isDisable: false
-            });
+            const [isFollowed, totalFollowers] = await Promise.all([
+                Follow.exists({
+                    userId: user._id,
+                    followedBy: currentUserId,
+                    isDeleted: false,
+                    isDisable: false
+                }),
+                Follow.countDocuments({
+                    userId: user._id,
+                    isDeleted: false,
+                    isDisable: false
+                })
+            ]);
 
             result.push({
                 _id: user._id || null,
                 userName: user.userName || null,
                 profileImage: user.profileImage || null,
                 isFollowed: !!isFollowed,
-                 province:follow?.provinceId?.value||null,
-                district:follow?.userId?.districtId?.value||null
+                province: user.provinceId?.value || null,
+                district: user.districtId?.value || null,
+                totalFollowers
             });
         }
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Followers list", result);
     } catch (error) {
         console.error("Error in getFollowersList:", error);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to fetch followers", error.message);
+        return apiErrorRes(
+            HTTP_STATUS.INTERNAL_SERVER_ERROR,
+            res,
+            "Failed to fetch followers",
+            error.message
+        );
     }
 };
+
 
 
 
