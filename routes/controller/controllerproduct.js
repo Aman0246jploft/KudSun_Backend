@@ -1593,57 +1593,49 @@ const getProductComment = async (req, res) => {
         const page = parseInt(req.query.pageNo) || 1;
         const limit = parseInt(req.query.size) || 10;
         const skip = (page - 1) * limit;
-        const totalCount = await ProductComment.countDocuments({ product: toObjectId(productId), parent: null, isDeleted: false });
+
+        const filter = {
+            product: toObjectId(productId),
+            parent: null,
+            isDeleted: false
+        };
+
+        const totalCount = await ProductComment.countDocuments(filter);
 
         // Fetch top-level comments
-        const comments = await ProductComment.find({ product: toObjectId(productId), parent: null, isDeleted: false })
+        const comments = await ProductComment.find(filter)
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit)
-            .populate('author', 'username profilePic isLive')
+            .populate('author', 'userName profileImage isLive')
             .populate('associatedProducts')
             .lean();
 
         const commentIds = comments.map(comment => comment._id);
 
-        // Aggregation for replies with associatedProducts populated
-        const replies = await ProductComment.aggregate([
-            { $match: { parent: { $in: commentIds }, isDeleted: false } },
-            { $sort: { createdAt: 1 } },
-            {
-                $lookup: {
-                    from: 'SellProduct', // make sure this is the correct collection name
-                    localField: 'associatedProducts',
-                    foreignField: '_id',
-                    as: 'associatedProducts'
-                }
-            },
-            {
-                $group: {
-                    _id: "$parent",
-                    firstReply: { $first: "$$ROOT" },
-                    replyCount: { $sum: 1 },
-                },
-            },
-        ]);
+        // Fetch all replies for these top-level comments
+        const replies = await ProductComment.find({
+                parent: { $in: commentIds },
+                isDeleted: false
+            })
+            .sort({ createdAt: 1 })
+            .populate('author', 'userName profileImage isLive')
+            .populate('associatedProducts')
+            .lean();
 
+        // Group replies under their parent comment
         const replyMap = {};
-        replies.forEach(r => {
-            replyMap[r._id.toString()] = {
-                reply: r.firstReply,
-                count: r.replyCount,
-            };
+        replies.forEach(reply => {
+            const parentId = reply.parent.toString();
+            if (!replyMap[parentId]) replyMap[parentId] = [];
+            replyMap[parentId].push(reply);
         });
 
-        // Attach replies to top-level comments
-        const enrichedComments = comments.map(comment => {
-            const match = replyMap[comment._id.toString()];
-            return {
-                ...comment,
-                firstReply: match ? match.reply : null,
-                totalReplies: match ? match.count : 0,
-            };
-        });
+        // Attach replies to each comment
+        const enrichedComments = comments.map(comment => ({
+            ...comment,
+            replies: replyMap[comment._id.toString()] || []
+        }));
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Comments fetched successfully", {
             pageNo: page,
@@ -1651,11 +1643,13 @@ const getProductComment = async (req, res) => {
             total: totalCount,
             commentList: enrichedComments,
         });
+
     } catch (err) {
-        console.error('Error fetching comments:', err);
+        console.error('Error fetching product comments:', err);
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
     }
 };
+
 
 
 
