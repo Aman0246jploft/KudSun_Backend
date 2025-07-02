@@ -18,7 +18,7 @@ module.exports = {
     reportUser: require('./controller/controllerReportUser'),
     location: require('./controller/controllerLocation'),
     supportKey: require("./controller/controllerSupportKey"),
-    
+    sellerBank: require("./controller/controllerSellerBank"),
     // chat: require("./controller/controllerChat"),
 
 
