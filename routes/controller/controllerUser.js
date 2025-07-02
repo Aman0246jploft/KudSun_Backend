@@ -1682,7 +1682,7 @@ const adminChangeUserPassword = async (req, res) => {
 const getOtherProfile = async (req, res) => {
     try {
         const userId = req.params.id;
-
+        const currentUser = req.user.userId
         if (!mongoose.Types.ObjectId.isValid(userId)) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid userId");
         }
@@ -1701,6 +1701,14 @@ const getOtherProfile = async (req, res) => {
         ]);
 
 
+        // 3. Check if currentUser follows the profile user
+        const isFollow = await Follow.exists({
+            userId: userId,
+            followedBy: currentUser,
+            isDeleted: false,
+            isDisable: false
+        });
+
 
         const [totalThreads, totalProducts, totalReviews] = await Promise.all([
             Thread.countDocuments({ userId, isDeleted: false, isDisable: false }),
@@ -1715,6 +1723,8 @@ const getOtherProfile = async (req, res) => {
                 _id: user._id,
                 userName: user.userName,
                 profileImage: user.profileImage,
+                dob:user?.dob,
+                gender:user?.gender,
                 is_Id_verified: user.is_Id_verified,
                 totalFollowers,
                 totalFollowing,
@@ -1722,7 +1732,8 @@ const getOtherProfile = async (req, res) => {
                 totalProducts,
                 totalReviews,
                 province: user?.provinceId?.value,
-                district: user?.districtId?.value || null
+                district: user?.districtId?.value || null,
+                isFollow: Boolean(isFollow)
 
             }
         );
