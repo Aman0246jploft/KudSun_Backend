@@ -1943,7 +1943,6 @@ router.get('/fetchCombinedProducts', perApiLimiter(), fetchCombinedProducts);
 
 router.get('/fetchUserProducts', perApiLimiter(), fetchUserProducts);
 router.get('/otherUserReviewlist', perApiLimiter(), otherUserReview);
-router.get('/fetchUserProducts', perApiLimiter(), fetchUserProducts);
 
 //Search Panel
 router.post('/createHistory', perApiLimiter(), createHistory);
