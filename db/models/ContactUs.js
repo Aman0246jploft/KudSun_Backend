@@ -16,10 +16,13 @@ const contactUsSchema = new Schema({
     },
 
     type: {
-        type: Schema.Types.ObjectId,
-        ref: 'SupportKey',
-        defalut: null
+        type: String
     },
+    // type: {
+    //     type: Schema.Types.ObjectId,
+    //     ref: 'SupportKey',
+    //     defalut: null
+    // },
     desc: {
         type: String,
         maxLength: 1200
