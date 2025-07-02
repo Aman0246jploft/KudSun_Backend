@@ -26,9 +26,9 @@ const create = async (req, res) => {
 
         const idFrontFile = req.files?.idDocumentFront?.[0];
         const selfieFile = req.files?.selfieWithId?.[0];
-        const idBackFile = req.files?.idDocumentBack?.[0];
+        // const idBackFile = req.files?.idDocumentBack?.[0];
 
-        const hasNewDocs = idFrontFile && selfieFile && idBackFile;
+        const hasNewDocs = idFrontFile && selfieFile ;
 
         // Case: existing record but no new docs
         if (existing) {
@@ -43,9 +43,9 @@ const create = async (req, res) => {
         // Upload files (required for new/retry)
         let idDocumentFrontUrl = idFrontFile ? await uploadImageCloudinary(idFrontFile, 'seller-verification') : null;
         let selfieWithIdUrl = selfieFile ? await uploadImageCloudinary(selfieFile, 'seller-verification') : null;
-        let idDocumentBackUrl = idBackFile ? await uploadImageCloudinary(idBackFile, 'seller-verification') : null;
+        // let idDocumentBackUrl = idBackFile ? await uploadImageCloudinary(idBackFile, 'seller-verification') : null;
 
-        if (!idDocumentFrontUrl || !selfieWithIdUrl || !idDocumentBackUrl) {
+        if (!idDocumentFrontUrl || !selfieWithIdUrl ) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'All documents are required to submit verification');
         }
 
@@ -55,7 +55,7 @@ const create = async (req, res) => {
             idNumber,
             idDocumentFrontUrl,
             selfieWithIdUrl,
-            idDocumentBackUrl,
+            // idDocumentBackUrl,
             verificationStatus: 'Pending',
         };
 
@@ -136,7 +136,7 @@ router.post('/create', perApiLimiter(),
     upload.fields([
         { name: 'idDocumentFront', maxCount: 1 },
         { name: 'selfieWithId', maxCount: 1 },
-        { name: 'idDocumentBack', maxCount: 1 }
+        // { name: 'idDocumentBack', maxCount: 1 }
     ]),
     create
 );
