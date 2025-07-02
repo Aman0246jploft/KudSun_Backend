@@ -3,7 +3,7 @@ const express = require('express');
 const multer = require('multer');
 const upload = multer();
 const router = express.Router();
-const { SellProduct, Order, Bid, SearchHistory, Follow, User, ProductComment, SellProductDraft, Category, ProductLike } = require('../../db');
+const { SellProduct, Bid, SearchHistory, Follow, User, ProductComment, SellProductDraft, Category, ProductLike, ProductReview } = require('../../db');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const { apiErrorRes, apiSuccessRes, toObjectId, formatTimeRemaining } = require('../../utils/globalFunction');
 const HTTP_STATUS = require('../../utils/statusCode');
@@ -1860,6 +1860,62 @@ const trending = async (req, res) => {
 
 
 
+
+const otherUserReview = async (req, res) => {
+    try {
+        const userId = req.query.userId;
+        if (!userId) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "userId query param is required");
+        }
+
+        // Parse pagination params, default values
+        const pageNo = parseInt(req.query.pageNo) || 1;
+        const size = parseInt(req.query.size) || 10;
+        const skip = (pageNo - 1) * size;
+
+        // Count total matching reviews for pagination metadata
+        const totalReviews = await ProductReview.countDocuments({
+            userId,
+            isDeleted: false,
+            isDisable: false
+        });
+
+        // Fetch paginated reviews
+        const reviews = await ProductReview.find({
+            userId: toObjectId(userId),
+            isDeleted: false,
+            isDisable: false
+        })
+            .skip(skip)
+            .limit(size)
+            .populate({
+                path: 'productId',
+                select: '_id title description price',
+            })
+            .populate({
+                path: 'userId',
+                select: 'userName profileImage provinceId districtId',
+                populate: [
+                    { path: 'provinceId', select: 'value' },
+                    { path: 'districtId', select: 'value' }
+                ]
+            })
+            .lean();
+        return apiSuccessRes(HTTP_STATUS.OK, res, `ProductReview List`, {
+            pageNo,
+            size,
+            total: totalReviews,
+            data: reviews,
+        });
+
+
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
+    }
+};
+
+
+
 router.post('/addSellerProduct', perApiLimiter(), upload.array('files', 10), addSellerProduct);
 
 router.post('/updateSellerProduct/:id', perApiLimiter(), upload.array('files', 10), updateSellerProduct);
@@ -1886,6 +1942,9 @@ router.get('/fetchCombinedProducts', perApiLimiter(), fetchCombinedProducts);
 // inside userProfile
 
 router.get('/fetchUserProducts', perApiLimiter(), fetchUserProducts);
+router.get('/otherUserReviewlist', perApiLimiter(), otherUserReview);
+router.get('/fetchUserProducts', perApiLimiter(), fetchUserProducts);
+
 //Search Panel
 router.post('/createHistory', perApiLimiter(), createHistory);
 router.post('/clearAllHistory', perApiLimiter(), clearAllHistory);
