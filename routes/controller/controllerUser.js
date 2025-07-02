@@ -1976,7 +1976,7 @@ const deleteAccount = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'User not found or already deleted');
         }
         user.data.isDeleted = true
-        await user.save();
+        await user.data.save();
         return apiSuccessRes(HTTP_STATUS.OK, res, 'Account deleted successfully');
     } catch (err) {
         console.error('updatePassword error:', err);
