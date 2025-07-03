@@ -491,6 +491,15 @@ const follow = async (req, res) => {
     try {
         let followedBy = req.user.userId
         let { userId } = req.body
+
+        if (String(followedBy) === String(userId)) {
+            return apiErrorRes(
+                HTTP_STATUS.BAD_REQUEST,
+                res,
+                "You cannot follow yourself"
+            );
+        }
+
         let followData = await getDocumentByQuery(Follow, { followedBy: toObjectId(followedBy), userId: toObjectId(userId) })
         if (followData.statusCode === CONSTANTS.SUCCESS) {
             await Follow.findByIdAndDelete(followData.data._id);
@@ -705,7 +714,7 @@ const getLikedThreads = async (req, res) => {
             // Lookup all comments for the thread
             {
                 $lookup: {
-                    from: "threadcomments",
+                    from: "ThreadComments",
                     localField: "_id",
                     foreignField: "thread",
                     as: "comments"
@@ -1890,7 +1899,8 @@ const getOtherProfile = async (req, res) => {
                 totalReviews,
                 province: user?.provinceId?.value,
                 district: user?.districtId?.value || null,
-                isFollow: Boolean(isFollow)
+                isFollow: Boolean(isFollow),
+                myAccount: userId.toString() == currentUser
 
             }
         );
