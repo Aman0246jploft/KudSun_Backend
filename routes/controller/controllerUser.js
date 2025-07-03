@@ -67,10 +67,10 @@ const requestOtp = async (req, res) => {
     const existingUser = await User.findOne({ phoneNumber });
     if (existingUser) {
 
-        if (user.isDisable) {
+        if (existingUser.isDisable) {
             return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, CONSTANTS_MSG.ACCOUNT_DISABLE);
         }
-        
+
         if (existingUser.isDeleted) {
             return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, CONSTANTS_MSG.ACCOUNT_DELETED);
         }
