@@ -268,13 +268,30 @@ const loginStepOne = async (req, res) => {
 
         const cleanedIdentifier = identifier.trim().toLowerCase();
 
-        const query = {
-            $or: [
-                { email: cleanedIdentifier },
-                { phoneNumber: identifier },
-                { userName: cleanedIdentifier }
-            ]
-        };
+        const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanedIdentifier);
+        const isPhoneNumber = /^\+?\d{7,15}$/.test(cleanedIdentifier);
+
+        let query = {};
+        let detectedType = "";
+        if (isEmail) {
+            query.email = cleanedIdentifier.toLowerCase();
+            detectedType = "email";
+        } else if (isPhoneNumber) {
+            query.phoneNumber = cleanedIdentifier;
+            detectedType = "phoneNumber";
+        } else {
+            query.userName = cleanedIdentifier.toLowerCase();
+            detectedType = "userName";
+        }
+
+
+        // const query = {
+        //     $or: [
+        //         { email: cleanedIdentifier },
+        //         { phoneNumber: identifier },
+        //         { userName: cleanedIdentifier }
+        //     ]
+        // };
 
         const user = await User.findOne(query);
 
@@ -290,8 +307,9 @@ const loginStepOne = async (req, res) => {
         }
 
         // No token needed here, frontend just proceeds with step 2
+        let obj = {token:null,...user.toJSON(),detectedType}
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "User verified, proceed with login", getUserResponse(user));
+        return apiSuccessRes(HTTP_STATUS.OK, res, "User verified, proceed with login",obj);
 
 
     } catch (error) {
