@@ -792,7 +792,6 @@ const requestResetOtp = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
-
 const verifyResetOtp = async (req, res) => {
     try {
         const { phoneNumber, otp } = req.body;
@@ -899,6 +898,119 @@ const resendResetOtp = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
+
+
+
+
+
+
+
+const requestResetOtpByEmail = async (req, res) => {
+    try {
+        const { email } = req.body;
+        if (!email) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Email is required");
+        }
+
+        const user = await User.findOne({ email });
+        if (!user) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User with this email does not exist");
+        }
+
+        const otp = process.env.NODE_ENV !== 'production' ? '123456' : generateOTP();
+        const redisValue = JSON.stringify({ otp, email });
+
+        await setKeyWithTime(`reset:${email}`, redisValue, 5 * 60);
+
+        // TODO: Send OTP via email (e.g., sendEmailOtp(email, otp))
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "OTP sent for password reset");
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    }
+};
+const verifyResetOtpByEmail = async (req, res) => {
+    try {
+        const { email, otp } = req.body;
+        if (!email || !otp) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Email and OTP are required");
+        }
+
+        const redisData = await getKey(`reset:${email}`);
+        if (redisData.statusCode !== CONSTANTS.SUCCESS) {
+            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "OTP expired or invalid");
+        }
+
+        const { otp: storedOtp } = JSON.parse(redisData.data);
+        if (otp !== storedOtp) {
+            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Invalid OTP");
+        }
+
+        await setKeyWithTime(`reset-verified:${email}`, 'true', 10 * 60);
+        await removeKey(`reset:${email}`);
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "OTP verified successfully");
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    }
+};
+const resetPasswordByEmail = async (req, res) => {
+    try {
+        const { email, newPassword, confirmPassword } = req.body;
+
+        const isVerified = await getKey(`reset-verified:${email}`);
+        if (isVerified.statusCode !== CONSTANTS.SUCCESS) {
+            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "OTP not verified or session expired");
+        }
+
+        if (!newPassword || !confirmPassword || newPassword !== confirmPassword) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "New password and confirm password must match");
+        }
+
+        const user = await User.findOne({ email });
+        if (!user) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
+        }
+
+        user.password = newPassword;
+        await user.save();
+
+        await removeKey(`reset-verified:${email}`);
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Password has been reset successfully");
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    }
+};
+const resendResetOtpByEmail = async (req, res) => {
+    try {
+        const { email } = req.body;
+        if (!email) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Email is required");
+        }
+
+        const user = await User.findOne({ email });
+        if (!user) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
+        }
+
+        const otp = process.env.NODE_ENV !== 'production' ? '123457' : generateOTP();
+        const redisValue = JSON.stringify({ otp, email });
+
+        await setKeyWithTime(`reset:${email}`, redisValue, 5 * 60);
+
+        // TODO: Send OTP via email (e.g., sendEmailOtp(email, otp))
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "OTP resent successfully");
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    }
+};
+
+
+
+
+
 
 const login = async (req, res) => {
     try {
@@ -2084,7 +2196,87 @@ const getBlockedUsers = async (req, res) => {
 
 
 
+const getUserNotificationSettings = async (req, res) => {
+    try {
+        const userId = req.user.userId;
 
+        // Try to find user selecting only the notification fields
+        let user = await User.findById(userId).select("dealChatnotification activityNotification alertNotification");
+
+        if (!user) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
+        }
+
+        // Check if any field is missing or undefined
+        let shouldUpdate = false;
+        const updateFields = {};
+
+        if (user.dealChatnotification === undefined) {
+            updateFields.dealChatnotification = true;
+            shouldUpdate = true;
+        }
+        if (user.activityNotification === undefined) {
+            updateFields.activityNotification = true;
+            shouldUpdate = true;
+        }
+        if (user.alertNotification === undefined) {
+            updateFields.alertNotification = true;
+            shouldUpdate = true;
+        }
+
+        if (shouldUpdate) {
+            user = await User.findByIdAndUpdate(
+                userId,
+                { $set: updateFields },
+                { new: true, select: "dealChatnotification activityNotification alertNotification" }
+            );
+        }
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Notification List", user);
+
+    } catch (err) {
+        return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json(apiErrorRes(CONSTANTS_MSG.INTERNAL_SERVER_ERROR));
+
+    }
+};
+
+
+
+
+const updateUserNotificationSettings = async (req, res) => {
+    try {
+        const userId = req.user.userId;
+
+        // Validation schema - only these three boolean fields allowed
+        const schema = Joi.object({
+            dealChatnotification: Joi.boolean().optional(),
+            activityNotification: Joi.boolean().optional(),
+            alertNotification: Joi.boolean().optional(),
+        });
+
+        const { error, value } = schema.validate(req.body);
+        if (error) {
+            return res.status(HTTP_STATUS.BAD_REQUEST).json(apiErrorRes(error.details[0].message));
+        }
+
+        // Update only those fields in user document
+        const updatedUser = await User.findByIdAndUpdate(
+            userId,
+            { $set: value },
+            { new: true, select: "dealChatnotification activityNotification alertNotification" }
+        );
+
+        if (!updatedUser) {
+            return res.status(HTTP_STATUS.NOT_FOUND).json(apiErrorRes("User not found"));
+        }
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Notification settings updated successfully", updatedUser);
+
+
+    } catch (err) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, CONSTANTS_MSG.INTERNAL_SERVER_ERROR);
+
+
+    }
+};
 
 //upload api 
 router.post('/upload', upload.single('file'), uploadfile);
@@ -2111,6 +2303,11 @@ router.post('/requestResetOtp', perApiLimiter(), upload.none(), requestResetOtp)
 router.post('/verifyResetOtp', perApiLimiter(), upload.none(), verifyResetOtp);
 router.post('/resetPassword', perApiLimiter(), upload.none(), resetPassword);
 router.post('/resendResetOtp', perApiLimiter(), upload.none(), resendResetOtp);
+//for email
+router.post('/requestResetOtpByEmail', perApiLimiter(), upload.none(), requestResetOtpByEmail);
+router.post('/verifyResetOtpByEmail', perApiLimiter(), upload.none(), verifyResetOtpByEmail);
+router.post('/resetPasswordByEmail', perApiLimiter(), upload.none(), resetPasswordByEmail);
+router.post('/resendResetOtpByEmail', perApiLimiter(), upload.none(), resendResetOtpByEmail);
 //
 router.post('/updatePassword', perApiLimiter(), upload.none(), updatePassword);
 router.post('/deleteAccount', perApiLimiter(), upload.none(), deleteAccount);
@@ -2154,6 +2351,18 @@ router.post('/adminChangeUserPassword', perApiLimiter(), upload.none(), adminCha
 
 router.post('/blockUser', perApiLimiter(), upload.none(), blockUser);
 router.get('/getBlockedUsers', perApiLimiter(), upload.none(), getBlockedUsers);
+
+
+router.get('/getUserNotificationSettings', perApiLimiter(), upload.none(), getUserNotificationSettings);
+router.post('/updateUserNotificationSettings', perApiLimiter(), upload.none(), updateUserNotificationSettings);
+
+
+
+
+
+
+
+//NotifiactionTable
 
 
 
