@@ -676,6 +676,7 @@ const showAuctionProducts = async (req, res) => {
         }
 
 
+
         if (tags) {
             const tagArray = Array.isArray(tags) ? tags : tags.split(',');
             filter.tags = { $in: tagArray };
@@ -698,6 +699,8 @@ const showAuctionProducts = async (req, res) => {
                 .lean(),
             SellProduct.countDocuments(filter)
         ]);
+        console.log("654654654", isTrending, filter)
+        console.log(products)
 
         if (products.length) {
             const categoryIds = [...new Set(products.map(p => p.categoryId?._id?.toString()))];
