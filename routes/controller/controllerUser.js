@@ -216,6 +216,18 @@ const completeRegistration = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Incomplete onboarding");
     }
 
+    userName = userName.trim().toLowerCase();
+    const usernameRegex = /^(?=.*[a-zA-Z])[a-zA-Z0-9@._]+$/;
+   if (!usernameRegex.test(userName)) {
+        return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Username must contain at least one letter and only include letters, numbers, '.', '_', or '@'.");
+    }
+
+    const existingUser = await User.findOne({ userName, _id: { $ne: user._id } });
+    if (existingUser) {
+        return apiErrorRes(HTTP_STATUS.CONFLICT, res, "Username is already in use.");
+    }
+
+
     if (req.file) {
         const imageUrl = await uploadImageCloudinary(req.file, 'profile-images');
         user.profileImage = imageUrl;
