@@ -1430,15 +1430,18 @@ const getProduct = async (req, res) => {
             .lean();
 
         const followersCount = await Follow.countDocuments({
-            userId: toObjectId(product.userId),
-            isDeleted: false,
-            isDisable: false
+            userId: toObjectId(product.userId?._id),
+            // isDeleted: false,
+            // isDisable: false
         });
+
+
+
 
         let isFollowing = false;
         if (loginUserId) {
             const followDoc = await Follow.findOne({
-                userId: toObjectId(product.userId),
+                userId: toObjectId(product.userId?._id),
                 followedBy: toObjectId(loginUserId),
                 isDeleted: false,
                 isDisable: false
@@ -1448,6 +1451,7 @@ const getProduct = async (req, res) => {
 
         product.seller = {
             ...user,
+            ...product.userId,
             followers: followersCount,
             isFollowing
         };
@@ -1517,7 +1521,8 @@ const getProduct = async (req, res) => {
                         as: 'author'
                     }
                 },
-                { $unwind: '$author' },
+                { $unwind: { path: '$author', preserveNullAndEmptyArrays: true } },
+
                 {
                     $lookup: {
                         from: 'ProductComment',
@@ -1540,7 +1545,12 @@ const getProduct = async (req, res) => {
                                     as: 'author'
                                 }
                             },
-                            { $unwind: '$author' },
+                            {
+                                $unwind: {
+                                    path: '$author',
+                                    preserveNullAndEmptyArrays: true
+                                }
+                            },
                             {
                                 $project: {
                                     _id: 1,
@@ -1583,6 +1593,21 @@ const getProduct = async (req, res) => {
             totalComments,
             topComments
         };
+
+        const latestProducts = await SellProduct.find({
+            userId: product.userId._id,
+            _id: { $ne: product._id },
+            isDeleted: false,
+            isDisable: false,
+            isDraft: { $ne: true },
+            isSold: false,
+        })
+            .sort({ createdAt: -1 })
+            .limit(10)
+            .select('fixedPrice auctionSettings productImages') // select fields you want to return
+            .lean();
+        product.latestUserProducts = latestProducts;
+
         console.log("topComments", topComments)
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Product fetched successfully.", product);

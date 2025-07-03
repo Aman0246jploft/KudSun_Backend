@@ -32,6 +32,13 @@ const publicRoutes = [
     `/api/v1/category/getSubCategoriesByCategoryId`,
     `/api/v1/appsetting/getVideo`,
 
+
+    `/api/v1/user/requestResetOtpByEmail`,
+    `/api/v1/user/verifyResetOtpByEmail`,
+    `/api/v1/user/resetPasswordByEmail`,
+    `/api/v1/user/resendResetOtpByEmail`,
+
+
     `/api/v1/user/getOnboardingStep`,
 
 
