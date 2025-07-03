@@ -146,7 +146,7 @@ const resendOtp = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "OTP already verified");
     }
 
-    const newOtp = process.env.NODE_ENV !== 'production' ? '123457' : generateOTP();
+    const newOtp = process.env.NODE_ENV !== 'production' ? '123456' : generateOTP();
     tempUser.tempOtp = newOtp;
     tempUser.tempOtpExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
     await tempUser.save();
@@ -497,7 +497,7 @@ const resendLoginOtp = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
         }
 
-        const newOtp = process.env.NODE_ENV !== 'production' ? '123457' : generateOTP();
+        const newOtp = process.env.NODE_ENV !== 'production' ? '123456' : generateOTP();
 
         user.loginOtp = newOtp;
         user.loginOtpExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
@@ -1029,7 +1029,7 @@ const resendResetOtp = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
         }
 
-        const otp = process.env.NODE_ENV !== 'production' ? '123457' : generateOTP();
+        const otp = process.env.NODE_ENV !== 'production' ? '123456' : generateOTP();
         const redisValue = JSON.stringify({ otp, phoneNumber });
 
         // Overwrite existing OTP and reset expiry
@@ -1166,7 +1166,7 @@ const resendResetOtpByEmail = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
         }
 
-        const otp = process.env.NODE_ENV !== 'production' ? '123457' : generateOTP();
+        const otp = process.env.NODE_ENV !== 'production' ? '123456' : generateOTP();
         const redisValue = JSON.stringify({ otp, email });
 
         await setKeyWithTime(`reset:${email}`, redisValue, 5 * 60);
@@ -1613,7 +1613,7 @@ const resendPhoneNumberUpdateOtp = async (req, res) => {
         }
 
         // Generate and resend OTP
-        const newOtp = process.env.NODE_ENV !== 'production' ? '123457' : generateOTP();
+        const newOtp = process.env.NODE_ENV !== 'production' ? '123456' : generateOTP();
 
         await setKeyWithTime(redisKey, newOtp, 5); // 5-minute TTL
 
