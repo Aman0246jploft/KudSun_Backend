@@ -708,7 +708,7 @@ const getThreads = async (req, res) => {
                 subCategoryNameMap[sub._id.toString()] = sub.name;
             });
         });
-            
+
 
         const enrichedThreads = threads.map(thread => {
             const tid = thread._id.toString();
@@ -900,16 +900,22 @@ const getRecentFollowedUsers = async (req, res) => {
         const size = parseInt(req.query.size) || 10;
         const skip = (pageNo - 1) * size;
 
-
-
         // Get followed user IDs
         const follows = await Follow.find({
             followedBy: currentUserId,
             isDeleted: false,
             isDisable: false
         }).select('userId');
+        const followedUserIdsRaw = follows.map(f => f.userId);
 
-        const followedUserIds = follows.map(f => f.userId);
+        const activeFollowedUsers = await User.find({
+            _id: { $in: followedUserIdsRaw },
+            isDeleted: false,
+            isDisable: false
+        }).select('_id');
+
+        const followedUserIds = activeFollowedUsers.map(user => user._id);
+
         if (!followedUserIds.length) {
             return apiSuccessRes(HTTP_STATUS.OK, res, "No followed users.", {
                 pageNo,
