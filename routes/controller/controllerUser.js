@@ -72,7 +72,7 @@ const requestOtp = async (req, res) => {
         }
 
         if (existingUser.isDeleted) {
-            return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, CONSTANTS_MSG.ACCOUNT_DELETED);
+            return apiErrorRes(HTTP_STATUS.UNPROCESSABLE_ENTITY, res, CONSTANTS_MSG.ACCOUNT_DELETED);
         }
 
 
@@ -276,7 +276,7 @@ const loginStepOne = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, CONSTANTS_MSG.ACCOUNT_DISABLE);
         }
         if (user.isDeleted) {
-            return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, CONSTANTS_MSG.ACCOUNT_DELETED);
+            return apiErrorRes(HTTP_STATUS.UNPROCESSABLE_ENTITY, res, CONSTANTS_MSG.ACCOUNT_DELETED);
         }
 
         // No token needed here, frontend just proceeds with step 2
@@ -402,7 +402,7 @@ const loginStepThreeVerifyOtp = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, CONSTANTS_MSG.ACCOUNT_DISABLE);
         }
         if (user.isDeleted) {
-            return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, CONSTANTS_MSG.ACCOUNT_DELETED);
+            return apiErrorRes(HTTP_STATUS.UNPROCESSABLE_ENTITY, res, CONSTANTS_MSG.ACCOUNT_DELETED);
         }
 
         if (!user.loginOtp || user.loginOtp !== otp) {
