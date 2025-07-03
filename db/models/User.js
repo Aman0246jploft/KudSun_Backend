@@ -176,9 +176,29 @@ UserSchema.pre('save', async function (next) {
 UserSchema.options.toJSON = {
     transform: function (doc, ret, options) {
         delete ret.__v;
-        delete ret.password; // Don't send password in JSON responses
+        delete ret.password;
+
+        // Manually ensure default values are included if undefined
+        ret.step ??= 1;
+        ret.tempOtp ??= null;
+        ret.profileImage ??= null;
+        ret.roleId ??= roleId.USER;
+        ret.fcmToken ??= null;
+        ret.isDisable ??= false;
+        ret.isDeleted ??= false;
+        ret.is_Verified_Seller ??= false;
+        ret.is_Id_verified ??= false;
+        ret.is_Preferred_seller ??= false;
+        ret.isLive ??= false;
+        ret.isFlagedReported ??= false;
+        ret.dealChatnotification ??= true;
+        ret.activityNotification ??= true;
+        ret.alertNotification ??= true;
+        ret.averageRatting ??= 0;
+
         return ret;
     }
 };
+
 
 module.exports = mongoose.model("User", UserSchema, "User"); 
