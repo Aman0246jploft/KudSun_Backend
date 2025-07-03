@@ -8,9 +8,11 @@ const http = require('http');
 const jwtVerification = require('./middlewares/jwtVerification');
 const requestLogger = require('./middlewares/requestLogger');
 const { setupSocket } = require('./config/socket');
+const path = require('path');
 const server = http.createServer(app); // Add this
 setupSocket(server)
 app.use(cors());
+app.use('/uploads', express.static(path.join(process.cwd(), 'public/uploads')));
 const { PORT, API_END_POINT_V1 } = process.env;
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));

@@ -7,6 +7,7 @@ const CONSTANTS = require('../utils/constants');
 
 
 const publicRoutes = [
+    "/uploads",
     '/api/v1/auth/register',
     '/api/v1/user/login',
     '/api/v1/user/requestOtp',
@@ -49,7 +50,10 @@ const publicRoutes = [
 
 function jwtVerification() {
     return (req, res, next) => {
-        const isPublic = publicRoutes.some(route => req.path.startsWith(route));
+        // const isPublic = publicRoutes.some(route => req.path.startsWith(route));
+        const isPublic = publicRoutes.some(route =>
+            req.path === route || req.path.startsWith(route + '/')
+        );
         if (isPublic) {
             return next(); // Allow public routes without JWT check
         }
