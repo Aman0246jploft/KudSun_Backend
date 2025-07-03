@@ -132,7 +132,7 @@ const getList = async (req, res) => {
         const [data, total] = await Promise.all([
             UserAddress.find(filter)
             .populate([{path:"provinceId",select:'_id value'},{path:"districtId",select:'_id value'}])
-                .sort({ createdAt: -1 }) // Newest first
+                .sort({ isActive:-1,createdAt: -1 }) // Newest first
                 .skip(skip)
                 .limit(size),
             UserAddress.countDocuments(filter)
