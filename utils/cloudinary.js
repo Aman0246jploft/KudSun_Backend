@@ -18,9 +18,24 @@ async function uploadImageCloudinary(file, userId) {
     try {
       const ext = path.extname(file.originalname).toLowerCase();
       const fileName = path.parse(file.originalname).name;
-      const publicId = `${fileName}`;
-      const resourceType = ['.pdf', '.doc', '.docx', '.txt'].includes(ext) ? 'raw' : 'image';
 
+      const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp'];
+      const videoExts = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.wmv'];
+      const audioExts = ['.mp3', '.wav', '.aac', '.ogg', '.m4a'];
+      const rawExts = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.zip', '.rar', '.7z', '.csv'];
+
+
+      let resourceType = 'auto'; // Default fallback
+
+      if (imageExts.includes(ext)) {
+        resourceType = 'image';
+      } else if (videoExts.includes(ext)) {
+        resourceType = 'video';
+      } else if (audioExts.includes(ext) || rawExts.includes(ext)) {
+        resourceType = 'raw';
+      }
+
+      const publicId = `${fileName}`;
       const readableStream = new stream.PassThrough();
       readableStream.end(file.buffer);
 
