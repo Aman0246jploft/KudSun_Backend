@@ -75,8 +75,6 @@ const requestOtp = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.UNPROCESSABLE_ENTITY, res, CONSTANTS_MSG.ACCOUNT_DELETED);
         }
 
-
-
         return apiErrorRes(HTTP_STATUS.OK, res, "Phone number already registered", {
             phoneNumber,
             step: existingUser.step || 5,  // 5 or whatever means completed
@@ -2339,6 +2337,7 @@ router.post('/loginStepOne', perApiLimiter(), upload.none(), loginStepOne);
 router.post('/loginStepTwo', perApiLimiter(), upload.none(), loginStepTwoPassword);
 router.post('/loginStepThree', perApiLimiter(), upload.none(), loginStepThreeVerifyOtp);
 router.post('/resendLoginOtp', perApiLimiter(), upload.none(), resendLoginOtp);
+
 router.post('/login', perApiLimiter(), upload.none(), validateRequest(loginSchema), login);
 router.post('/loginAsGuest', perApiLimiter(), upload.none(), loginAsGuest);
 
