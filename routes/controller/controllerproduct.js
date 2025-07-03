@@ -1397,8 +1397,28 @@ const getProduct = async (req, res) => {
         }
 
         const product = await SellProduct.findOne(query)
-            .populate('categoryId', 'name')
+            .populate([
+                {
+                    path: 'categoryId',
+                    select: 'name',
+                },
+                {
+                    path: 'userId',
+                    select: 'userName profileImage is_Id_verified is_Preferred_seller isLive averageRatting provinceId districtId',
+                    populate: [
+                        {
+                            path: 'provinceId',
+                            select: 'value', // adjust as needed
+                        },
+                        {
+                            path: 'districtId',
+                            select: 'value', // adjust as needed
+                        },
+                    ],
+                },
+            ])
             .lean();
+
 
         if (!product) {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Product not found or unavailable.");
@@ -1406,7 +1426,7 @@ const getProduct = async (req, res) => {
 
         // --- Seller Info
         const user = await User.findById(product.userId)
-            .select('userName profileImage is_Id_verified is_Preferred_seller isLive')
+            .select('userName profileImage is_Id_verified is_Preferred_seller isLive averageRatting ')
             .lean();
 
         const followersCount = await Follow.countDocuments({

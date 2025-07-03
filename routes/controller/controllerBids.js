@@ -260,8 +260,90 @@ const myBids = async (req, res) => {
     }
 };
 
+
+
+
+
+
+
+
+
+const getBidInfo = async (req, res) => {
+    try {
+        const { productId } = req.params;
+        const currentUser = req.user?.userId;
+
+        const product = await SellProduct.findOne({ _id: productId, isDeleted: false, isDisable: false }).lean();
+        if (!product) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Product not found or not available');
+        }
+
+        if (product.saleType !== SALE_TYPE.AUCTION) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'This product is not an auction type');
+        }
+
+        const { auctionSettings = {} } = product;
+        const { biddingEndsAt, startingPrice, biddingIncrementPrice } = auctionSettings;
+
+        if (!biddingEndsAt || startingPrice == null) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Auction settings are incomplete');
+        }
+
+        const auctionEnd = new Date(biddingEndsAt); // already UTC
+        const now = new Date(); // UTC
+        const timeLeftSeconds = Math.max(0, Math.floor((auctionEnd - now) / 1000));
+
+        const highestBid = await Bid.findOne({ productId }).sort({ amount: -1 }).lean();
+
+        let bids = await Bid.find({ productId })
+            .populate("userId", "userName profileImage  ")
+            .select('userId _id amount currentlyWinning placedAt yourBid')
+            .sort({ amount: -1 })
+            .lean();
+
+        // Mark bids by current user
+        if (currentUser) {
+            bids = bids.map(bid => ({
+                ...bid,
+                yourBid: String(bid.userId._id) === String(currentUser),
+            }));
+        }
+
+        const currentBid = highestBid?.amount || startingPrice;
+        const bidIncrement = biddingIncrementPrice || 1;
+
+        const data = {
+            currentBid,
+            bidIncrement,
+            bids,
+            timeLeftSeconds, // in seconds (UTC)
+            biddingEndsAt: auctionEnd.toISOString(), // optional: full UTC timestamp
+        };
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, 'Auction bid info', data);
+
+    } catch (err) {
+        console.error("Error in getBidInfo:", err);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Internal server error");
+    }
+};
+
+
+
+
+
+
+
+
 router.post('/placeBid', perApiLimiter(), upload.none(), validateRequest(bidSchema), placeBid);
 router.get('/productBid/:id', perApiLimiter(), upload.none(), productBidList);
 router.get('/myBids', perApiLimiter(), upload.none(), myBids);
+
+router.get('/getBidInfo/:productId', perApiLimiter(), upload.none(), getBidInfo);
+
+
+
+
+
 
 module.exports = router;

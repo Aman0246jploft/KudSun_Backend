@@ -133,7 +133,7 @@ const getList = async (req, res) => {
 
         const [data, total] = await Promise.all([
             SellerBank.find(filter)
-                .sort({ createdAt: -1 }) // Newest first
+                .sort({ isActive: -1, createdAt: -1 }) // Newest first
                 .skip(skip)
                 .limit(size),
             SellerBank.countDocuments(filter)

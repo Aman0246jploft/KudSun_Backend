@@ -120,7 +120,8 @@ const UserSchema = new Schema({
     },
     provinceId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Location"
+        ref: "Location",
+        
 
     },
     districtId: {
@@ -138,6 +139,10 @@ const UserSchema = new Schema({
     alertNotification: {
         type: Boolean,
         defaut: true
+    },
+    averageRatting:{
+        type:Number,
+        default:0
     }
 
 }, {
