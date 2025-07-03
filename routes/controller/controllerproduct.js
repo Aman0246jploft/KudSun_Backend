@@ -1435,9 +1435,6 @@ const getProduct = async (req, res) => {
             // isDisable: false
         });
 
-
-
-
         let isFollowing = false;
         if (loginUserId) {
             const followDoc = await Follow.findOne({
@@ -1608,7 +1605,39 @@ const getProduct = async (req, res) => {
             .lean();
         product.latestUserProducts = latestProducts;
 
-        console.log("topComments", topComments)
+
+        const recommendedProducts = await SellProduct.find({
+            categoryId: product?.categoryId?._id || product?.categoryId || product?.subCategoryId,
+            _id: { $ne: product._id },
+            isDeleted: false,
+            isDisable: false,
+            isDraft: { $ne: true },
+        })
+            .sort({ createdAt: -1 })
+            .limit(10)
+            .select('fixedPrice auctionSettings productImages title saleType userId') // include userId to populate it
+            .populate({
+                path: 'userId',
+                select: 'averageRatting userName isLive profileImage is_Verified_Seller is_Id_verified'
+            })
+            .lean();
+
+        product.recommendedProducts = recommendedProducts;
+
+        const totalLike = await ProductLike.countDocuments({
+            productId: toObjectId(id)
+        })
+        if (loginUserId) {
+
+            const isLike = await ProductLike.exists({
+                productId: toObjectId(id),
+                likeBy: toObjectId(loginUserId)
+            })
+            product.isLike = !!isLike
+
+        }
+
+        product.totalLike = totalLike
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Product fetched successfully.", product);
     } catch (error) {
