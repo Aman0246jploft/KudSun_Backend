@@ -66,6 +66,17 @@ const requestOtp = async (req, res) => {
     // Check if user exists in main User collection
     const existingUser = await User.findOne({ phoneNumber });
     if (existingUser) {
+
+        if (user.isDisable) {
+            return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, CONSTANTS_MSG.ACCOUNT_DISABLE);
+        }
+        
+        if (existingUser.isDeleted) {
+            return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, CONSTANTS_MSG.ACCOUNT_DELETED);
+        }
+
+
+
         return apiErrorRes(HTTP_STATUS.OK, res, "Phone number already registered", {
             phoneNumber,
             step: existingUser.step || 5,  // 5 or whatever means completed
