@@ -218,7 +218,7 @@ const completeRegistration = async (req, res) => {
 
     userName = userName.trim().toLowerCase();
     const usernameRegex = /^(?=.*[a-zA-Z])[a-zA-Z0-9@._]+$/;
-   if (!usernameRegex.test(userName)) {
+    if (!usernameRegex.test(userName)) {
         return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Username must contain at least one letter and only include letters, numbers, '.', '_', or '@'.");
     }
 
