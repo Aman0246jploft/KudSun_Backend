@@ -97,8 +97,20 @@ const getFAQs = async (req, res) => {
   }
 };
 
+const getVideo = async (req, res) => {
+  try {
+    // Get all documents first
+    const allSettings = await AppSetting.find().select('value key');
+
+    // Filter to find the specific documents
+    const Auction_rules = allSettings.find(setting => setting.key === "11videoXYZ");
 
 
+    return apiSuccessRes(HTTP_STATUS.OK, res, "VideoUrl", Auction_rules);
+  } catch (error) {
+    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+  }
+};
 
 
 
@@ -106,6 +118,8 @@ router.post('/create', upload.none(), globalCrudController.create(AppSetting));
 router.get('/termAndPolicy', termAndPolicy);
 router.get('/auctionRule', auctionRule);
 router.get('/getFAQs', getFAQs);
+
+router.get('/getVideo', getVideo);
 
 
 router.post('/update', upload.none(), globalCrudController.update(AppSetting));
