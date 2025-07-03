@@ -209,7 +209,7 @@ const getOnboardingStep = async (req, res) => {
     });
 };
 const completeRegistration = async (req, res) => {
-    const { phoneNumber, userName, gender, dob, fcmToken } = req.body;
+    let { phoneNumber, userName, gender, dob, fcmToken } = req.body;
 
     const user = await User.findOne({ phoneNumber });
     if (!user) {
