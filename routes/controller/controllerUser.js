@@ -614,7 +614,7 @@ const getLikedProducts = async (req, res) => {
         const sortBy = req.query.sortBy === "fixedPrice" ? "fixedPrice" : "createdAt";
         const sortOrder = req.query.sortOrder === "asc" ? 1 : -1;
 
-        // Get liked product IDs for the user
+        // Step 1: Get liked product IDs for the user
         const likedDocs = await ProductLike.find({
             likeBy: toObjectId(userId),
             isDisable: false,
@@ -622,6 +622,15 @@ const getLikedProducts = async (req, res) => {
         }).select("productId");
 
         const likedProductIds = likedDocs.map((doc) => doc.productId);
+
+        if (likedProductIds.length === 0) {
+            return apiSuccessRes(HTTP_STATUS.OK, res, "No liked products found", {
+                products: [],
+                total: 0,
+                pageNo: page,
+                size: limit
+            });
+        }
 
         const query = {
             _id: { $in: likedProductIds },
@@ -631,14 +640,87 @@ const getLikedProducts = async (req, res) => {
 
         const totalCount = await SellProduct.countDocuments(query);
 
-        const products = await SellProduct.find(query)
-            .sort({ [sortBy]: sortOrder })
-            .skip(skip)
-            .limit(limit)
-            .populate({ path: "userId", select: "userName profileImage" })
-            .lean();
+        // Step 2: Aggregate product data with comment stats and user info
+        const products = await SellProduct.aggregate([
+            { $match: query },
+            { $sort: { [sortBy]: sortOrder } },
+            { $skip: skip },
+            { $limit: limit },
 
-        // For each product that is auction, fetch bid count
+            // Lookup user info
+            {
+                $lookup: {
+                    from: "User",
+                    localField: "userId",
+                    foreignField: "_id",
+                    as: "user"
+                }
+            },
+            {
+                $addFields: {
+                    userId: { $arrayElemAt: ["$user", 0] }
+                }
+            },
+            { $unset: "user" },
+
+            // Lookup comments and associated products
+            {
+                $lookup: {
+                    from: "ProductComment",
+                    let: { productId: "$_id" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: { $eq: ["$product", "$$productId"] },
+                                isDisable: false,
+                                isDeleted: false
+                            }
+                        },
+                        {
+                            $group: {
+                                _id: null,
+                                commentCount: { $sum: 1 },
+                                associatedProducts: { $push: "$associatedProducts" }
+                            }
+                        },
+                        {
+                            $project: {
+                                commentCount: 1,
+                                associatedProductCount: {
+                                    $size: {
+                                        $filter: {
+                                            input: {
+                                                $reduce: {
+                                                    input: "$associatedProducts",
+                                                    initialValue: [],
+                                                    in: { $concatArrays: ["$$value", "$$this"] }
+                                                }
+                                            },
+                                            as: "item",
+                                            cond: { $ne: ["$$item", null] }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    ],
+                    as: "commentStats"
+                }
+            },
+            {
+                $addFields: {
+                    commentCount: {
+                        $ifNull: [{ $arrayElemAt: ["$commentStats.commentCount", 0] }, 0]
+                    },
+                    associatedProductCount: {
+                        $ifNull: [{ $arrayElemAt: ["$commentStats.associatedProductCount", 0] }, 0]
+                    }
+                }
+            },
+            { $unset: "commentStats" }
+        ]);
+
+        // Step 3: Add totalBids per product (if auction type)
         const productsWithBidCount = await Promise.all(
             products.map(async (product) => {
                 if (product.saleType === SALE_TYPE.AUCTION) {
@@ -659,6 +741,7 @@ const getLikedProducts = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error.message);
     }
 };
+
 
 const getLikedThreads = async (req, res) => {
     try {
@@ -711,55 +794,67 @@ const getLikedThreads = async (req, res) => {
                 $unset: "user"  // Remove the original array
             },
 
-            // Lookup all comments for the thread
+
+
             {
                 $lookup: {
-                    from: "ThreadComments",
-                    localField: "_id",
-                    foreignField: "thread",
-                    as: "comments"
-                }
-            },
-
-            // Add commentCount field
-            {
-                $addFields: {
-                    commentCount: { $size: "$comments" }
-                }
-            },
-
-            // Unwind comments to get associatedProducts
-            { $unwind: { path: "$comments", preserveNullAndEmptyArrays: true } },
-
-            // Unwind associatedProducts from each comment
-            { $unwind: { path: "$comments.associatedProducts", preserveNullAndEmptyArrays: true } },
-
-            // Group back to thread level, keep entire thread doc as 'threadDoc'
-            {
-                $group: {
-                    _id: "$_id",
-                    threadDoc: { $first: "$$ROOT" },
-                    associatedProductsSet: { $addToSet: "$comments.associatedProducts" }
-                }
-            },
-
-            // Add associatedProductCount field
-            {
-                $addFields: {
-                    "threadDoc.associatedProductCount": {
-                        $size: {
-                            $filter: {
-                                input: "$associatedProductsSet",
-                                as: "prod",
-                                cond: { $ne: ["$$prod", null] }
+                    from: "ThreadComment",
+                    let: { threadId: "$_id" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: { $eq: ["$thread", "$$threadId"] },
+                                isDisable: false,
+                                isDeleted: false
+                            }
+                        },
+                        {
+                            $group: {
+                                _id: null,
+                                commentCount: { $sum: 1 },
+                                associatedProducts: {
+                                    $push: "$associatedProducts"
+                                }
+                            }
+                        },
+                        {
+                            $project: {
+                                commentCount: 1,
+                                associatedProductCount: {
+                                    $size: {
+                                        $filter: {
+                                            input: {
+                                                $reduce: {
+                                                    input: "$associatedProducts",
+                                                    initialValue: [],
+                                                    in: { $concatArrays: ["$$value", "$$this"] }
+                                                }
+                                            },
+                                            as: "item",
+                                            cond: { $ne: ["$$item", null] }
+                                        }
+                                    }
+                                }
                             }
                         }
+                    ],
+                    as: "commentStats"
+                }
+            },
+            {
+                $addFields: {
+                    commentCount: {
+                        $ifNull: [{ $arrayElemAt: ["$commentStats.commentCount", 0] }, 0]
+                    },
+                    associatedProductCount: {
+                        $ifNull: [{ $arrayElemAt: ["$commentStats.associatedProductCount", 0] }, 0]
                     }
                 }
             },
+            {
+                $unset: "commentStats"
+            }
 
-            // Replace root to output full thread doc with added fields
-            { $replaceRoot: { newRoot: "$threadDoc" } }
         ];
 
         // Then add sorting, pagination as before
