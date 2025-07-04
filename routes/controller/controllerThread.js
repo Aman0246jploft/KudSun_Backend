@@ -418,7 +418,7 @@ const associatedProductByThreadId = async (req, res) => {
         const productWithBidInfo = await Promise.all(products.map(async (product) => {
             let bidCount = 0;
             if (product.saleType === SALE_TYPE.AUCTION) {
-                bidCount = await Bid.countDocuments({ productId: toObjectId(product._id) });
+                bidCount = await Bid.countDocuments({ productId: toObjectId(product?._id) });
             }
 
             return {
@@ -464,7 +464,7 @@ const getThreadComments = async (req, res) => {
             .populate('associatedProducts')
             .lean();
 
-        const commentIds = comments.map(comment => comment._id);
+        const commentIds = comments.map(comment => comment?._id);
 
         // Fetch all replies for these top-level comments
         const replies = await ThreadComment.find({ parent: { $in: commentIds } })
@@ -484,7 +484,7 @@ const getThreadComments = async (req, res) => {
         // Attach replies to each comment
         const enrichedComments = comments.map(comment => ({
             ...comment,
-            replies: replyMap[comment._id.toString()] || [],
+            replies: replyMap[comment?._id.toString()] || [],
         }));
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Comments fetched successfully", {
@@ -529,11 +529,11 @@ const getCommentByParentId = async (req, res) => {
         const enrichedReplies = await Promise.all(
             replies.map(async (reply) => {
                 const totalRepliesCount = await ThreadComment.countDocuments({
-                    parent: reply._id,
+                    parent: reply?._id,
                 });
 
                 const firstReply = await ThreadComment.findOne({
-                    parent: reply._id,
+                    parent: reply?._id,
                 })
                     .sort({ createdAt: 1 })
                     .populate("author", "userName profileImage")
@@ -544,7 +544,7 @@ const getCommentByParentId = async (req, res) => {
                     totalReplies: totalRepliesCount,
                     firstReply: firstReply
                         ? {
-                            _id: firstReply._id,
+                            _id: firstReply?._id,
                             content: firstReply.content,
                             author: firstReply.author,
                             createdAt: firstReply.createdAt,
@@ -639,7 +639,7 @@ const getThreads = async (req, res) => {
             .lean();
 
 
-        const threadIds = threads.map(t => t._id);
+        const threadIds = threads.map(t => t?._id);
         const userIds = [...new Set(threads.map(t => t.userId?._id?.toString()).filter(Boolean))];
 
         const [followerCounts, commentCounts, likeCounts, productCounts] = await Promise.all([
@@ -679,10 +679,10 @@ const getThreads = async (req, res) => {
             ])
         ]);
 
-        const followerMap = Object.fromEntries(followerCounts.map(f => [f._id.toString(), f.count]));
-        const commentMap = Object.fromEntries(commentCounts.map(c => [c._id.toString(), c.count]));
-        const likeMap = Object.fromEntries(likeCounts.map(l => [l._id.toString(), l.count]));
-        const productMap = Object.fromEntries(productCounts.map(p => [p._id.toString(), p.count]));
+        const followerMap = Object.fromEntries(followerCounts.map(f => [f?._id.toString(), f.count]));
+        const commentMap = Object.fromEntries(commentCounts.map(c => [c?._id.toString(), c.count]));
+        const likeMap = Object.fromEntries(likeCounts.map(l => [l?._id.toString(), l.count]));
+        const productMap = Object.fromEntries(productCounts.map(p => [p?._id.toString(), p.count]));
 
         let currentUserId = req.user?.userId?.toString();
 
@@ -711,7 +711,7 @@ const getThreads = async (req, res) => {
 
 
         const enrichedThreads = threads.map(thread => {
-            const tid = thread._id.toString();
+            const tid = thread?._id.toString();
             const uid = thread.userId?._id?.toString() || '';
 
 
@@ -993,80 +993,156 @@ const getThreadById = async (req, res) => {
                 }
             }
         ]);
-const recommendedThreads = await Thread.aggregate([
-  {
-    $match: {
-      _id: { $ne: threadObjectId },
-      isDeleted: false,
-      $or: [
-        { categoryId: thread.categoryId?._id || thread.categoryId },
-        { subCategoryId: thread.subCategoryId }
-      ]
-    }
-  },
-  { $sort: { createdAt: -1 } },
-  { $limit: 10 },
-  {
-    $lookup: {
-      from: "User",
-      localField: "userId",
-      foreignField: "_id",
-      as: "user"
-    }
-  },
-  { $unwind: "$user" },
-  {
-    $lookup: {
-      from: "ThreadComment",
-      localField: "_id",
-      foreignField: "thread",
-      as: "comments"
-    }
-  },
-  {
-    $lookup: {
-      from: "ThreadLike",
-      let: { threadId: "$_id" },
-      pipeline: [
-        { $match: { $expr: { $eq: ["$threadId", "$$threadId"] }, isDeleted: false, isDisable: false } },
-        { $count: "count" }
-      ],
-      as: "likeCount"
-    }
-  },
-  {
-    $lookup: {
-      from: "SellProduct",
-      localField: "associatedProducts",
-      foreignField: "_id",
-      as: "products"
-    }
-  },
-  {
-    $project: {
-      _id: 1,
-      title: 1,
-      description: 1,
-      minBudget: 1,
-      maxBudget: 1,
-      createdAt: 1,
-      tags: 1,
-      user: {
-        _id: "$user._id",
-        userName: "$user.userName",
-        profileImage: "$user.profileImage",
-        isLive: "$user.isLive",
-        is_Id_verified: "$user.is_Id_verified",
-        is_Verified_Seller: "$user.is_Verified_Seller",
-        provinceId: "$user.provinceId",
-        districtId: "$user.districtId"
-      },
-      commentCount: { $size: "$comments" },
-      likeCount: { $ifNull: [{ $arrayElemAt: ["$likeCount.count", 0] }, 0] },
-      productCount: { $size: "$products" }
-    }
-  }
-]);
+        const recommendedThreads = await Thread.aggregate([
+            {
+                $match: {
+                    _id: { $ne: threadObjectId },
+                    isDeleted: false,
+                    $or: [
+                        { categoryId: thread.categoryId?._id || thread.categoryId },
+                        { subCategoryId: thread.subCategoryId }
+                    ]
+                }
+            },
+            { $sort: { createdAt: -1 } },
+            { $limit: 10 },
+
+            // Lookup user
+            {
+                $lookup: {
+                    from: "User",
+                    localField: "userId",
+                    foreignField: "_id",
+                    as: "user"
+                }
+            },
+            { $unwind: "$user" },
+
+            // Lookup likes
+            {
+                $lookup: {
+                    from: "ThreadLike",
+                    let: { threadId: "$_id" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: { $eq: ["$threadId", "$$threadId"] },
+                                isDeleted: false,
+                                isDisable: false
+                            }
+                        },
+                        { $group: { _id: null, count: { $sum: 1 } } }
+                    ],
+                    as: "likeStats"
+                }
+            },
+
+            // Lookup comments
+            {
+                $lookup: {
+                    from: "ThreadComment",
+                    let: { threadId: "$_id" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: { $eq: ["$thread", "$$threadId"] },
+                                parent: null
+                            }
+                        },
+                        { $group: { _id: null, count: { $sum: 1 } } }
+                    ],
+                    as: "commentStats"
+                }
+            },
+
+            // Lookup if current user liked this thread
+            ...(currentUserId ? [{
+                $lookup: {
+                    from: "ThreadLike",
+                    let: { threadId: "$_id" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$threadId", "$$threadId"] },
+                                        { $eq: ["$likeBy", toObjectId(currentUserId)] }
+                                    ]
+                                },
+                                isDeleted: false,
+                                isDisable: false
+                            }
+                        },
+                        { $limit: 1 }
+                    ],
+                    as: "likedByUser"
+                }
+            }] : []),
+
+            // Lookup total associated products from comments
+            {
+                $lookup: {
+                    from: "ThreadComment",
+                    let: { threadId: "$_id" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: { $eq: ["$thread", "$$threadId"] },
+                                isDeleted: false
+                            }
+                        },
+                        { $project: { associatedProducts: 1 } },
+                        { $unwind: "$associatedProducts" },
+                        {
+                            $group: {
+                                _id: null,
+                                totalAssociatedProducts: { $sum: 1 }
+                            }
+                        }
+                    ],
+                    as: "commentProductStats"
+                }
+            },
+
+            // Final projection
+            {
+                $project: {
+                    _id: 1,
+                    title: 1,
+                    description: 1,
+                    budgetRange: 1,
+                    createdAt: 1,
+                    budgetFlexible: 1,
+                    tags: 1,
+
+                    user: {
+                        _id: "$user._id",
+                        userName: "$user.userName",
+                        profileImage: "$user.profileImage",
+                        isLive: "$user.isLive",
+                        is_Id_verified: "$user.is_Id_verified",
+                        is_Verified_Seller: "$user.is_Verified_Seller",
+                        provinceId: "$user.provinceId",
+                        districtId: "$user.districtId"
+                    },
+
+                    totalLikes: { $ifNull: [{ $arrayElemAt: ["$likeStats.count", 0] }, 0] },
+                    totalComments: { $ifNull: [{ $arrayElemAt: ["$commentStats.count", 0] }, 0] },
+                    isLiked: {
+                        $cond: {
+                            if: { $gt: [{ $size: "$likedByUser" }, 0] },
+                            then: true,
+                            else: false
+                        }
+                    },
+                    productCount: {
+                        $ifNull: [{ $arrayElemAt: ["$commentProductStats.totalAssociatedProducts", 0] }, 0]
+                    }
+                }
+            }
+        ]);
+
+
 
 
 
@@ -1164,7 +1240,7 @@ const getFollowedUsersThreads = async (req, res) => {
             .select(' -__v')
             .lean();
 
-        const threadIds = threads.map(t => t._id);
+        const threadIds = threads.map(t => t?._id);
         const userIds = [...new Set(threads.map(t => t.userId?._id?.toString()).filter(Boolean))];
 
         const [followerCounts, commentCounts, likeCounts, productCounts] = await Promise.all([
@@ -1204,13 +1280,13 @@ const getFollowedUsersThreads = async (req, res) => {
             ])
         ]);
 
-        const followerMap = Object.fromEntries(followerCounts.map(f => [f._id.toString(), f.count]));
-        const commentMap = Object.fromEntries(commentCounts.map(c => [c._id.toString(), c.count]));
-        const likeMap = Object.fromEntries(likeCounts.map(l => [l._id.toString(), l.count]));
-        const productMap = Object.fromEntries(productCounts.map(p => [p._id.toString(), p.count]));
+        const followerMap = Object.fromEntries(followerCounts.map(f => [f?._id.toString(), f.count]));
+        const commentMap = Object.fromEntries(commentCounts.map(c => [c?._id.toString(), c.count]));
+        const likeMap = Object.fromEntries(likeCounts.map(l => [l?._id.toString(), l.count]));
+        const productMap = Object.fromEntries(productCounts.map(p => [p?._id.toString(), p.count]));
 
         const enrichedThreads = threads.map(thread => {
-            const tid = thread._id.toString();
+            const tid = thread?._id.toString();
             const uid = thread.userId?._id?.toString() || '';
 
             return {
@@ -1260,7 +1336,7 @@ const getRecentFollowedUsers = async (req, res) => {
             isDisable: false
         }).select('_id');
 
-        const followedUserIds = activeFollowedUsers.map(user => user._id);
+        const followedUserIds = activeFollowedUsers.map(user => user?._id);
 
         if (!followedUserIds.length) {
             return apiSuccessRes(HTTP_STATUS.OK, res, "No followed users.", {
