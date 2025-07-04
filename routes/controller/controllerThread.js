@@ -746,6 +746,352 @@ const getThreads = async (req, res) => {
 };
 
 
+
+const getThreadById = async (req, res) => {
+    try {
+        const { threadId } = req.params;
+        if (!mongoose.Types.ObjectId.isValid(threadId)) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid thread ID");
+        }
+
+        const thread = await Thread.findOne({ _id: threadId, isDeleted: false })
+            .populate({
+                path: 'userId',
+                select: 'userName profileImage isLive is_Id_verified is_Preferred_seller provinceId districtId',
+                populate: [
+                    { path: 'provinceId', select: 'value' },
+                    { path: 'districtId', select: 'value' }
+                ]
+            })
+            .populate('categoryId', 'name subCategoryId')
+            .select('-__v')
+            .lean();
+
+        if (!thread) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Thread not found");
+        }
+
+        const threadObjectId = toObjectId(threadId);
+        const userId = thread.userId?._id?.toString();
+        const currentUserId = req.user?.userId?.toString();
+
+        const [followerCount, commentCount, likeCount, productCount, likedByUser] = await Promise.all([
+            Follow.countDocuments({ userId, isDeleted: false, isDisable: false }),
+            ThreadComment.countDocuments({ thread: threadObjectId, parent: null }),
+            ThreadLike.countDocuments({ threadId: threadObjectId, isDeleted: false, isDisable: false }),
+            ThreadComment.aggregate([
+                { $match: { thread: threadObjectId, associatedProducts: { $exists: true, $not: { $size: 0 } } } },
+                {
+                    $group: {
+                        _id: null,
+                        productSet: { $addToSet: "$associatedProducts" }
+                    }
+                },
+                {
+                    $project: {
+                        count: {
+                            $size: {
+                                $reduce: {
+                                    input: "$productSet",
+                                    initialValue: [],
+                                    in: { $setUnion: ["$$value", "$$this"] }
+                                }
+                            }
+                        }
+                    }
+                }
+            ]),
+            currentUserId
+                ? ThreadLike.exists({
+                    threadId: threadObjectId,
+                    likeBy: toObjectId(currentUserId)
+                })
+                : false
+        ]);
+
+
+        let isFollow = false;
+        if (currentUserId && userId) {
+            isFollow = await Follow.exists({
+                userId: toObjectId(userId),
+                followedBy: toObjectId(currentUserId),
+                isDeleted: false,
+                isDisable: false
+            });
+        }
+
+        // Get subcategory name from category
+        let subCategoryName = null;
+        if (thread.subCategoryId && thread.categoryId?.subCategoryId?.length) {
+            const sub = thread.categoryId.subCategoryId.find(
+                s => s._id.toString() === thread.subCategoryId.toString()
+            );
+            if (sub) subCategoryName = sub.name;
+        }
+
+
+        const topComments = await ThreadComment.aggregate([
+            { $match: { thread: threadObjectId, parent: null } },
+            { $sort: { createdAt: -1 } },
+            { $limit: 2 },
+            {
+                $lookup: {
+                    from: "User",
+                    localField: "author",
+                    foreignField: "_id",
+                    as: "author"
+                }
+            },
+            { $unwind: "$author" },
+            {
+                $lookup: {
+                    from: "SellProduct",
+                    localField: "associatedProducts",
+                    foreignField: "_id",
+                    as: "associatedProducts"
+                }
+            },
+            {
+                $lookup: {
+                    from: "ThreadComment",
+                    let: { parentId: "$_id" },
+                    pipeline: [
+                        { $match: { $expr: { $eq: ["$parent", "$$parentId"] } } },
+                        { $sort: { createdAt: -1 } },
+                        { $limit: 1 },
+                        {
+                            $lookup: {
+                                from: "User",
+                                localField: "author",
+                                foreignField: "_id",
+                                as: "author"
+                            }
+                        },
+                        { $unwind: "$author" },
+                        {
+                            $lookup: {
+                                from: "SellProduct",
+                                localField: "associatedProducts",
+                                foreignField: "_id",
+                                as: "associatedProducts"
+                            }
+                        }
+                    ],
+                    as: "topReply"
+                }
+            },
+            {
+                $lookup: {
+                    from: "ThreadComment",
+                    let: { parentId: "$_id" },
+                    pipeline: [
+                        { $match: { $expr: { $eq: ["$parent", "$$parentId"] } } },
+                        { $count: "totalReplies" }
+                    ],
+                    as: "replyCount"
+                }
+            },
+            {
+                $addFields: {
+                    totalReplies: { $ifNull: [{ $arrayElemAt: ["$replyCount.totalReplies", 0] }, 0] }
+                }
+            },
+            {
+                $project: {
+                    _id: 1,
+                    content: 1,
+                    createdAt: 1,
+                    updatedAt: 1,
+                    associatedProducts: {
+                        _id: 1,
+                        title: 1,
+                        description: 1,
+                        fixedPrice: 1,
+                        isSold: 1
+                    },
+                    author: {
+                        _id: 1,
+                        userName: 1,
+                        profileImage: 1,
+                        isLive: 1,
+                        is_Id_verified: 1,
+                        is_Verified_Seller: 1
+                    },
+                    topReply: {
+                        _id: 1,
+                        content: 1,
+                        createdAt: 1,
+                        associatedProducts: {
+                            _id: 1,
+                            title: 1,
+                            description: 1,
+                            fixedPrice: 1,
+                            isSold: 1
+                        },
+                        author: {
+                            _id: 1,
+                            userName: 1,
+                            profileImage: 1,
+                            isLive: 1,
+                            is_Id_verified: 1,
+                            is_Verified_Seller: 1
+                        }
+                    },
+                    totalReplies: 1
+                }
+            }
+        ]);
+
+
+
+        // 1. Gather all associated product IDs from thread comments
+        const allAssociatedProductIdsAgg = await ThreadComment.aggregate([
+            { $match: { thread: threadObjectId } },
+            { $project: { associatedProducts: 1 } },
+            { $unwind: "$associatedProducts" },
+            { $group: { _id: null, productIds: { $addToSet: "$associatedProducts" } } }
+        ]);
+
+        // 2. Get associated product IDs from the thread itself (if needed)
+        let threadProductIds = [];
+        if (thread.associatedProducts && thread.associatedProducts.length) {
+            threadProductIds = thread.associatedProducts.map(id => id.toString());
+        }
+
+        let commentProductIds = allAssociatedProductIdsAgg[0]?.productIds?.map(id => id.toString()) || [];
+
+        const allProductIds = Array.from(new Set([...threadProductIds, ...commentProductIds])).map(id => toObjectId(id));
+
+        // 3. Fetch product details with user info
+        const associatedProductsFull = await SellProduct.aggregate([
+            { $match: { _id: { $in: allProductIds } } },
+            {
+                $lookup: {
+                    from: "User",
+                    localField: "userId",
+                    foreignField: "_id",
+                    as: "seller"
+                }
+            },
+            { $unwind: "$seller" },
+            {
+                $project: {
+                    _id: 1,
+                    title: 1,
+                    description: 1,
+                    fixedPrice: 1,
+                    isSold: 1,
+                    images: 1,
+                    seller: {
+                        _id: 1,
+                        userName: 1,
+                        isLive: 1,
+                        is_Id_verified: 1,
+                        is_Verified_Seller: 1,
+                        profileImage: 1
+                    }
+                }
+            }
+        ]);
+const recommendedThreads = await Thread.aggregate([
+  {
+    $match: {
+      _id: { $ne: threadObjectId },
+      isDeleted: false,
+      $or: [
+        { categoryId: thread.categoryId?._id || thread.categoryId },
+        { subCategoryId: thread.subCategoryId }
+      ]
+    }
+  },
+  { $sort: { createdAt: -1 } },
+  { $limit: 10 },
+  {
+    $lookup: {
+      from: "User",
+      localField: "userId",
+      foreignField: "_id",
+      as: "user"
+    }
+  },
+  { $unwind: "$user" },
+  {
+    $lookup: {
+      from: "ThreadComment",
+      localField: "_id",
+      foreignField: "thread",
+      as: "comments"
+    }
+  },
+  {
+    $lookup: {
+      from: "ThreadLike",
+      let: { threadId: "$_id" },
+      pipeline: [
+        { $match: { $expr: { $eq: ["$threadId", "$$threadId"] }, isDeleted: false, isDisable: false } },
+        { $count: "count" }
+      ],
+      as: "likeCount"
+    }
+  },
+  {
+    $lookup: {
+      from: "SellProduct",
+      localField: "associatedProducts",
+      foreignField: "_id",
+      as: "products"
+    }
+  },
+  {
+    $project: {
+      _id: 1,
+      title: 1,
+      description: 1,
+      minBudget: 1,
+      maxBudget: 1,
+      createdAt: 1,
+      tags: 1,
+      user: {
+        _id: "$user._id",
+        userName: "$user.userName",
+        profileImage: "$user.profileImage",
+        isLive: "$user.isLive",
+        is_Id_verified: "$user.is_Id_verified",
+        is_Verified_Seller: "$user.is_Verified_Seller",
+        provinceId: "$user.provinceId",
+        districtId: "$user.districtId"
+      },
+      commentCount: { $size: "$comments" },
+      likeCount: { $ifNull: [{ $arrayElemAt: ["$likeCount.count", 0] }, 0] },
+      productCount: { $size: "$products" }
+    }
+  }
+]);
+
+
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Thread fetched successfully", {
+            ...thread,
+            totalFollowers: followerCount || 0,
+            totalComments: commentCount || 0,
+            totalLikes: likeCount || 0,
+            totalAssociatedProducts: productCount[0]?.count || 0,
+            isLiked: !!likedByUser,
+            isFollow: !!isFollow,
+            associatedProducts: associatedProductsFull,
+            topComments: topComments,
+            recommendedThreads,
+            myThread: currentUserId && userId === currentUserId,
+            subCategoryId: subCategoryName || null
+        });
+    } catch (error) {
+        console.error("Error in getThreadById:", error);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Something went wrong");
+    }
+};
+
+
+
 const getFollowedUsersThreads = async (req, res) => {
     try {
         const {
@@ -1180,6 +1526,8 @@ router.post('/closeThread/:threadId', perApiLimiter(), closeThread);
 
 //List api for the Home Screen // product controller
 router.get('/getThreads', perApiLimiter(), upload.none(), getThreads);
+router.get('/getThreads/:threadId', perApiLimiter(), upload.none(), getThreadById);
+
 
 //comment 
 router.post('/addComment', perApiLimiter(), upload.array('files', 2), addComment);

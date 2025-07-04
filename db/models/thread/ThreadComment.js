@@ -31,7 +31,7 @@ const commentSchema = new mongoose.Schema({
         ref: 'ThreadComment',
         default: null,
     },
-        isDisable: {
+    isDisable: {
         type: Boolean,
         default: false
     },

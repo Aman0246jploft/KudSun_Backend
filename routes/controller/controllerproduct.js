@@ -1454,47 +1454,59 @@ const getProduct = async (req, res) => {
         };
 
         // --- Auction Info (if applicable)
-        if (product.saleType === SALE_TYPE.AUCTION) {
-            const allBids = await Bid.find({ productId: id }).sort({ placedAt: -1 }).lean();
+       if (product.saleType === SALE_TYPE.AUCTION) {
+    const allBids = await Bid.find({ productId: id }).sort({ placedAt: -1 }).lean();
 
-            const totalBids = allBids.length;
-            const isReserveMet = allBids.some(bid => bid.isReserveMet === true);
-            const currentHighestBid = allBids.reduce((max, bid) => bid.amount > max.amount ? bid : max, { amount: 0 });
+    const totalBids = allBids.length;
+    const isReserveMet = allBids.some(bid => bid.isReserveMet === true);
+    const currentHighestBid = allBids.reduce((max, bid) => bid.amount > max.amount ? bid : max, { amount: 0 });
 
-            const bidderMap = new Map();
-            for (const bid of allBids) {
-                if (!bidderMap.has(bid.userId.toString())) {
-                    bidderMap.set(bid.userId.toString(), bid.amount);
-                }
-            }
+    const bidderMap = new Map();
+    const latestBidMap = new Map();
 
-            const bidderIds = Array.from(bidderMap.keys());
-
-            const bidderUsers = await User.find({ _id: { $in: bidderIds } })
-                .select('_id userName profileImage isLive')
-                .lean();
-
-            const bidders = bidderUsers.map(user => ({
-                ...user,
-                latestBidAmount: bidderMap.get(user._id.toString())
-            }));
-
-            product.auctionDetails = {
-                ...product.auctionSettings,
-                totalBids,
-                isReserveMet,
-                isLiveAuction: product.auctionSettings?.isBiddingOpen || false,
-                currentHighestBid: {
-                    userId: currentHighestBid.userId,
-                    amount: currentHighestBid.amount,
-                    placedAt: currentHighestBid.placedAt
-                },
-                bidders
-            };
+    for (const bid of allBids) {
+        const userIdStr = bid.userId.toString();
+        if (!bidderMap.has(userIdStr)) {
+            bidderMap.set(userIdStr, bid.amount);
+            latestBidMap.set(userIdStr, bid);
         }
+    }
+
+    const bidderIds = Array.from(bidderMap.keys());
+
+    const bidderUsers = await User.find({ _id: { $in: bidderIds } })
+        .select('_id userName profileImage isLive')
+        .lean();
+
+ const bidders = bidderUsers.map(user => {
+    const userIdStr = user._id.toString();
+    const isCurrentUser = loginUserId?.toString() === userIdStr;
+
+    return {
+        ...user,
+        latestBidAmount: bidderMap.get(userIdStr),
+        myBid: isCurrentUser ? true : false
+    };
+});
+
+
+    product.auctionDetails = {
+        ...product.auctionSettings,
+        totalBids,
+        isReserveMet,
+        isLiveAuction: product.auctionSettings?.isBiddingOpen || false,
+        currentHighestBid: {
+            userId: currentHighestBid.userId,
+            amount: currentHighestBid.amount,
+            placedAt: currentHighestBid.placedAt
+        },
+        bidders
+    };
+}
+
         const [totalComments, topComments] = await Promise.all([
             ProductComment.countDocuments({
-                product: product._id,
+                product: product?._id,
                 parent: null,
                 isDeleted: false,
                 isDisable: false
@@ -1502,7 +1514,7 @@ const getProduct = async (req, res) => {
             ProductComment.aggregate([
                 {
                     $match: {
-                        product: toObjectId(product._id),
+                        product: toObjectId(product?._id),
                         parent: null,
                         isDeleted: false,
                         isDisable: false
@@ -1592,7 +1604,7 @@ const getProduct = async (req, res) => {
         };
 
         const latestProducts = await SellProduct.find({
-            userId: product.userId._id,
+            userId: product.userId?._id,
             _id: { $ne: product._id },
             isDeleted: false,
             isDisable: false,
@@ -1601,7 +1613,7 @@ const getProduct = async (req, res) => {
         })
             .sort({ createdAt: -1 })
             .limit(10)
-            .select('fixedPrice auctionSettings productImages') // select fields you want to return
+            .select('fixedPrice auctionSettings productImages isSold') // select fields you want to return
             .lean();
         product.latestUserProducts = latestProducts;
 
