@@ -974,6 +974,39 @@ const getThreadById = async (req, res) => {
                 }
             },
             { $unwind: "$seller" },
+
+
+            {
+                $lookup: {
+                    from: "Bid",
+                    let: { productId: "$_id", saleType: "$saleType" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$productId", "$$productId"] },
+                                    ]
+                                }
+                            }
+                        }
+                    ],
+                    as: "bids"
+                }
+            },
+
+            {
+                $addFields: {
+                    totalBids: {
+                        $cond: [
+                            { $eq: ["$saleType", "auction"] },
+                            { $size: "$bids" },
+                            0
+                        ]
+                    }
+                }
+            },
+
             {
                 $project: {
                     _id: 1,
@@ -981,6 +1014,8 @@ const getThreadById = async (req, res) => {
                     description: 1,
                     fixedPrice: 1,
                     isSold: 1,
+                    saleType: 1,
+                    totalBids: 1,
                     images: 1,
                     seller: {
                         _id: 1,
