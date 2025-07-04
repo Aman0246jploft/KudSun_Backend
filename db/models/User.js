@@ -121,8 +121,6 @@ const UserSchema = new Schema({
     provinceId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Location",
-        
-
     },
     districtId: {
         type: mongoose.Schema.Types.ObjectId,
@@ -140,10 +138,18 @@ const UserSchema = new Schema({
         type: Boolean,
         defaut: true
     },
-    averageRatting:{
-        type:Number,
-        default:0
-    }
+    averageRatting: {
+        type: Number,
+        default: 0
+    },
+    walletBalance: {
+        type: Number,
+        default: 0,
+    },
+    FreezWalletBalance: {
+        type: Number,
+        default: 0,
+    },
 
 }, {
     timestamps: true
