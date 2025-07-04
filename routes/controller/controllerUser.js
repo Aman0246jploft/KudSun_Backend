@@ -1561,11 +1561,17 @@ const verifyPhoneNumberUpdateOtp = async (req, res) => {
         }
 
         // Update phone number
-        const updatedUser = await User.findByIdAndUpdate(
-            userId,
-            { phoneNumber: phoneNumber.toLowerCase() },
-            { new: true }
-        ).select('-password');
+await User.findByIdAndUpdate(
+    userId,
+    { phoneNumber: phoneNumber.toLowerCase() }
+);
+
+const updatedUser = await User.findById(userId)
+    .populate([
+        { path: "provinceId", select: "value" },
+        { path: "districtId", select: "value" }
+    ])
+    .select("-password");
 
         // Clean up OTP
         await removeKey(redisKey);

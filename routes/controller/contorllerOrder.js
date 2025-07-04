@@ -540,7 +540,8 @@ const getSoldProducts = async (req, res) => {
         const query = {
             sellerId,
             isDeleted: false,
-            isDisable: false
+            isDisable: false,
+            paymentStatus: PAYMENT_STATUS.COMPLETED
         };
 
         const total = await Order.countDocuments(query);
@@ -822,7 +823,7 @@ const updateOrderStatusBySeller = async (req, res) => {
         const sellerId = req.user?.userId;
         const { orderId } = req.params;
 
-        let { status:newStatus } = req.body
+        let { status: newStatus } = req.body
         if (!newStatus) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "status is Required");
         }
@@ -858,6 +859,28 @@ const updateOrderStatusBySeller = async (req, res) => {
             );
             if (hasOnlyLocalPickup) {
                 return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Order uses local pickup. Shipping step not allowed.");
+            }
+        }
+
+
+        // Update product isSold if order is being cancelled, returned, or failed
+        if (
+            [ORDER_STATUS.CANCELLED, ORDER_STATUS.RETURNED, ORDER_STATUS.FAILED].includes(newStatus)
+        ) {
+            const populatedOrder = await order.populate('items.productId');
+
+            for (const item of populatedOrder.items) {
+                const product = item.productId;
+
+                // Update SellProduct, not main Product
+                const sellerProduct = await SellProduct.findOne({
+                    _id: product._id
+                });
+
+                if (sellerProduct?.saleType === 'fixed') {
+                    sellerProduct.isSold = false;
+                    await sellerProduct.save();
+                }
             }
         }
 
