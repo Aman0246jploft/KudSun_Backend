@@ -1622,6 +1622,7 @@ const getProduct = async (req, res) => {
             categoryId: product?.categoryId?._id || product?.categoryId || product?.subCategoryId,
             _id: { $ne: product._id },
             isDeleted: false,
+            saleType:SALE_TYPE.FIXED,
             isDisable: false,
             isDraft: { $ne: true },
         })
