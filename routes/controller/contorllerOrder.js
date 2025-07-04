@@ -25,6 +25,7 @@ const createOrder = async (req, res) => {
         if (req.body.items) {
             items = parseItems(req.body.items)
         }
+
         const sellerIds = new Set(); // collect seller IDs
 
         if (!Array.isArray(items) || items.length === 0) {
@@ -46,7 +47,8 @@ const createOrder = async (req, res) => {
             userId: toObjectId(userId),
             'items.productId': { $in: productIds },
             isDeleted: { $ne: true },   // Assuming soft deletes,
-            status: { $in: activeOrderStatuses }
+            status: { $in: activeOrderStatuses },
+            paymentStatus: { $ne: PAYMENT_STATUS.FAILED }
         }).session(session);
 
 
@@ -216,8 +218,7 @@ const paymentCallback = async (req, res) => {
     const schema = Joi.object({
         orderId: Joi.string().required(),
         paymentStatus: Joi.string().valid(PAYMENT_STATUS.COMPLETED, PAYMENT_STATUS.FAILED).required(),
-        paymentId: Joi.string().required(), // Payment gateway ID
-
+        paymentId: Joi.string().required(),
     });
 
     const { error, value } = schema.validate(req.body);
@@ -227,34 +228,54 @@ const paymentCallback = async (req, res) => {
 
     const { orderId, paymentStatus, paymentId } = value;
 
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
     try {
-        const order = await Order.findOne({ _id: orderId });
+        const order = await Order.findOne({ _id: orderId }).session(session);
 
         if (!order) {
+            await session.abortTransaction();
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Order not found");
         }
 
         if (order.paymentStatus === PAYMENT_STATUS.COMPLETED) {
+            await session.abortTransaction();
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Payment already completed");
         }
 
-        if (order.paymentStatus === PAYMENT_STATUS.FAILED && paymentStatus === PAYMENT_STATUS.SUCCESS) {
+        if (order.paymentStatus === PAYMENT_STATUS.FAILED && paymentStatus === PAYMENT_STATUS.COMPLETED) {
+            await session.abortTransaction();
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Payment cannot be marked as success after failure");
         }
 
+        // Update order payment info
         order.paymentStatus = paymentStatus;
         order.paymentId = paymentId;
-        await order.save();
+
+        // If payment failed: update status + mark products as not sold
+        if (paymentStatus === PAYMENT_STATUS.FAILED) {
+            order.status = ORDER_STATUS.FAILED;
+        }
+
+        await order.save({ session });
+        await session.commitTransaction();
+        session.endSession();
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Payment status updated", {
-            orderId: order.orderId,
+            orderId: order._id,
             paymentStatus: order.paymentStatus,
+            orderStatus: order.status,
         });
     } catch (err) {
+        await session.abortTransaction();
+        session.endSession();
         console.error("Payment callback error:", err);
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to update payment status");
     }
 };
+
+
 
 
 
@@ -819,8 +840,8 @@ const updateOrderStatusBySeller = async (req, res) => {
     try {
         const sellerId = req.user?.userId;
         const { orderId } = req.params;
+        let { status: newStatus } = req.body;
 
-        let { status: newStatus } = req.body
         if (!newStatus) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "status is Required");
         }
@@ -832,47 +853,69 @@ const updateOrderStatusBySeller = async (req, res) => {
 
         const currentStatus = order.status;
 
-        // Validate status transition
         if (currentStatus === newStatus) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Order is already in this status");
         }
 
-        if (!TERMINAL_STATUSES.includes(newStatus)) {
-            const allowedNext = ALLOWED_NEXT_STATUSES[currentStatus] || [];
-            if (!allowedNext.includes(newStatus)) {
-                return apiErrorRes(
-                    HTTP_STATUS.BAD_REQUEST,
-                    res,
-                    `Cannot move order from ${currentStatus} to ${newStatus}`
-                );
+        // Populate items.productId to check delivery types
+        const populatedOrder = await order.populate('items.productId');
+
+        // Check if ALL products are local pickup
+        const allLocalPickup = populatedOrder.items.every(
+            item => item.productId?.deliveryType === "local_pickup"
+        );
+
+        // Check if ANY product is NOT local pickup
+        const hasNonLocalPickup = populatedOrder.items.some(
+            item => item.productId?.deliveryType !== "local_pickup"
+        );
+
+        // Define allowed status transitions based on current status and delivery types
+        let allowedTransitions = [];
+
+        if (currentStatus === ORDER_STATUS.PENDING) {
+            // From pending, seller can cancel or confirm
+            allowedTransitions = [ORDER_STATUS.CANCELLED, ORDER_STATUS.CONFIRMED];
+        } else if (currentStatus === ORDER_STATUS.CONFIRMED) {
+            if (allLocalPickup) {
+                // All local pickup: can go directly to DELIVERED or CANCELLED
+                allowedTransitions = [ORDER_STATUS.DELIVERED, ORDER_STATUS.CANCELLED];
+            } else {
+                // Has non-local pickup products: must ship before deliver or can cancel
+                allowedTransitions = [ORDER_STATUS.SHIPPED, ORDER_STATUS.CANCELLED];
             }
+        } else if (currentStatus === ORDER_STATUS.SHIPPED) {
+            // From shipped can only go to delivered
+            allowedTransitions = [ORDER_STATUS.DELIVERED];
+        } else {
+            // For other statuses, fallback to default allowed transitions if any
+            allowedTransitions = ALLOWED_NEXT_STATUSES[currentStatus] || [];
         }
 
-        // Validate shipping step for products with local pickup
-        if (newStatus === ORDER_STATUS.SHIPPED) {
-            const populatedOrder = await order.populate('items.productId');
-            const hasOnlyLocalPickup = populatedOrder.items.every(item =>
-                item.productId?.deliveryType === "local_pickup"
+        if (!allowedTransitions.includes(newStatus)) {
+            return apiErrorRes(
+                HTTP_STATUS.BAD_REQUEST,
+                res,
+                `Cannot move order from ${currentStatus} to ${newStatus}`
             );
-            if (hasOnlyLocalPickup) {
-                return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Order uses local pickup. Shipping step not allowed.");
-            }
         }
 
+        // Prevent shipping if no non-local-pickup products
+        if (newStatus === ORDER_STATUS.SHIPPED && !hasNonLocalPickup) {
+            return apiErrorRes(
+                HTTP_STATUS.BAD_REQUEST,
+                res,
+                "Shipping step not allowed for orders with only local pickup products"
+            );
+        }
 
-        // Update product isSold if order is being cancelled, returned, or failed
+        // Update product isSold flag if order is cancelled, returned, or failed
         if (
             [ORDER_STATUS.CANCELLED, ORDER_STATUS.RETURNED, ORDER_STATUS.FAILED].includes(newStatus)
         ) {
-            const populatedOrder = await order.populate('items.productId');
-
             for (const item of populatedOrder.items) {
                 const product = item.productId;
-
-                // Update SellProduct, not main Product
-                const sellerProduct = await SellProduct.findOne({
-                    _id: product._id
-                });
+                const sellerProduct = await SellProduct.findOne({ _id: product._id });
 
                 if (sellerProduct?.saleType === 'fixed') {
                     sellerProduct.isSold = false;
@@ -881,6 +924,7 @@ const updateOrderStatusBySeller = async (req, res) => {
             }
         }
 
+        // Save new status
         order.status = newStatus;
         await order.save();
 
@@ -897,6 +941,7 @@ const updateOrderStatusBySeller = async (req, res) => {
         );
     }
 };
+
 
 
 
