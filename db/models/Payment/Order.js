@@ -28,6 +28,7 @@ const Schema = mongoose.Schema;
 const OrderSchema = new Schema({
     orderId: { type: String, unique: true, }, // could be custom like ORD123456
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    sellerId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
 
     addressId: { type: Schema.Types.ObjectId, ref: 'UserAddress' }, // foreign key
     items: [{
@@ -51,7 +52,7 @@ const OrderSchema = new Schema({
         ref: 'Shipping',
     },
     grandTotal: { type: Number, required: true },
-
+    paymentId: { type: String },
     paymentStatus: { type: String, enum: Object.values(PAYMENT_STATUS), default: PAYMENT_STATUS.PENDING },
     paymentMethod: { type: String, enum: Object.values(PAYMENT_METHOD), default: PAYMENT_METHOD.ONLINE },
 
@@ -64,6 +65,7 @@ const OrderSchema = new Schema({
         type: Schema.Types.ObjectId,
         ref: 'Dispute',
     },
+
     isDisable: { type: Boolean, default: false },
     isDeleted: { type: Boolean, default: false }
 }, {
