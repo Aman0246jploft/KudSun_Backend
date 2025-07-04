@@ -96,7 +96,7 @@ const UserSchema = new Schema({
     lastLogin: {
         type: Date
     },
-    // when Payment credintial is done
+    // when Payment credintial is done  
     is_Verified_Seller: {
         type: Boolean,
         default: false

@@ -4,12 +4,13 @@ const multer = require('multer');
 const upload = multer();
 const router = express.Router();
 const moment = require("moment")
-const { UserAddress, Order, SellProduct, Bid, FeeSetting } = require('../../db');
+const { UserAddress, Order, SellProduct, Bid, FeeSetting, User } = require('../../db');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const HTTP_STATUS = require('../../utils/statusCode');
 const { toObjectId, apiSuccessRes, apiErrorRes, parseItems } = require('../../utils/globalFunction');
 const { SALE_TYPE, DEFAULT_AMOUNT, PAYMENT_METHOD, ORDER_STATUS, PAYMENT_STATUS, CHARGE_TYPE, PRICING_TYPE } = require('../../utils/Role');
 const { default: mongoose } = require('mongoose');
+const Joi = require('joi');
 
 
 const createOrder = async (req, res) => {
@@ -24,6 +25,7 @@ const createOrder = async (req, res) => {
         if (req.body.items) {
             items = parseItems(req.body.items)
         }
+        const sellerIds = new Set(); // collect seller IDs
 
         if (!Array.isArray(items) || items.length === 0) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Invalid order data');
@@ -86,6 +88,13 @@ const createOrder = async (req, res) => {
                 return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, `Product not found or unavailable: ${item.productId}`);
             }
 
+            const seller = await User.findOne({ _id: product.userId });
+            if (!seller || seller.isDeleted || seller.isDisable) {
+                return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `Seller of product ${product.title} is deleted or disabled`);
+            }
+
+            sellerIds.add(product.userId.toString());
+
             if (product.userId.toString() === userId.toString()) {
                 await session.abortTransaction();
                 return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `You cannot purchase your own product: ${product.title}`);
@@ -147,6 +156,8 @@ const createOrder = async (req, res) => {
             totalShippingCharge += Number(product.shippingCharge ?? DEFAULT_AMOUNT.SHIPPING_CHARGE);
         }
 
+        const sellerId = Array.from(sellerIds)[0];
+
         const buyerProtectionFeeSetting = feeMap[CHARGE_TYPE.BUYER_PROTECTION_FEE];
         let buyerProtectionFee = 0;
         let buyerProtectionFeeType = PRICING_TYPE.FIXED;
@@ -175,6 +186,7 @@ const createOrder = async (req, res) => {
 
         const order = new Order({
             userId,
+            sellerId,
             addressId: address._id,
             items: orderItems,
             totalAmount,
@@ -197,6 +209,58 @@ const createOrder = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to place order");
     }
 };
+
+
+// Sample callback for successful payment
+const paymentCallback = async (req, res) => {
+    const schema = Joi.object({
+        orderId: Joi.string().required(),
+        paymentStatus: Joi.string().valid(PAYMENT_STATUS.COMPLETED, PAYMENT_STATUS.FAILED).required(),
+        paymentId: Joi.string().required(), // Payment gateway ID
+
+    });
+
+    const { error, value } = schema.validate(req.body);
+    if (error) {
+        return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, error.details[0].message);
+    }
+
+    const { orderId, paymentStatus, paymentId } = value;
+
+    try {
+        const order = await Order.findOne({ _id: orderId });
+
+        if (!order) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Order not found");
+        }
+
+        if (order.paymentStatus === PAYMENT_STATUS.COMPLETED) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Payment already completed");
+        }
+
+        if (order.paymentStatus === PAYMENT_STATUS.FAILED && paymentStatus === PAYMENT_STATUS.SUCCESS) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Payment cannot be marked as success after failure");
+        }
+
+        order.paymentStatus = paymentStatus;
+        order.paymentId = paymentId;
+        await order.save();
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Payment status updated", {
+            orderId: order.orderId,
+            paymentStatus: order.paymentStatus,
+        });
+    } catch (err) {
+        console.error("Payment callback error:", err);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to update payment status");
+    }
+};
+
+
+
+
+
+
 
 const updateOrderById = async (req, res) => {
     const { orderId } = req.params;
@@ -343,9 +407,15 @@ const previewOrder = async (req, res) => {
                 return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, `Product not found or unavailable: ${item.productId}`);
             }
 
+            const seller = await User.findOne({ _id: product.userId });
+            if (!seller || seller.isDeleted || seller.isDisable) {
+                return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `Seller of product ${product.title} is deleted or disabled`);
+            }
+
             if (product.userId.toString() === userId.toString()) {
                 return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `You cannot purchase your own product: ${product.title}`);
             }
+
 
             let price = 0;
 
@@ -392,7 +462,13 @@ const previewOrder = async (req, res) => {
                 quantity,
                 price,
                 subtotal,
-                shippingCharge
+                shippingCharge,
+                seller: {
+                    name: seller?.userName || null,
+                    profileImage: seller?.profileImage || null,
+                    isLive: seller?.isLive || false
+
+                }
             });
         }
 
@@ -431,6 +507,7 @@ const previewOrder = async (req, res) => {
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Order preview", {
             items: previewItems,
+            address,
             totalAmount,
             shippingCharge,
             buyerProtectionFee,
@@ -456,48 +533,42 @@ const getSoldProducts = async (req, res) => {
         const pageSize = Math.min(100, Math.max(1, parseInt(req.query.size) || 10));
         const skip = (pageNo - 1) * pageSize;
 
-        // Step 1: Find all your sold product IDs
-        const soldProducts = await SellProduct.find({
-            userId: sellerId,
-            isDeleted: false,
-            isDisable: false,
-            // isSold: true
-        }, { _id: 1 }).lean();
+        // Only include confirmed, shipped, delivered orders
+        // const allowedStatuses = [ORDER_STATUS.CONFIRMED, ORDER_STATUS.SHIPPED, ORDER_STATUS.DELIVERED];
 
-        const soldProductIds = soldProducts.map(p => p._id);
-        if (soldProductIds.length === 0) {
-            return apiSuccessRes(HTTP_STATUS.OK, res, "No sold products found", {
-                pageNo,
-                size: pageSize,
-                total: 0,
-                orders: []
-            });
-        }
-
+        // Query orders where sellerId is matched and status is in allowedStatuses
         const query = {
-            'items.productId': { $in: soldProductIds },
-
+            sellerId,
             isDeleted: false,
             isDisable: false
         };
+
         const total = await Order.countDocuments(query);
+
         const orders = await Order.find(query)
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(pageSize)
-            .populate({
-                path: 'items.productId',
-                model: 'SellProduct',
-                select: 'title productImages fixedPrice saleType auctionSettings userId'
-            })
+            .populate([
+                {
+                    path: 'items.productId',
+                    model: 'SellProduct',
+                    select: 'title productImages fixedPrice saleType auctionSettings userId deliveryType'
+                },
+                {
+                    path: 'userId',
+                    select: 'userName profileImage isLive is_Id_verified is_Verified_Seller'
+                }
+            ])
             .lean();
 
-        // Optional: Filter each order's items to only include the seller's products
+        // Filter each order's items to only include the seller's products (defensive step)
         for (const order of orders) {
             order.items = order.items.filter(item => {
                 return item.productId?.userId?.toString() === sellerId.toString();
             });
         }
+
         return apiSuccessRes(HTTP_STATUS.OK, res, "Sold products fetched successfully", {
             pageNo,
             size: pageSize,
@@ -734,15 +805,95 @@ const cancelOrderAndRelistProducts = async (req, res) => {
 };
 
 
+const ALLOWED_NEXT_STATUSES = {
+    [ORDER_STATUS.PENDING]: [ORDER_STATUS.CONFIRMED, ORDER_STATUS.CANCELLED],
+    [ORDER_STATUS.CONFIRMED]: [ORDER_STATUS.SHIPPED, ORDER_STATUS.CANCELLED],
+    [ORDER_STATUS.SHIPPED]: [ORDER_STATUS.DELIVERED, ORDER_STATUS.RETURNED],
+    [ORDER_STATUS.DELIVERED]: [ORDER_STATUS.RETURNED],
+};
+const TERMINAL_STATUSES = [
+    ORDER_STATUS.CANCELLED,
+    ORDER_STATUS.RETURNED,
+    ORDER_STATUS.FAILED,
+];
 
+const updateOrderStatusBySeller = async (req, res) => {
+    try {
+        const sellerId = req.user?.userId;
+        const { orderId } = req.params;
+
+        let { status:newStatus } = req.body
+        if (!newStatus) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "status is Required");
+        }
+
+        const order = await Order.findOne({ _id: orderId, sellerId });
+        if (!order) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Order not found for this seller");
+        }
+
+        const currentStatus = order.status;
+
+        // Validate status transition
+        if (currentStatus === newStatus) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Order is already in this status");
+        }
+
+        if (!TERMINAL_STATUSES.includes(newStatus)) {
+            const allowedNext = ALLOWED_NEXT_STATUSES[currentStatus] || [];
+            if (!allowedNext.includes(newStatus)) {
+                return apiErrorRes(
+                    HTTP_STATUS.BAD_REQUEST,
+                    res,
+                    `Cannot move order from ${currentStatus} to ${newStatus}`
+                );
+            }
+        }
+
+        // Validate shipping step for products with local pickup
+        if (newStatus === ORDER_STATUS.SHIPPED) {
+            const populatedOrder = await order.populate('items.productId');
+            const hasOnlyLocalPickup = populatedOrder.items.every(item =>
+                item.productId?.deliveryType === "local_pickup"
+            );
+            if (hasOnlyLocalPickup) {
+                return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Order uses local pickup. Shipping step not allowed.");
+            }
+        }
+
+        order.status = newStatus;
+        await order.save();
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Order status updated successfully", {
+            orderId: order._id,
+            status: order.status,
+        });
+    } catch (err) {
+        console.error("Update order status error:", err);
+        return apiErrorRes(
+            HTTP_STATUS.INTERNAL_SERVER_ERROR,
+            res,
+            err.message || "Failed to update order status"
+        );
+    }
+};
+
+
+
+//////////////////////////////////////////////////////////////////////////////
 router.post('/placeOrder', perApiLimiter(), upload.none(), createOrder);
 router.get('/previewOrder', perApiLimiter(), upload.none(), previewOrder);
-
-
+router.post('/paymentCallback', paymentCallback);
+//////////////////////////////////////////////////////////////////////////////
 router.post('/updateOrder/:orderId', perApiLimiter(), upload.none(), updateOrderById);
 router.get('/getBoughtProduct', perApiLimiter(), upload.none(), getBoughtProducts);
 router.get('/getSoldProducts', perApiLimiter(), upload.none(), getSoldProducts);
 router.post('/cancelAndRelistProduct', perApiLimiter(), upload.none(), cancelOrderAndRelistProducts);
+
+
+///
+router.post('/updateOrderStatusBySeller/:orderId', perApiLimiter(), upload.none(), updateOrderStatusBySeller);
+
 
 
 
