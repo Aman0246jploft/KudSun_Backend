@@ -259,9 +259,6 @@ const paymentCallback = async (req, res) => {
 
 
 
-
-
-
 const updateOrderById = async (req, res) => {
     const { orderId } = req.params;
 
@@ -907,16 +904,12 @@ const updateOrderStatusBySeller = async (req, res) => {
 router.post('/placeOrder', perApiLimiter(), upload.none(), createOrder);
 router.get('/previewOrder', perApiLimiter(), upload.none(), previewOrder);
 router.post('/paymentCallback', paymentCallback);
+router.post('/updateOrderStatusBySeller/:orderId', perApiLimiter(), upload.none(), updateOrderStatusBySeller);
 //////////////////////////////////////////////////////////////////////////////
 router.post('/updateOrder/:orderId', perApiLimiter(), upload.none(), updateOrderById);
 router.get('/getBoughtProduct', perApiLimiter(), upload.none(), getBoughtProducts);
 router.get('/getSoldProducts', perApiLimiter(), upload.none(), getSoldProducts);
 router.post('/cancelAndRelistProduct', perApiLimiter(), upload.none(), cancelOrderAndRelistProducts);
-
-
-///
-router.post('/updateOrderStatusBySeller/:orderId', perApiLimiter(), upload.none(), updateOrderStatusBySeller);
-
 
 
 
