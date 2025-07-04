@@ -410,7 +410,7 @@ const associatedProductByThreadId = async (req, res) => {
 
         // Step 2: Fetch products with user info
         const products = await SellProduct.find({ _id: { $in: paginatedIds } })
-            .populate({ path: 'userId', select: 'userName email profileImage' }) // user info
+            .populate({ path: 'userId', select: 'userName email is_Verified_Seller  profileImage isLive is_Id_verified' }) // user info
             .sort({ [sortBy]: sortOrder })
             .lean();
 
@@ -431,11 +431,7 @@ const associatedProductByThreadId = async (req, res) => {
 
         return apiSuccessRes(HTTP_STATUS.OK, res, 'Associated products fetched successfully', {
             total,
-            pageNo,
             size,
-            totalPages: Math.ceil(total / size),
-            sortBy,
-            sortOrder: sortOrder === 1 ? 'asc' : 'desc',
             products: productWithBidInfo
         });
 
@@ -1611,6 +1607,89 @@ const getDraftThreads = async (req, res) => {
     }
 };
 
+const selectProductForAssociation = async (req, res) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) {
+            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Unauthorized access");
+        }
+
+        const { pageNo = 1, size = 10, keyWord = "" } = req.query;
+
+        const matchConditions = {
+            userId: toObjectId(userId),
+            isSold: false,
+            isDeleted: false
+        };
+
+        if (keyWord && keyWord.trim() !== "") {
+            matchConditions.$or = [
+                { title: { $regex: keyWord, $options: "i" } },
+                { description: { $regex: keyWord, $options: "i" } }
+            ];
+        }
+
+        const skip = (parseInt(pageNo) - 1) * parseInt(size);
+
+        const [products, totalCount] = await Promise.all([
+            SellProduct.find(matchConditions)
+                .select("_id title description fixedPrice saleType productImages createdAt")
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(parseInt(size))
+                .lean(),
+            SellProduct.countDocuments(matchConditions)
+        ]);
+
+        const auctionProductIds = products
+            .filter(p => p.saleType === "auction")
+            .map(p => p._id);
+
+
+
+        let bidCounts = {};
+        if (auctionProductIds.length > 0) {
+            const bids = await Bid.aggregate([
+                { $match: { productId: { $in: auctionProductIds } } },
+                {
+                    $group: {
+                        _id: "$productId",
+                        totalBids: { $sum: 1 }
+                    }
+                }
+            ]);
+
+
+            bidCounts = bids.reduce((acc, cur) => {
+                acc[cur._id.toString()] = cur.totalBids;
+                return acc;
+            }, {});
+
+
+        }
+
+        const finalProducts = products.map(product => {
+            const prod = { ...product };
+            if (prod.saleType === "auction") {
+                prod.totalBids = bidCounts[prod._id.toString()] || 0;
+            }
+            return prod;
+        });
+
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Products fetched successfully", {
+            products: finalProducts,
+            total: totalCount,
+            pageNo: parseInt(pageNo),
+            size: parseInt(size)
+        });
+    } catch (error) {
+        console.error("Error in selectProductForAssociation:", error);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Something went wrong");
+    }
+};
+
+
 
 
 
@@ -1638,11 +1717,15 @@ router.post('/closeThread/:threadId', perApiLimiter(), closeThread);
 //List api for the Home Screen // product controller
 router.get('/getThreads', perApiLimiter(), upload.none(), getThreads);
 router.get('/getThreads/:threadId', perApiLimiter(), upload.none(), getThreadById);
+router.get('/selectProductForAssociation', perApiLimiter(), upload.none(), selectProductForAssociation);
+router.get('/associatedProductByThreadId/:threadId', perApiLimiter(), upload.none(), associatedProductByThreadId);
+
+
+
 
 
 //comment 
 router.post('/addComment', perApiLimiter(), upload.array('files', 2), addComment);
-router.post('/associatedProductByThreadId/:threadId', perApiLimiter(), upload.none(), associatedProductByThreadId);
 router.get('/getThreadComments/:threadId', perApiLimiter(), getThreadComments);
 router.get('/getCommentByParentId/:parentId', perApiLimiter(), upload.none(), getCommentByParentId);
 

@@ -216,6 +216,9 @@ const completeRegistration = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Incomplete onboarding");
     }
 
+    if (userName.length < 3) {
+        return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Username must be at least 3 characters long.");
+    }
     userName = userName.trim().toLowerCase();
     const usernameRegex = /^(?=.*[a-zA-Z])[a-zA-Z0-9@._]+$/;
     if (!usernameRegex.test(userName)) {
@@ -307,9 +310,9 @@ const loginStepOne = async (req, res) => {
         }
 
         // No token needed here, frontend just proceeds with step 2
-        let obj = {token:null,...user.toJSON(),detectedType}
+        let obj = { token: null, ...user.toJSON(), detectedType }
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "User verified, proceed with login",obj);
+        return apiSuccessRes(HTTP_STATUS.OK, res, "User verified, proceed with login", obj);
 
 
     } catch (error) {
@@ -1431,17 +1434,24 @@ const updateProfile = async (req, res) => {
 
         // Check for existing userName
         if (userName && userName.trim() !== "") {
-            const normalizedUserName = userName.toLowerCase();
-            const userInfo = await getDocumentByQuery(User, {
-                userName: normalizedUserName,
-                _id: { $ne: toObjectId(userId) }
-            });
-            if (userInfo.statusCode === CONSTANTS.SUCCESS) {
+
+            userName = userName.trim().toLowerCase();
+            if (userName.length < 3) {
+                return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Username must be at least 3 characters long.");
+            }
+
+            const usernameRegex = /^(?=.*[a-zA-Z])[a-zA-Z0-9@._]+$/;
+
+            if (!usernameRegex.test(userName)) {
                 return apiErrorRes(
                     HTTP_STATUS.BAD_REQUEST,
                     res,
-                    "userName Already Exist"
+                    "Username must contain at least one letter and only include letters, numbers, '.', '_', or '@'."
                 );
+            }
+            const existingUser = await User.findOne({ userName, _id: { $ne: userId } });
+            if (existingUser) {
+                return apiErrorRes(HTTP_STATUS.CONFLICT, res, "Username is already in use.");
             }
         }
 
@@ -1561,17 +1571,17 @@ const verifyPhoneNumberUpdateOtp = async (req, res) => {
         }
 
         // Update phone number
-await User.findByIdAndUpdate(
-    userId,
-    { phoneNumber: phoneNumber.toLowerCase() }
-);
+        await User.findByIdAndUpdate(
+            userId,
+            { phoneNumber: phoneNumber.toLowerCase() }
+        );
 
-const updatedUser = await User.findById(userId)
-    .populate([
-        { path: "provinceId", select: "value" },
-        { path: "districtId", select: "value" }
-    ])
-    .select("-password");
+        const updatedUser = await User.findById(userId)
+            .populate([
+                { path: "provinceId", select: "value" },
+                { path: "districtId", select: "value" }
+            ])
+            .select("-password");
 
         // Clean up OTP
         await removeKey(redisKey);
