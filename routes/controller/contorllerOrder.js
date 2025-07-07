@@ -1,10 +1,9 @@
-
 const express = require('express');
 const multer = require('multer');
 const upload = multer();
 const router = express.Router();
 const moment = require("moment")
-const { UserAddress, Order, SellProduct, Bid, FeeSetting, User, Shipping } = require('../../db');
+const { UserAddress, Order, SellProduct, Bid, FeeSetting, User, Shipping, OrderStatusHistory } = require('../../db');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const HTTP_STATUS = require('../../utils/statusCode');
 const { toObjectId, apiSuccessRes, apiErrorRes, parseItems } = require('../../utils/globalFunction');
@@ -262,6 +261,16 @@ const paymentCallback = async (req, res) => {
         await session.commitTransaction();
         session.endSession();
 
+        if (order.status !== ORDER_STATUS.FAILED) {
+            await OrderStatusHistory.create({
+                orderId: order._id,
+                oldStatus: order.status,
+                newStatus: order.status,
+                // changedBy: req.user?.userId,
+                note: 'Payment status updated'
+            });
+        }
+
         return apiSuccessRes(HTTP_STATUS.OK, res, "Payment status updated", {
             orderId: order._id,
             paymentStatus: order.paymentStatus,
@@ -337,6 +346,16 @@ const updateOrderById = async (req, res) => {
             { $set: value },
             { new: true }
         );
+
+        if (updatedOrder.status !== existingOrder.status) {
+            await OrderStatusHistory.create({
+                orderId: updatedOrder._id,
+                oldStatus: existingOrder.status,
+                newStatus: updatedOrder.status,
+                changedBy: req.user?.userId,
+                note: 'Status updated by seller'
+            });
+        }
 
         return res.status(HTTP_STATUS.OK).json(apiSuccessRes(updatedOrder, "Order updated successfully"));
     } catch (err) {
@@ -767,6 +786,16 @@ const cancelOrderAndRelistProducts = async (req, res) => {
             session.endSession();
 
             // Success response with details
+            if (orderUpdateResult?.status !== order.status) {
+                await OrderStatusHistory.create({
+                    orderId: order._id,
+                    oldStatus: order.status,
+                    newStatus: orderUpdateResult.status,
+                    changedBy: req.user?.userId,
+                    note: 'Status updated by seller'
+                });
+            }
+
             return apiSuccessRes(HTTP_STATUS.OK, res, "Order cancelled and products relisted successfully", {
                 orderId: order._id,
                 orderStatus: orderUpdateResult?.status || order.status,
@@ -967,6 +996,16 @@ const updateOrderStatusBySeller = async (req, res) => {
         order.status = newStatus;
         await order.save();
 
+        if (currentStatus !== newStatus) {
+            await OrderStatusHistory.create({
+                orderId: order._id,
+                oldStatus: currentStatus,
+                newStatus,
+                changedBy: req.user?.userId,
+                note: 'Status updated by seller'
+            });
+        }
+
         return apiSuccessRes(HTTP_STATUS.OK, res, "Order status updated successfully", {
             orderId: order._id,
             status: order.status,
@@ -989,10 +1028,10 @@ router.get('/previewOrder', perApiLimiter(), upload.none(), previewOrder);
 router.post('/placeOrder', perApiLimiter(), upload.none(), createOrder);
 router.post('/paymentCallback', paymentCallback);
 router.post('/updateOrderStatusBySeller/:orderId', perApiLimiter(), upload.none(), updateOrderStatusBySeller);
+router.get('/getSoldProducts', perApiLimiter(), upload.none(), getSoldProducts);
+router.get('/getBoughtProduct', perApiLimiter(), upload.none(), getBoughtProducts);
 //////////////////////////////////////////////////////////////////////////////
 router.post('/updateOrder/:orderId', perApiLimiter(), upload.none(), updateOrderById);
-router.get('/getBoughtProduct', perApiLimiter(), upload.none(), getBoughtProducts);
-router.get('/getSoldProducts', perApiLimiter(), upload.none(), getSoldProducts);
 router.post('/cancelAndRelistProduct', perApiLimiter(), upload.none(), cancelOrderAndRelistProducts);
 
 

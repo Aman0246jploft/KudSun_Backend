@@ -28,9 +28,10 @@ const ORDER_STATUS = {
     CONFIRMED: 'confirmed',
     SHIPPED: 'shipped',
     DELIVERED: 'delivered',
-    CANCELLED: 'cancelled',
+    CANCELLED: '    ',
     RETURNED: 'returned',
-    FAILED: 'failed'
+    FAILED: 'failed',
+    COMPLETED:'completed'
 };
 
 const PAYMENT_STATUS = {

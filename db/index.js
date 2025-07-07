@@ -58,6 +58,7 @@ module.exports = {
     Supportkey: require("./models/SupportKey"),
     SellerBank: require("./models/SellerBank"),
     BlockUser: require("./models/BlockUser"),
+    OrderStatusHistory: require("./models/Payment/OrderStatusHistory"),
     //rbac---->
     Module: require("./models/Rbac/Module"),
     Role: require("./models/Rbac/Role"),
