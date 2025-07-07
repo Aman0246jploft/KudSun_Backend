@@ -1475,7 +1475,7 @@ const getProduct = async (req, res) => {
     const bidderIds = Array.from(bidderMap.keys());
 
     const bidderUsers = await User.find({ _id: { $in: bidderIds } })
-        .select('_id userName profileImage isLive')
+        .select('_id userName profileImage isLive createdAt')
         .lean();
 
  const bidders = bidderUsers.map(user => {
