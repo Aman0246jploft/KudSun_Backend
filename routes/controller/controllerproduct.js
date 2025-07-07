@@ -9,7 +9,7 @@ const { apiErrorRes, apiSuccessRes, toObjectId, formatTimeRemaining } = require(
 const HTTP_STATUS = require('../../utils/statusCode');
 const { uploadImageCloudinary, deleteImageCloudinary } = require('../../utils/cloudinary');
 const CONSTANTS_MSG = require('../../utils/constantsMessage');
-const { SALE_TYPE, DeliveryType, ORDER_STATUS, roleId } = require('../../utils/Role');
+const { SALE_TYPE, DeliveryType, ORDER_STATUS, roleId, conditions } = require('../../utils/Role');
 const { DateTime } = require('luxon');
 
 
@@ -155,7 +155,7 @@ const addSellerProduct = async (req, res) => {
         }
 
 
-        const validConditions = ['brand_new', 'like_new', 'good', 'fair', 'works'];
+        const validConditions = Object.values(conditions);
         if (!validConditions.includes(condition)) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid condition value.");
         }
