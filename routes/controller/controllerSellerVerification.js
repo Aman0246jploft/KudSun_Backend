@@ -147,13 +147,13 @@ const changeVerificationStatus = async (req, res) => {
         if (status === 'Approved') {
             await User.findByIdAndUpdate(
                 verification.userId,
-                { is_Verified_Seller: true },
+                { is_Verified_Seller: true,  is_Id_verified: true },
                 { session }
             );
         } else if (status === 'Rejected') {
             await User.findByIdAndUpdate(
                 verification.userId,
-                { is_Verified_Seller: false },
+                { is_Verified_Seller: false,is_Id_verified: false },
                 { session }
             );
         }
