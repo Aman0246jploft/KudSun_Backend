@@ -1121,8 +1121,6 @@ const updateOrderStatusByBuyer = async (req, res) => {
 
 
 
-
-
 //////////////////////////////////////////////////////////////////////////////
 router.get('/previewOrder', perApiLimiter(), upload.none(), previewOrder);
 router.post('/placeOrder', perApiLimiter(), upload.none(), createOrder);

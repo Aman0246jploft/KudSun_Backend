@@ -2509,7 +2509,7 @@ router.post('/deleteAccount', perApiLimiter(), upload.none(), deleteAccount);
 
 //Follow //Like
 router.post('/follow', perApiLimiter(), upload.none(), validateRequest(followSchema), follow);
-router.post('/threadlike', perApiLimiter(), upload.none(), validateRequest(threadLikeSchema), threadlike);
+router.post('/threadlike', perApiLimiter(), upload.none(), threadlike);
 router.post('/productLike', perApiLimiter(), upload.none(), validateRequest(productLikeSchema), productLike);
 router.get('/getLikedProducts', perApiLimiter(), upload.none(), getLikedProducts)
 router.get('/getLikedThreads', perApiLimiter(), upload.none(), getLikedThreads)
