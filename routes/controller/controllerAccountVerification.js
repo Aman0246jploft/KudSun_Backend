@@ -72,8 +72,8 @@ const create = async (req, res) => {
 const getVerificationIdList = async (req, res) => {
 
     try {
-        let pageNo = parseInt(req.query.pageNo) || 1;
-        let pageSize = parseInt(req.query.size) || 10;
+        let pageNo = 1;
+        let pageSize = 1;
 
         const skip = (pageNo - 1) * pageSize;
 
