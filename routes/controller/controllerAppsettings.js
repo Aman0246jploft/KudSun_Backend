@@ -8,6 +8,7 @@ const { AppSetting, Supportkey } = require('../../db');
 const validateRequest = require('../../middlewares/validateRequest');
 const { apiErrorRes, apiSuccessRes } = require('../../utils/globalFunction');
 const HTTP_STATUS = require('../../utils/statusCode');
+const { uploadImageCloudinary, deleteImageCloudinary } = require('../../utils/cloudinary');
 
 // upload.none()
 
@@ -112,7 +113,37 @@ const getVideo = async (req, res) => {
   }
 };
 
+const updateVideo = async (req, res) => {
+  try {
+    const key = "11videoXYZ"; // Hardcoded key
 
+    if (!req.file) {
+      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Video file is required.");
+    }
+
+    // Find existing setting
+    const setting = await AppSetting.findOne({ key });
+
+    // Delete previous video if exists
+    if (setting && setting.value) {
+      await deleteImageCloudinary(setting.value); // assumes function handles full Cloudinary URL
+    }
+
+    // Upload new video
+    const videoUrl = await uploadImageCloudinary(req.file, 'app-video'); // or uploadVideoCloudinary
+
+    // Update or create the setting
+    const updatedSetting = await AppSetting.findOneAndUpdate(
+      { key },
+      { value: videoUrl },
+      { new: true, upsert: true }
+    );
+
+    return apiSuccessRes(HTTP_STATUS.OK, res, "Video updated successfully", updatedSetting);
+  } catch (error) {
+    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+  }
+};
 
 router.post('/create', upload.none(), globalCrudController.create(AppSetting));
 router.get('/termAndPolicy', termAndPolicy);
@@ -120,6 +151,9 @@ router.get('/auctionRule', auctionRule);
 router.get('/getFAQs', getFAQs);
 
 router.get('/getVideo', getVideo);
+router.post('/updateVideo', upload.single('video'), updateVideo);
+
+
 
 
 router.post('/update', upload.none(), globalCrudController.update(AppSetting));

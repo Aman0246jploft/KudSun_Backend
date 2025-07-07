@@ -188,6 +188,61 @@ router.post('/create', perApiLimiter(),
     create
 );
 
+const getSellerRequests = async (req, res) => {
+    try {
+        const {
+            pageNo = 1,
+            size = 10,
+            search = '',
+            status,
+            userId
+        } = req.query;
+
+        const page = parseInt(pageNo);
+        const limit = parseInt(size);
+        const skip = (page - 1) * limit;
+
+        const query = {
+            isDeleted: false,
+            isDisable: false
+        };
+
+        if (userId) {
+            query.userId = userId;
+        }
+
+        if (status && ['Pending', 'Approved', 'Rejected'].includes(status)) {
+            query.verificationStatus = status;
+        }
+
+        if (search) {
+            query.$or = [
+                { legalFullName: { $regex: search, $options: 'i' } },
+                { idNumber: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        const [totalCount, sellerRequests] = await Promise.all([
+            SellerVerification.countDocuments(query),
+            SellerVerification.find(query)
+                .populate({ path: 'userId', select: 'fullName email phone' })
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+        ]);
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, 'Seller requests fetched successfully', {
+            totalCount,
+            pageNo: page,
+            size: limit,
+            data: sellerRequests
+        });
+
+    } catch (err) {
+        console.error('getSellerRequests error:', err);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Something went wrong');
+    }
+};
 
 
 
@@ -196,5 +251,6 @@ router.post('/getById', perApiLimiter(), upload.none(), validateRequest(moduleSc
 router.post('/changeVerificationStatus', perApiLimiter(), upload.none(), changeVerificationStatus);
 
 
+router.get('/getSellerRequests', perApiLimiter(), getSellerRequests);
 
 module.exports = router;
