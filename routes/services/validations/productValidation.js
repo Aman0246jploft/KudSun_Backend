@@ -27,8 +27,8 @@ const addProductSchema = Joi.object({
     endDate: Joi.date().optional(),
     endTime: Joi.string().optional()
   }).when('saleType', { is: 'auction', then: Joi.required() }),
-  deliveryType: Joi.string().valid('free_shipping', 'charge_shipping').required(),
-  shippingCharge: Joi.number().when('deliveryType', { is: 'charge_shipping', then: Joi.required() })
+  deliveryType: Joi.string().valid('free shipping', 'charge shipping').required(),
+  shippingCharge: Joi.number().when('deliveryType', { is: 'charge shipping', then: Joi.required() })
 });
 
 module.exports = {
