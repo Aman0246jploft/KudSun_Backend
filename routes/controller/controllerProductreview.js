@@ -1,9 +1,8 @@
-
 const express = require('express');
 const multer = require('multer');
 const upload = multer();
 const router = express.Router();
-const { ProductReview, Order } = require('../../db');
+const { ProductReview, Order, SellProduct, User } = require('../../db');
 const validateRequest = require('../../middlewares/validateRequest');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const { createReviewValidation } = require('../services/validations/moduleProductReview');
@@ -12,7 +11,27 @@ const HTTP_STATUS = require('../../utils/statusCode');
 const { uploadImageCloudinary } = require('../../utils/cloudinary');
 const { ORDER_STATUS } = require('../../utils/Role');
 
+// Helper to update seller's averageRatting
+async function updateSellerAverageRatingByProduct(productId) {
+    const product = await SellProduct.findById(productId).lean();
+    if (!product) return;
+    const sellerId = product.userId;
+    const products = await SellProduct.find({ userId: sellerId, isDeleted: false }).select('_id').lean();
+    const productIds = products.map(p => p._id);
+    if (productIds.length === 0) {
+        await User.findByIdAndUpdate(sellerId, { averageRatting: 0 });
+        return;
+    }
+    const reviews = await ProductReview.find({
+        productId: { $in: productIds },
+        isDeleted: false,
+        isDisable: false
+    }).select('rating').lean();
+    const totalRatings = reviews.reduce((sum, r) => sum + (r.rating || 0), 0);
+    const avg = reviews.length ? (totalRatings / reviews.length) : 0;
+    await User.findByIdAndUpdate(sellerId, { averageRatting: avg });
 
+}
 
 const createOrUpdateReview = async (req, res) => {
     try {
@@ -25,7 +44,7 @@ const createOrUpdateReview = async (req, res) => {
         const hasOrdered = await Order.exists({
             userId: toObjectId(userId),
             'items.productId': toObjectId(productId),
-            status: ORDER_STATUS.DELIVERED  // Only allow if delivered
+            // status: ORDER_STATUS.DELIVERED  // Only allow if delivered
         });
 
         if (!hasOrdered) {
@@ -52,6 +71,8 @@ const createOrUpdateReview = async (req, res) => {
                 review.reviewImages = reviewImages;
             }
             await review.save();
+            // Update seller's averageRatting
+            await updateSellerAverageRatingByProduct(productId);
             return apiSuccessRes(HTTP_STATUS.OK, res, 'ProductReview updated successfully', { review });
         } else {
             // Create new review
@@ -63,6 +84,8 @@ const createOrUpdateReview = async (req, res) => {
                 reviewText,
                 reviewImages
             });
+            // Update seller's averageRatting
+            await updateSellerAverageRatingByProduct(productId);
             return apiSuccessRes(HTTP_STATUS.CREATED, res, 'ProductReview created successfully', { review });
         }
     } catch (err) {
@@ -72,6 +95,5 @@ const createOrUpdateReview = async (req, res) => {
 };
 
 router.post('/review', perApiLimiter(), upload.array('reviewImages', 3), validateRequest(createReviewValidation), createOrUpdateReview);
-
 
 module.exports = router;
