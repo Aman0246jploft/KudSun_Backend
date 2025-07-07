@@ -5,8 +5,8 @@ const roleId = {
 }
 
 const conditions = {
-    brand_new: 'brand_new',
-    like_new: "like_new",
+    brand_new: 'brand new',
+    like_new: "like new",
     good: 'good',
     fair: 'fair',
     works: 'works'
@@ -17,9 +17,9 @@ const SALE_TYPE = {
 }
 
 const DeliveryType = {
-    FREE_SHIPPING: 'free_shipping',
-    CHARGE_SHIPPING: 'charge_shipping',
-    LOCAL_PICKUP: 'local_pickup'
+    FREE_SHIPPING: 'free shipping',
+    CHARGE_SHIPPING: 'charge shipping',
+    LOCAL_PICKUP: 'local pickup'
 
 }
 
@@ -28,10 +28,11 @@ const ORDER_STATUS = {
     CONFIRMED: 'confirmed',
     SHIPPED: 'shipped',
     DELIVERED: 'delivered',
-    CANCELLED: '    ',
+    CANCELLED: 'cancelled',
     RETURNED: 'returned',
     FAILED: 'failed',
-    COMPLETED:'completed'
+    COMPLETED: 'completed',
+    CONFIREM_RECEIPT: 'confirm_receipt'
 };
 
 const PAYMENT_STATUS = {

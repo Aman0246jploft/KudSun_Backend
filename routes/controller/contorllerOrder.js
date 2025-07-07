@@ -7,7 +7,7 @@ const { UserAddress, Order, SellProduct, Bid, FeeSetting, User, Shipping, OrderS
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const HTTP_STATUS = require('../../utils/statusCode');
 const { toObjectId, apiSuccessRes, apiErrorRes, parseItems } = require('../../utils/globalFunction');
-const { SALE_TYPE, DEFAULT_AMOUNT, PAYMENT_METHOD, ORDER_STATUS, PAYMENT_STATUS, CHARGE_TYPE, PRICING_TYPE } = require('../../utils/Role');
+const { SALE_TYPE, DEFAULT_AMOUNT, PAYMENT_METHOD, ORDER_STATUS, PAYMENT_STATUS, CHARGE_TYPE, PRICING_TYPE, SHIPPING_STATUS } = require('../../utils/Role');
 const { default: mongoose } = require('mongoose');
 const Joi = require('joi');
 
@@ -439,12 +439,14 @@ const previewOrder = async (req, res) => {
         console.log("itemsitems", items)
 
         for (const item of items) {
-            const product = await SellProduct.findOne({ _id: toObjectId(item.productId), isDeleted: false, isDisable: false, isSold: false });
+            const product = await SellProduct.findOne({ _id: toObjectId(item.productId), isDeleted: false, isDisable: false });
+            console.log("product", product)
             if (!product) {
                 return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, `Product not found or unavailable: ${item.productId}`);
             }
 
             const seller = await User.findOne({ _id: product.userId });
+            console.log("seller", seller)
             if (!seller || seller.isDeleted || seller.isDisable) {
                 return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `Seller of product ${product.title} is deleted or disabled`);
             }
@@ -891,13 +893,15 @@ const updateOrderStatusBySeller = async (req, res) => {
 
         // Check if ALL products are local pickup
         const allLocalPickup = populatedOrder.items.every(
-            item => item.productId?.deliveryType === "local_pickup"
+            item => item.productId?.deliveryType === "local pickup"
         );
 
         // Check if ANY product is NOT local pickup
         const hasNonLocalPickup = populatedOrder.items.some(
-            item => item.productId?.deliveryType !== "local_pickup"
+            item => item.productId?.deliveryType !== "local pickup"
         );
+
+
 
         // Define allowed status transitions based on current status and delivery types
         let allowedTransitions = [];
@@ -906,6 +910,8 @@ const updateOrderStatusBySeller = async (req, res) => {
             // From pending, seller can cancel or confirm
             allowedTransitions = [ORDER_STATUS.CANCELLED, ORDER_STATUS.CONFIRMED];
         } else if (currentStatus === ORDER_STATUS.CONFIRMED) {
+
+
             if (allLocalPickup) {
                 // All local pickup: can go directly to DELIVERED or CANCELLED
                 allowedTransitions = [ORDER_STATUS.DELIVERED, ORDER_STATUS.CANCELLED];
@@ -929,6 +935,7 @@ const updateOrderStatusBySeller = async (req, res) => {
             );
         }
 
+        // console.log("hasNonLocalPickup",hasNonLocalPickup)
 
         if (newStatus === ORDER_STATUS.SHIPPED && !hasNonLocalPickup) {
             return apiErrorRes(
@@ -937,8 +944,6 @@ const updateOrderStatusBySeller = async (req, res) => {
                 "Shipping step not allowed for orders with only local‑pickup products"
             );
         }
-
-
 
 
 
@@ -970,11 +975,8 @@ const updateOrderStatusBySeller = async (req, res) => {
                 });
                 await newShipping.save();
             }
-            return apiErrorRes(
-                HTTP_STATUS.BAD_REQUEST,
-                res,
-                "Shipping step not allowed for orders with only local pickup products"
-            );
+
+
         }
 
         // Update product isSold flag if order is cancelled, returned, or failed
@@ -1021,6 +1023,104 @@ const updateOrderStatusBySeller = async (req, res) => {
 };
 
 
+const updateOrderStatusByBuyer = async (req, res) => {
+    try {
+        const buyerId = req.user?.userId;
+        const { orderId } = req.params;
+        let { status: newStatus } = req.body;
+
+        if (!newStatus) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Status is required");
+        }
+
+        const order = await Order.findOne({ _id: orderId, userId: buyerId });
+        if (!order) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Order not found for this buyer");
+        }
+
+        const currentStatus = order.status;
+
+        if (currentStatus === newStatus) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Order is already in this status");
+        }
+
+        // Populate product data
+        const populatedOrder = await order.populate('items.productId');
+
+        let allowedTransitions = [];
+
+        if (currentStatus === ORDER_STATUS.SHIPPED) {
+            // After shipped, buyer can confirm delivery or request return
+            allowedTransitions = [ORDER_STATUS.CONFIREM_RECEIPT];
+            // allowedTransitions = [ORDER_STATUS.CONFIREM_RECEIPT, ORDER_STATUS.RETURNED];
+        } else if (currentStatus === ORDER_STATUS.DELIVERED) {
+            // After delivery, buyer can request return
+            allowedTransitions = [ORDER_STATUS.RETURNED];
+        } else {
+            return apiErrorRes(
+                HTTP_STATUS.BAD_REQUEST,
+                res,
+                `Buyers can only update orders after they are shipped or delivered`
+            );
+        }
+
+        if (!allowedTransitions.includes(newStatus)) {
+            return apiErrorRes(
+                HTTP_STATUS.BAD_REQUEST,
+                res,
+                `Cannot move order from ${currentStatus} to ${newStatus}`
+            );
+        }
+
+        // If buyer is requesting return, unlock isSold flag
+        if (newStatus === ORDER_STATUS.RETURNED) {
+            for (const item of populatedOrder.items) {
+                const product = item.productId;
+                const sellerProduct = await SellProduct.findOne({ _id: product._id });
+                if (sellerProduct?.saleType === 'fixed') {
+                    sellerProduct.isSold = false;
+                    await sellerProduct.save();
+                }
+            }
+        }
+
+        // Save new status
+        order.status = newStatus;
+        await order.save();
+
+        if (currentStatus !== newStatus) {
+            await OrderStatusHistory.create({
+                orderId: order._id,
+                oldStatus: currentStatus,
+                newStatus,
+                changedBy: req.user?.userId,
+                note: 'Status updated by buyer'
+            });
+        }
+
+        return apiSuccessRes(
+            HTTP_STATUS.OK,
+            res,
+            newStatus === ORDER_STATUS.DELIVERED
+                ? "Order marked as delivered. Thank you for confirming receipt!"
+                : "Order status updated successfully",
+            {
+                orderId: order._id,
+                status: order.status,
+            }
+        );
+    } catch (err) {
+        console.error("Update order status by buyer error:", err);
+        return apiErrorRes(
+            HTTP_STATUS.INTERNAL_SERVER_ERROR,
+            res,
+            err.message || "Failed to update order status"
+        );
+    }
+};
+
+
+
 
 
 //////////////////////////////////////////////////////////////////////////////
@@ -1028,6 +1128,7 @@ router.get('/previewOrder', perApiLimiter(), upload.none(), previewOrder);
 router.post('/placeOrder', perApiLimiter(), upload.none(), createOrder);
 router.post('/paymentCallback', paymentCallback);
 router.post('/updateOrderStatusBySeller/:orderId', perApiLimiter(), upload.none(), updateOrderStatusBySeller);
+router.post('/updateOrderStatusByBuyer/:orderId', perApiLimiter(), upload.none(), updateOrderStatusByBuyer);
 router.get('/getSoldProducts', perApiLimiter(), upload.none(), getSoldProducts);
 router.get('/getBoughtProduct', perApiLimiter(), upload.none(), getBoughtProducts);
 //////////////////////////////////////////////////////////////////////////////

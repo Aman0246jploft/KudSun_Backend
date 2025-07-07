@@ -204,7 +204,8 @@ const getSellerRequests = async (req, res) => {
 
         const query = {
             isDeleted: false,
-            isDisable: false
+            isDisable: false,
+            verificationStatus:"Pending"
         };
 
         if (userId) {
