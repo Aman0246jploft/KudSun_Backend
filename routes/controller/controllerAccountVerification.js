@@ -78,13 +78,13 @@ const getVerificationIdList = async (req, res) => {
         const skip = (pageNo - 1) * pageSize;
 
         const [data, totalCount] = await Promise.all([
-            AccountVerification.find({ isDeleted: false, userId: toObjectId(req.user.userId) })
+            SellerVerification.find({ isDeleted: false, userId: toObjectId(req.user.userId) })
                 .sort({ createdAt: -1 }) // newest first
                 .skip(skip)
                 .limit(pageSize)
                 .select('-__v -isDisable -isDeleted '), // optional: exclude __v
 
-            AccountVerification.countDocuments({ isDeleted: false })
+            SellerVerification.countDocuments({ isDeleted: false })
         ]);
 
         return apiSuccessRes(HTTP_STATUS.OK, res, 'Verification list fetched successfully', {
@@ -206,9 +206,11 @@ router.get('/getMyVerificationList', perApiLimiter(),
 
 
 
+// SellerVerification
 router.get('/getVerificationIdList', perApiLimiter(), getVerificationIdList);
 
 router.get('/getList', perApiLimiter(), globalCrudController.getList(SellerVerification));
+
 router.post('/changeVerificationStatus', perApiLimiter(), upload.none(), changeVerificationStatus);
 
 
