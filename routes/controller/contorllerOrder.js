@@ -4,7 +4,7 @@ const multer = require('multer');
 const upload = multer();
 const router = express.Router();
 const moment = require("moment")
-const { UserAddress, Order, SellProduct, Bid, FeeSetting, User } = require('../../db');
+const { UserAddress, Order, SellProduct, Bid, FeeSetting, User, Shipping } = require('../../db');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const HTTP_STATUS = require('../../utils/statusCode');
 const { toObjectId, apiSuccessRes, apiErrorRes, parseItems } = require('../../utils/globalFunction');
@@ -900,8 +900,47 @@ const updateOrderStatusBySeller = async (req, res) => {
             );
         }
 
-        // Prevent shipping if no non-local-pickup products
+
         if (newStatus === ORDER_STATUS.SHIPPED && !hasNonLocalPickup) {
+            return apiErrorRes(
+                HTTP_STATUS.BAD_REQUEST,
+                res,
+                "Shipping step not allowed for orders with only local‑pickup products"
+            );
+        }
+
+
+
+
+
+        // Prevent shipping if no non-local-pickup products
+        if (newStatus === ORDER_STATUS.SHIPPED) {
+            const { carrierId, trackingNumber } = req.body;
+            const shippingData = {
+                carrier: carrierId,
+                trackingNumber: trackingNumber || undefined,
+                status: SHIPPING_STATUS.NOT_DISPATCHED,
+            };
+
+            if (!carrierId) {
+                return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "CarrierId is required for shipping");
+            }
+            const existingShipping = await Shipping.findOne({ orderId: order._id, isDeleted: false });
+            if (existingShipping) {
+                // Update existing shipping record
+                existingShipping.carrier = shippingData.carrier;
+                existingShipping.trackingNumber = shippingData.trackingNumber;
+                existingShipping.status = shippingData.status;
+                await existingShipping.save();
+            } else {
+                // Create new shipping record
+                const newShipping = new Shipping({
+                    orderId: order._id,
+                    addressId: order.addressId, // make sure order has this field
+                    ...shippingData,
+                });
+                await newShipping.save();
+            }
             return apiErrorRes(
                 HTTP_STATUS.BAD_REQUEST,
                 res,
@@ -946,8 +985,8 @@ const updateOrderStatusBySeller = async (req, res) => {
 
 
 //////////////////////////////////////////////////////////////////////////////
-router.post('/placeOrder', perApiLimiter(), upload.none(), createOrder);
 router.get('/previewOrder', perApiLimiter(), upload.none(), previewOrder);
+router.post('/placeOrder', perApiLimiter(), upload.none(), createOrder);
 router.post('/paymentCallback', paymentCallback);
 router.post('/updateOrderStatusBySeller/:orderId', perApiLimiter(), upload.none(), updateOrderStatusBySeller);
 //////////////////////////////////////////////////////////////////////////////
