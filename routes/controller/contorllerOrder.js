@@ -3,7 +3,8 @@ const multer = require('multer');
 const upload = multer();
 const router = express.Router();
 const moment = require("moment")
-const { UserAddress, Order, SellProduct, Bid, FeeSetting, User, Shipping, OrderStatusHistory } = require('../../db');
+const { UserAddress,Transaction, Order, SellProduct, Bid, FeeSetting, User, Shipping, OrderStatusHistory, ProductReview } = require('../../db');
+
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const HTTP_STATUS = require('../../utils/statusCode');
 const { toObjectId, apiSuccessRes, apiErrorRes, parseItems } = require('../../utils/globalFunction');
@@ -213,11 +214,14 @@ const createOrder = async (req, res) => {
 
 
 // Sample callback for successful payment
+
 const paymentCallback = async (req, res) => {
     const schema = Joi.object({
         orderId: Joi.string().required(),
         paymentStatus: Joi.string().valid(PAYMENT_STATUS.COMPLETED, PAYMENT_STATUS.FAILED).required(),
         paymentId: Joi.string().required(),
+        cardType: Joi.string().required(),
+        cardLast4: Joi.string().required(),
     });
 
     const { error, value } = schema.validate(req.body);
@@ -225,7 +229,7 @@ const paymentCallback = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, error.details[0].message);
     }
 
-    const { orderId, paymentStatus, paymentId } = value;
+    const { orderId, paymentStatus, paymentId, cardType, cardLast4 } = value;
 
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -260,6 +264,20 @@ const paymentCallback = async (req, res) => {
         await order.save({ session });
         await session.commitTransaction();
         session.endSession();
+
+        // Log transaction (Tnx) if payment completed or failed
+        if ([PAYMENT_STATUS.COMPLETED, PAYMENT_STATUS.FAILED].includes(paymentStatus)) {
+            await Transaction.create({
+                orderId: order._id,
+                userId: order.userId,
+                amount: order.grandTotal,
+                paymentMethod: order.paymentMethod,
+                paymentStatus,
+                paymentGatewayId: paymentId,
+                cardType: cardType || undefined,
+                cardLast4: cardLast4 || undefined,
+            });
+        }
 
         if (order.status !== ORDER_STATUS.FAILED) {
             await OrderStatusHistory.create({
@@ -391,9 +409,29 @@ const getBoughtProducts = async (req, res) => {
             .populate({
                 path: 'items.productId',
                 model: 'SellProduct',
-                select: 'title productImages fixedPrice saleType auctionSettings'
+                select: 'title productImages fixedPrice status saleType auctionSettings'
             })
             .lean();
+
+
+        for (const order of orders) {
+            for (const item of order.items || []) {
+                const productId = item.productId?._id;
+                item.isReviewed = false;
+                if (item.status === ORDER_STATUS.CONFIRM_RECEIPT && productId) {
+                    const reviewExists = await ProductReview.exists({
+                        userId,
+                        productId,
+                        isDeleted: false,
+                        isDisable: false
+                    });
+                    item.isReviewed = !!reviewExists;
+                }
+            }
+
+
+
+        }
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Bought products fetched successfully", {
             pageNo,
@@ -1051,8 +1089,8 @@ const updateOrderStatusByBuyer = async (req, res) => {
 
         if (currentStatus === ORDER_STATUS.SHIPPED) {
             // After shipped, buyer can confirm delivery or request return
-            allowedTransitions = [ORDER_STATUS.CONFIREM_RECEIPT];
-            // allowedTransitions = [ORDER_STATUS.CONFIREM_RECEIPT, ORDER_STATUS.RETURNED];
+            allowedTransitions = [ORDER_STATUS.CONFIRM_RECEIPT];
+            // allowedTransitions = [ORDER_STATUS.CONFIRM_RECEIPT, ORDER_STATUS.RETURNED];
         } else if (currentStatus === ORDER_STATUS.DELIVERED) {
             // After delivery, buyer can request return
             allowedTransitions = [ORDER_STATUS.RETURNED];
@@ -1119,7 +1157,141 @@ const updateOrderStatusByBuyer = async (req, res) => {
     }
 };
 
+// Get detailed order info for UI
+const getOrderDetails = async (req, res) => {
+    try {
+        const { orderId } = req.params;
+        if (!orderId) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'orderId is required');
+        }
 
+        // Fetch order with all necessary relations
+        const order = await Order.findOne({ _id: orderId, isDeleted: false })
+            .populate({
+                path: 'items.productId',
+                model: 'SellProduct',
+                select: 'title productImages fixedPrice saleType auctionSettings shippingCharge deliveryType',
+            })
+            .populate({
+                path: 'userId',
+                select: 'userName profileImage isLive is_Id_verified is_Verified_Seller',
+            })
+            .populate({
+                path: 'sellerId',
+                select: 'userName profileImage isLive is_Id_verified is_Verified_Seller',
+            })
+            .populate({
+                path: 'addressId',
+                model: 'UserAddress',
+            })
+            .lean();
+
+        if (!order) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Order not found');
+        }
+
+        // Shipping info
+        const shipping = await Shipping.findOne({ orderId: order._id, isDeleted: false })
+            .populate({ path: 'carrier', select: 'name' })
+            .lean();
+
+        // Status history
+        const statusHistory = await OrderStatusHistory.find({ orderId: order._id })
+            .sort({ changedAt: 1 })
+            .populate({ path: 'changedBy', select: 'userName' })
+            .lean();
+
+        // Dispute info
+        const dispute = await require('../../db/models/Dispute').findOne({ orderId: order._id, isDeleted: false }).lean();
+
+        // Reviews (for each product in order)
+        const Review = require('../../db/models/ProductReview');
+        const reviews = await Promise.all(
+            (order.items || []).map(async (item) => {
+                const review = await Review.findOne({ productId: item.productId?._id, userId: order.userId?._id, isDeleted: false });
+                return review ? {
+                    productId: item.productId?._id,
+                    rating: review.rating,
+                    reviewText: review.reviewText,
+                    reviewImages: review.reviewImages,
+                    createdAt: review.createdAt,
+                } : null;
+            })
+        );
+
+        // Fetch transaction info for this order
+        const transaction = await Transaction.findOne({ orderId: order._id }).lean();
+
+        // Format breakdown
+        const breakdown = {
+            item: order.totalAmount || 0,
+            shipping: order.shippingCharge || 0,
+            buyerProtectionFee: order.BuyerProtectionFee || 0,
+            taxes: order.Tax || 0,
+            total: order.grandTotal || 0,
+        };
+
+        // Format response
+        const response = {
+            status: order.status,
+            paymentStatus: order.paymentStatus,
+            orderId: order.orderId || String(order._id),
+            orderDate: order.createdAt,
+            paymentMethod: order.paymentMethod,
+            paymentTime: order.updatedAt,
+            seller: order.sellerId || null,
+            buyer: order.userId || null,
+            items: (order.items || []).map(item => ({
+                title: item.productId?.title || '',
+                image: item.productId?.productImages?.[0] || '',
+                price: item.priceAtPurchase || 0,
+                quantity: item.quantity || 1,
+                saleType: item.productId?.saleType || '',
+                auctionSettings: item.productId?.auctionSettings || null,
+                shippingCharge: item.productId?.shippingCharge || 0,
+                deliveryType: item.productId?.deliveryType || '',
+            })),
+            breakdown,
+            address: order.addressId || null,
+            shipping: shipping ? {
+                carrier: shipping.carrier?.name || '',
+                trackingNumber: shipping.trackingNumber || '',
+                shippingDate: shipping.updatedAt || null,
+                status: shipping.status || '',
+            } : null,
+            statusHistory: (statusHistory || []).map(h => ({
+                oldStatus: h.oldStatus,
+                newStatus: h.newStatus,
+                changedBy: h.changedBy?.userName || '',
+                changedAt: h.changedAt,
+                note: h.note || '',
+            })),
+            dispute: dispute ? {
+                status: dispute.status,
+                reason: dispute.reason,
+                description: dispute.description,
+                resolved: dispute.status === 'resolved',
+                createdAt: dispute.createdAt,
+            } : null,
+            reviews: reviews.filter(Boolean),
+            transaction: transaction ? {
+                transactionId: transaction._id,
+                paymentGatewayId: transaction.paymentGatewayId,
+                amount: transaction.amount,
+                paymentMethod: transaction.paymentMethod,
+                paymentStatus: transaction.paymentStatus,
+                cardType: transaction.cardType || '',
+                cardLast4: transaction.cardLast4 || '',
+                createdAt: transaction.createdAt,
+            } : null,
+        };
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, 'Order details fetched', response);
+    } catch (err) {
+        console.error('Get order details error:', err);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || 'Failed to fetch order details');
+    }
+};
 
 //////////////////////////////////////////////////////////////////////////////
 router.get('/previewOrder', perApiLimiter(), upload.none(), previewOrder);
@@ -1132,6 +1304,7 @@ router.get('/getBoughtProduct', perApiLimiter(), upload.none(), getBoughtProduct
 //////////////////////////////////////////////////////////////////////////////
 router.post('/updateOrder/:orderId', perApiLimiter(), upload.none(), updateOrderById);
 router.post('/cancelAndRelistProduct', perApiLimiter(), upload.none(), cancelOrderAndRelistProducts);
+router.get('/details/:orderId', perApiLimiter(), upload.none(), getOrderDetails);
 
 
 

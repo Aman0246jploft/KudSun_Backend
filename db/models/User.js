@@ -138,10 +138,9 @@ const UserSchema = new Schema({
         type: Boolean,
         defaut: true
     },
-    averageRatting: {
-        type: Number,
-        default: 0
-    },
+    totalRatingSum: { type: Number, default: 0 },
+    totalRatingCount: { type: Number, default: 0 },
+    averageRatting: { type: Number, default: 0 },
     walletBalance: {
         type: Number,
         default: 0,

@@ -59,6 +59,7 @@ module.exports = {
     SellerBank: require("./models/SellerBank"),
     BlockUser: require("./models/BlockUser"),
     OrderStatusHistory: require("./models/Payment/OrderStatusHistory"),
+    Transaction:require("./models/Payment/Transaction"),
     //rbac---->
     Module: require("./models/Rbac/Module"),
     Role: require("./models/Rbac/Role"),
