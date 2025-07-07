@@ -110,6 +110,7 @@ const create = async (req, res) => {
             is_Verified_Seller: true,
             is_Id_verified: false,
         });
+        
         return apiSuccessRes(HTTP_STATUS.CREATED, res, 'Seller verification submitted successfully', result);
 
     } catch (err) {

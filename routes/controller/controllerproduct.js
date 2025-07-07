@@ -1454,55 +1454,55 @@ const getProduct = async (req, res) => {
         };
 
         // --- Auction Info (if applicable)
-       if (product.saleType === SALE_TYPE.AUCTION) {
-    const allBids = await Bid.find({ productId: id }).sort({ placedAt: -1 }).lean();
+        if (product.saleType === SALE_TYPE.AUCTION) {
+            const allBids = await Bid.find({ productId: id }).sort({ placedAt: -1 }).lean();
 
-    const totalBids = allBids.length;
-    const isReserveMet = allBids.some(bid => bid.isReserveMet === true);
-    const currentHighestBid = allBids.reduce((max, bid) => bid.amount > max.amount ? bid : max, { amount: 0 });
+            const totalBids = allBids.length;
+            const isReserveMet = allBids.some(bid => bid.isReserveMet === true);
+            const currentHighestBid = allBids.reduce((max, bid) => bid.amount > max.amount ? bid : max, { amount: 0 });
 
-    const bidderMap = new Map();
-    const latestBidMap = new Map();
+            const bidderMap = new Map();
+            const latestBidMap = new Map();
 
-    for (const bid of allBids) {
-        const userIdStr = bid.userId.toString();
-        if (!bidderMap.has(userIdStr)) {
-            bidderMap.set(userIdStr, bid.amount);
-            latestBidMap.set(userIdStr, bid);
+            for (const bid of allBids) {
+                const userIdStr = bid.userId.toString();
+                if (!bidderMap.has(userIdStr)) {
+                    bidderMap.set(userIdStr, bid.amount);
+                    latestBidMap.set(userIdStr, bid);
+                }
+            }
+
+            const bidderIds = Array.from(bidderMap.keys());
+
+            const bidderUsers = await User.find({ _id: { $in: bidderIds } })
+                .select('_id userName profileImage isLive createdAt')
+                .lean();
+
+            const bidders = bidderUsers.map(user => {
+                const userIdStr = user._id.toString();
+                const isCurrentUser = loginUserId?.toString() === userIdStr;
+
+                return {
+                    ...user,
+                    latestBidAmount: bidderMap.get(userIdStr),
+                    myBid: isCurrentUser ? true : false
+                };
+            });
+
+
+            product.auctionDetails = {
+                ...product.auctionSettings,
+                totalBids,
+                isReserveMet,
+                isLiveAuction: product.auctionSettings?.isBiddingOpen || false,
+                currentHighestBid: {
+                    userId: currentHighestBid.userId,
+                    amount: currentHighestBid.amount,
+                    placedAt: currentHighestBid.placedAt
+                },
+                bidders
+            };
         }
-    }
-
-    const bidderIds = Array.from(bidderMap.keys());
-
-    const bidderUsers = await User.find({ _id: { $in: bidderIds } })
-        .select('_id userName profileImage isLive createdAt')
-        .lean();
-
- const bidders = bidderUsers.map(user => {
-    const userIdStr = user._id.toString();
-    const isCurrentUser = loginUserId?.toString() === userIdStr;
-
-    return {
-        ...user,
-        latestBidAmount: bidderMap.get(userIdStr),
-        myBid: isCurrentUser ? true : false
-    };
-});
-
-
-    product.auctionDetails = {
-        ...product.auctionSettings,
-        totalBids,
-        isReserveMet,
-        isLiveAuction: product.auctionSettings?.isBiddingOpen || false,
-        currentHighestBid: {
-            userId: currentHighestBid.userId,
-            amount: currentHighestBid.amount,
-            placedAt: currentHighestBid.placedAt
-        },
-        bidders
-    };
-}
 
         const [totalComments, topComments] = await Promise.all([
             ProductComment.countDocuments({
@@ -1618,11 +1618,12 @@ const getProduct = async (req, res) => {
         product.latestUserProducts = latestProducts;
 
 
+
         const recommendedProducts = await SellProduct.find({
             categoryId: product?.categoryId?._id || product?.categoryId || product?.subCategoryId,
             _id: { $ne: product._id },
             isDeleted: false,
-            saleType:SALE_TYPE.FIXED,
+            // saleType:SALE_TYPE.FIXED / AUCTION ,
             isDisable: false,
             isDraft: { $ne: true },
         })
@@ -1635,11 +1636,48 @@ const getProduct = async (req, res) => {
             })
             .lean();
 
+
+
         product.recommendedProducts = recommendedProducts;
+
+        const auctionProductIds = recommendedProducts
+            .filter(p => p.saleType === SALE_TYPE.AUCTION)
+            .map(p => p._id);
 
         const totalLike = await ProductLike.countDocuments({
             productId: toObjectId(id)
         })
+
+        const bidCounts = await Bid.aggregate([
+            {
+                $match: {
+                    productId: { $in: auctionProductIds }
+                }
+            },
+            {
+                $group: {
+                    _id: '$productId',
+                    totalBids: { $sum: 1 }
+                }
+            }
+        ]);
+        // Create a map for quick lookup
+        const bidCountMap = new Map();
+        bidCounts.forEach(b => {
+            bidCountMap.set(b._id.toString(), b.totalBids);
+        });
+        // Add totalBids to auction products only
+        product.recommendedProducts = recommendedProducts.map(p => {
+            if (p.saleType === SALE_TYPE.AUCTION) {
+                const count = bidCountMap.get(p._id.toString()) || 0;
+                return {
+                    ...p,
+                    totalBids: count
+                };
+            }
+            return p;
+        });
+
         if (loginUserId) {
 
             const isLike = await ProductLike.exists({
