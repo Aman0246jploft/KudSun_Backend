@@ -105,6 +105,11 @@ const create = async (req, res) => {
             result = await SellerVerification.create(payload);
         }
 
+
+        await User.findByIdAndUpdate(userId, {
+            is_Verified_Seller: true,
+            is_Id_verified: false,
+        });
         return apiSuccessRes(HTTP_STATUS.CREATED, res, 'Seller verification submitted successfully', result);
 
     } catch (err) {
@@ -112,8 +117,6 @@ const create = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Something went wrong');
     }
 };
-
-
 
 
 
@@ -147,13 +150,13 @@ const changeVerificationStatus = async (req, res) => {
         if (status === 'Approved') {
             await User.findByIdAndUpdate(
                 verification.userId,
-                { is_Verified_Seller: true,  is_Id_verified: true },
+                { is_Verified_Seller: true, is_Id_verified: true },
                 { session }
             );
         } else if (status === 'Rejected') {
             await User.findByIdAndUpdate(
                 verification.userId,
-                { is_Verified_Seller: false,is_Id_verified: false },
+                { is_Verified_Seller: false, is_Id_verified: false },
                 { session }
             );
         }
@@ -175,19 +178,6 @@ const changeVerificationStatus = async (req, res) => {
 
 
 
-
-
-
-router.post('/create', perApiLimiter(),
-    upload.fields([
-        { name: 'idDocumentFront', maxCount: 1 },
-        { name: 'selfieWithId', maxCount: 1 }
-        // { name: 'bankBook', maxCount: 1 }
-    ]),
-    validateRequest(sellerVerificationSchema),
-    create
-);
-
 const getSellerRequests = async (req, res) => {
     try {
         const {
@@ -205,7 +195,7 @@ const getSellerRequests = async (req, res) => {
         const query = {
             isDeleted: false,
             isDisable: false,
-            verificationStatus:"Pending"
+            verificationStatus: "Pending"
         };
 
         if (userId) {
@@ -246,6 +236,16 @@ const getSellerRequests = async (req, res) => {
 };
 
 
+
+router.post('/create', perApiLimiter(),
+    upload.fields([
+        { name: 'idDocumentFront', maxCount: 1 },
+        { name: 'selfieWithId', maxCount: 1 }
+        // { name: 'bankBook', maxCount: 1 }
+    ]),
+    validateRequest(sellerVerificationSchema),
+    create
+);
 
 router.get('/getList', perApiLimiter(), globalCrudController.getList(SellerVerification));
 router.post('/getById', perApiLimiter(), upload.none(), validateRequest(moduleSchemaForId), globalCrudController.getById(SellerVerification));
