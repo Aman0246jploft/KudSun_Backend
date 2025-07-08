@@ -45,7 +45,6 @@ const SellProductsSchema = new Schema({
     }],
     condition: {
         type: String,
-        enum: Object.values(conditions),
         required: true
     },
     saleType: {

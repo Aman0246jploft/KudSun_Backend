@@ -264,7 +264,7 @@ const updateParameterForSubCategory = async (req, res) => {
         const roleId = req.user?.roleId;
 
 
-        console.log( req.params)
+        console.log(req.params)
 
         if (!newKey && !newValues) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Nothing to update');
@@ -745,7 +745,7 @@ const getParametersBySubCategoryId = async (req, res) => {
     try {
         const { subCategoryId } = req.params;
         const userId = req.user?.userId;
-        const isAdmin = req.user?.role === 1; // Assuming role is stored in JWT payload
+        const isAdmin = req.user?.roleId === 1; // Assuming role is stored in JWT payload
 
         if (!subCategoryId) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Subcategory ID is required');
