@@ -15,11 +15,11 @@ const ShippingSchema = new Schema({
     addressId: { type: Schema.Types.ObjectId, ref: 'UserAddress', required: true }, // same as used in order
     trackingNumber: { type: String },
     carrier: { type: Schema.Types.ObjectId, ref: 'Carrier', required: true }, // e.g., BlueDart, Delhivery, etc.  
-    status: {
-        type: String,
-        enum: Object.values(SHIPPING_STATUS),
-        default: SHIPPING_STATUS.NOT_DISPATCHED
-    },
+    // status: {
+    //     type: String,
+    //     enum: Object.values(SHIPPING_STATUS),
+    //     default: SHIPPING_STATUS.NOT_DISPATCHED
+    // },
     isDisable: { type: Boolean, default: false },
     isDeleted: { type: Boolean, default: false }
 }, {

@@ -5,7 +5,10 @@ const { User, ChatMessage, ChatRoom } = require('../db');
 const { findOrCreateOneOnOneRoom } = require('../routes/services/serviceChat');
 const { handleGetChatRooms, handleGetMessageList } = require('../routes/controller/controllerChat');
 const { toObjectId } = require('../utils/globalFunction');
+const path = require('path');
 
+// Get base URL from environment or default to localhost
+const BASE_URL = process.env.BASE_URL || 'http://localhost:9097';
 
 const connectedUsers = {};
 async function setupSocket(server) {
@@ -60,87 +63,148 @@ async function setupSocket(server) {
         });
 
         //sendMessage
-        socket.on('sendMessage', async ({ roomId, type, content, mediaUrl, systemMeta, ...data }) => {
-            let isNewRoom = false;
-            if (!roomId) {
-                if (!data.otherUserId) {
-                    return socket.emit('error', { message: 'roomId or otherUserId required' });
+        socket.on('sendMessage', async ({ roomId, type, content, mediaUrl, fileName, systemMeta, ...data }) => {
+            try {
+                let isNewRoom = false;
+                if (!roomId) {
+                    if (!data.otherUserId) {
+                        return socket.emit('error', { message: 'roomId or otherUserId required' });
+                    }
+                    // Use your service to find or create 1-on-1 room
+                    const { room, isNew } = await findOrCreateOneOnOneRoom(userId, data.otherUserId);
+                    roomId = room._id?.toString();
+                    isNewRoom = isNew || false;
+                    socket.join(roomId); // join the socket room dynamically
                 }
-                // Use your service to find or create 1-on-1 room
-                const { room, isNew } = await findOrCreateOneOnOneRoom(userId, data.otherUserId);
-                roomId = room._id?.toString();
-                isNewRoom = isNew || false;
-                socket.join(roomId); // join the socket room dynamically
-            }
-            let newMessage = new ChatMessage({
-                chatRoom: roomId,
-                sender: (type === 'SYSTEM' || type === 'ORDER') ? null : userId,
-                messageType: type,
-                content,
-                mediaUrl,
-                systemMeta
-            });
-            await newMessage.save();
 
-            // Correct way in Mongoose 6+
-            newMessage = await newMessage.populate('sender', '_id userName profileImage');
+                // Handle file uploads
+                if (type === 'IMAGE' || type === 'VIDEO' || type === 'AUDIO' || type === 'FILE') {
+                    try {
+                        // Extract file data and type from base64
+                        const matches = content.match(/^data:([A-Za-z-+/]+);base64,(.+)$/);
+                        
+                        if (!matches || matches.length !== 3) {
+                            throw new Error('Invalid file data');
+                        }
 
-            const updatedRoom = await ChatRoom.findByIdAndUpdate(
-                roomId,
-                { lastMessage: newMessage._id, updatedAt: new Date() },
-                { new: true }
-            ).populate('lastMessage').populate('participants', 'userName profileImage');
+                        const fileType = matches[1];
+                        const fileData = Buffer.from(matches[2], 'base64');
 
-            const messageWithRoom = {
-                ...newMessage.toObject(),
-                chatRoom: roomId
-            };
+                        // Check file size (2MB)
+                        if (fileData.length > 2 * 1024 * 1024) {
+                            throw new Error('File size exceeds 2MB limit');
+                        }
 
-            io.to(roomId).emit('newMessage', messageWithRoom);
+                        // Generate unique filename
+                        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+                        const sanitizedName = fileName.replace(/[^a-zA-Z0-9.]/g, '-');
+                        const filename = uniqueSuffix + '-' + sanitizedName;
+                        const filepath = path.join('public/uploads/chat/', filename);
 
+                        // Create directory if it doesn't exist
+                        const dir = path.dirname(filepath);
+                        if (!require('fs').existsSync(dir)) {
+                            require('fs').mkdirSync(dir, { recursive: true });
+                        }
 
-            const roomForSender = {
-                ...updatedRoom.toObject(),
-                participants: updatedRoom.participants.filter(p => p._id?.toString() !== userId?.toString())
-            };
+                        // Save file
+                        require('fs').writeFileSync(filepath, fileData);
 
-            const roomForReceiver = {
-                ...updatedRoom.toObject(),
-                participants: updatedRoom.participants.filter(p => p._id?.toString() !== data.otherUserId?.toString())
-            };
-            if (isNewRoom) {
-                io.to(`user_${userId}`).emit('newChatRoom', {
-                    ...roomForSender,
-                    unreadCount: 0 // sender has no unread
-                });
+                        // Update content to be the full URL
+                        const relativePath = `/uploads/chat/${filename}`;
+                        content = `${BASE_URL}${relativePath}`;
+                        mediaUrl = content;
+                    } catch (error) {
+                        console.error('File upload error:', error);
+                        return socket.emit('error', { message: error.message });
+                    }
+                }
 
-                const unreadCount = await ChatMessage.countDocuments({
+                // Create message
+                let newMessage = new ChatMessage({
                     chatRoom: roomId,
-                    seenBy: { $nin: [toObjectId(data.otherUserId)] },
-                    sender: { $ne: toObjectId(data.otherUserId) }
-                });
-                io.to(`user_${data.otherUserId}`).emit('newChatRoom', {
-                    ...roomForReceiver,
-                    unreadCount
-                });
-            } else {
-                io.to(`user_${userId}`).emit('roomUpdated', {
-                    ...roomForSender,
-                    unreadCount: 0
-                });
-                const unreadCount = await ChatMessage.countDocuments({
-                    chatRoom: roomId,
-                    seenBy: { $ne: toObjectId(data.otherUserId) },
-                    sender: { $ne: toObjectId(data.otherUserId) }
+                    sender: (type === 'SYSTEM' || type === 'ORDER') ? null : userId,
+                    messageType: type,
+                    content,
+                    mediaUrl,
+                    fileName,
+                    systemMeta
                 });
 
-                io.to(`user_${data.otherUserId}`).emit('roomUpdated', {
-                    ...roomForReceiver,
-                    unreadCount
-                });
+                await newMessage.save();
+
+                // Populate sender info
+                newMessage = await newMessage.populate('sender', '_id userName profileImage');
+
+                // For product messages, populate product info
+                if (type === 'PRODUCT' && systemMeta?.productId) {
+                    newMessage = await newMessage.populate('systemMeta.productId');
+                }
+
+                const updatedRoom = await ChatRoom.findByIdAndUpdate(
+                    roomId,
+                    { lastMessage: newMessage._id, updatedAt: new Date() },
+                    { new: true }
+                ).populate('lastMessage').populate('participants', 'userName profileImage');
+
+                const messageWithRoom = {
+                    ...newMessage.toObject(),
+                    chatRoom: roomId
+                };
+
+                io.to(roomId).emit('newMessage', messageWithRoom);
+
+                // Add null check for updatedRoom
+                if (!updatedRoom) {
+                    console.error(`Room not found with ID: ${roomId}`);
+                    return socket.emit('error', { message: 'Room not found' });
+                }
+
+                const roomForSender = {
+                    ...updatedRoom.toObject(),
+                    participants: updatedRoom.participants.filter(p => p._id?.toString() !== userId?.toString())
+                };
+
+                const roomForReceiver = {
+                    ...updatedRoom.toObject(),
+                    participants: updatedRoom.participants.filter(p => p._id?.toString() !== data.otherUserId?.toString())
+                };
+
+                if (isNewRoom) {
+                    io.to(`user_${userId}`).emit('newChatRoom', {
+                        ...roomForSender,
+                        unreadCount: 0 // sender has no unread
+                    });
+
+                    const unreadCount = await ChatMessage.countDocuments({
+                        chatRoom: roomId,
+                        seenBy: { $nin: [toObjectId(data.otherUserId)] },
+                        sender: { $ne: toObjectId(data.otherUserId) }
+                    });
+                    io.to(`user_${data.otherUserId}`).emit('newChatRoom', {
+                        ...roomForReceiver,
+                        unreadCount
+                    });
+                } else {
+                    io.to(`user_${userId}`).emit('roomUpdated', {
+                        ...roomForSender,
+                        unreadCount: 0
+                    });
+                    const unreadCount = await ChatMessage.countDocuments({
+                        chatRoom: roomId,
+                        seenBy: { $ne: toObjectId(data.otherUserId) },
+                        sender: { $ne: toObjectId(data.otherUserId) }
+                    });
+
+                    io.to(`user_${data.otherUserId}`).emit('roomUpdated', {
+                        ...roomForReceiver,
+                        unreadCount
+                    });
+                }
+            } catch (error) {
+                console.error('Error in sendMessage:', error);
+                socket.emit('error', { message: 'Failed to send message' });
             }
-
-
         });
 
         // socket.on('markMessagesAsSeen', async ({ roomId }) => {
