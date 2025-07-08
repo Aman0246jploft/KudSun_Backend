@@ -81,6 +81,9 @@ const NOTIFICATION_TYPES = {
     CHAT: 'chat',
     ORDER: 'order',
     SYSTEM: 'system',
+    DEAL_CHAT: 'deal_chat',
+    ACTIVITY: 'activity',
+    ALERT: 'alert'
 };
 
 const PRICING_TYPE = {

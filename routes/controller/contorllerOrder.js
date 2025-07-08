@@ -3,7 +3,8 @@ const multer = require('multer');
 const upload = multer();
 const router = express.Router();
 const moment = require("moment")
-const { UserAddress,Transaction, Order, SellProduct, Bid, FeeSetting, User, Shipping, OrderStatusHistory, ProductReview } = require('../../db');
+const { UserAddress,Transaction, Order, SellProduct, Bid, FeeSetting, User, Shipping, OrderStatusHistory, ProductReview, ChatRoom, ChatMessage } = require('../../db');
+const { findOrCreateOneOnOneRoom } = require('../services/serviceChat');
 
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const HTTP_STATUS = require('../../utils/statusCode');
@@ -12,6 +13,45 @@ const { SALE_TYPE, DEFAULT_AMOUNT, PAYMENT_METHOD, ORDER_STATUS, PAYMENT_STATUS,
 const { default: mongoose } = require('mongoose');
 const Joi = require('joi');
 
+const emitSystemMessage = async (io, systemMessage, room, buyerId, sellerId) => {
+    if (!io) return;
+
+    // Emit the new message to the room
+    const messageWithRoom = {
+        ...systemMessage.toObject(),
+        chatRoom: room._id
+    };
+    io.to(room._id.toString()).emit('newMessage', messageWithRoom);
+
+    // Update chat room for both users
+    const roomObj = await ChatRoom.findById(room._id)
+        .populate('participants', 'userName profileImage')
+        .populate('lastMessage');
+
+    // For buyer
+    io.to(`user_${buyerId}`).emit('roomUpdated', {
+        ...roomObj.toObject(),
+        participants: roomObj.participants.filter(p => p._id.toString() !== buyerId.toString()),
+        unreadCount: 0
+    });
+
+    // For seller
+    io.to(`user_${sellerId}`).emit('roomUpdated', {
+        ...roomObj.toObject(),
+        participants: roomObj.participants.filter(p => p._id.toString() !== sellerId.toString()),
+        unreadCount: 1
+    });
+
+    // Also emit a specific system notification event
+    io.to(`user_${buyerId}`).emit('systemNotification', {
+        type: systemMessage.messageType,
+        meta: systemMessage.systemMeta
+    });
+    io.to(`user_${sellerId}`).emit('systemNotification', {
+        type: systemMessage.messageType,
+        meta: systemMessage.systemMeta
+    });
+};
 
 const createOrder = async (req, res) => {
     const session = await mongoose.startSession();
@@ -201,8 +241,56 @@ const createOrder = async (req, res) => {
             TaxType: taxType,
         });
         await order.save({ session });
+
+        // Create or get chat room with seller after order creation
+        const { room } = await findOrCreateOneOnOneRoom(userId, sellerId);
+        
+        // Create system message for order creation
+        const systemMessage = new ChatMessage({
+            chatRoom: room._id,
+            messageType: 'ORDER_STATUS',
+            systemMeta: {
+                statusType: 'ORDER',
+                status: ORDER_STATUS.PENDING,
+                orderId: order._id,
+                productId: orderItems[0].productId, // First product in order
+                meta: {
+                    orderNumber: order._id.toString(),
+                    totalAmount: order.grandTotal,
+                    itemCount: orderItems.length
+                },
+                actions: [
+                    {
+                        label: "View Order",
+                        url: `/order/${order._id}`,
+                        type: "primary"
+                    }
+                ],
+                theme: 'info'
+            }
+        });
+
+        console.log(12345,"systemMessage",systemMessage)
+
+
+        await systemMessage.save({ session });
+
+        // Update chat room's last message
+        await ChatRoom.findByIdAndUpdate(
+            room._id,
+            { 
+                lastMessage: systemMessage._id,
+                updatedAt: new Date()
+            },
+            { session }
+        );
+
         await session.commitTransaction();
         session.endSession();
+
+        const io = req.app.get('io');
+        await emitSystemMessage(io, systemMessage, room, userId, sellerId);
+
         return apiSuccessRes(HTTP_STATUS.CREATED, res, "Order placed successfully", order);
     } catch (err) {
         await session.abortTransaction();
@@ -235,7 +323,10 @@ const paymentCallback = async (req, res) => {
     session.startTransaction();
 
     try {
-        const order = await Order.findOne({ _id: orderId }).session(session);
+        const order = await Order.findOne({ _id: orderId })
+            .populate('userId')
+            .populate('sellerId')
+            .session(session);
 
         if (!order) {
             await session.abortTransaction();
@@ -262,10 +353,67 @@ const paymentCallback = async (req, res) => {
         }
 
         await order.save({ session });
+
+        // Find or create chat room between buyer and seller
+        const { room } = await findOrCreateOneOnOneRoom(order.userId, order.sellerId);
+
+        // Create system message for payment status
+        const systemMessage = new ChatMessage({
+            chatRoom: room._id,
+            messageType: 'PAYMENT_STATUS',
+            systemMeta: {
+                statusType: 'PAYMENT',
+                status: paymentStatus,
+                orderId: order._id,
+                productId: order.items[0].productId, // First product in order
+                title: paymentStatus === PAYMENT_STATUS.COMPLETED ? 'Payment Completed' : 'Payment Failed',
+                meta: {
+                    orderNumber: order._id.toString(),
+                    amount: `$${(order.grandTotal || 0).toFixed(2)}`,
+                    itemCount: order.items.length,
+                    paymentId: paymentId,
+                    paymentMethod: order.paymentMethod,
+                    cardInfo: paymentStatus === PAYMENT_STATUS.COMPLETED ? `${cardType} ending in ${cardLast4}` : null,
+                    timestamp: new Date().toISOString()
+                },
+                actions: paymentStatus === PAYMENT_STATUS.COMPLETED ? [
+                    {
+                        label: "View Order",
+                        url: `/order/${order._id}`,
+                        type: "primary"
+                    }
+                ] : [
+                    {
+                        label: "Try Payment Again",
+                        url: `/payment/retry/${order._id}`,
+                        type: "primary"
+                    },
+                    {
+                        label: "View Order",
+                        url: `/order/${order._id}`,
+                        type: "secondary"
+                    }
+                ],
+                theme: paymentStatus === PAYMENT_STATUS.COMPLETED ? 'success' : 'error'
+            }
+        });
+
+        await systemMessage.save({ session });
+
+        // Update chat room's last message
+        await ChatRoom.findByIdAndUpdate(
+            room._id,
+            { 
+                lastMessage: systemMessage._id,
+                updatedAt: new Date()
+            },
+            { session }
+        );
+
         await session.commitTransaction();
         session.endSession();
 
-        // Log transaction (Tnx) if payment completed or failed
+        // Log transaction
         if ([PAYMENT_STATUS.COMPLETED, PAYMENT_STATUS.FAILED].includes(paymentStatus)) {
             await Transaction.create({
                 orderId: order._id,
@@ -284,10 +432,12 @@ const paymentCallback = async (req, res) => {
                 orderId: order._id,
                 oldStatus: order.status,
                 newStatus: order.status,
-                // changedBy: req.user?.userId,
                 note: 'Payment status updated'
             });
         }
+
+        const io = req.app.get('io');
+        await emitSystemMessage(io, systemMessage, room, order.userId, order.sellerId);
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Payment status updated", {
             orderId: order._id,
@@ -915,7 +1065,10 @@ const updateOrderStatusBySeller = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "status is Required");
         }
 
-        const order = await Order.findOne({ _id: orderId, sellerId });
+        const order = await Order.findOne({ _id: orderId, sellerId })
+            .populate('items.productId')
+            .populate('userId');
+            
         if (!order) {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Order not found for this seller");
         }
@@ -938,8 +1091,6 @@ const updateOrderStatusBySeller = async (req, res) => {
         const hasNonLocalPickup = populatedOrder.items.some(
             item => item.productId?.deliveryType !== "local pickup"
         );
-
-
 
         // Define allowed status transitions based on current status and delivery types
         let allowedTransitions = [];
@@ -982,8 +1133,6 @@ const updateOrderStatusBySeller = async (req, res) => {
                 "Shipping step not allowed for orders with only local‑pickup products"
             );
         }
-
-
 
         // Prevent shipping if no non-local-pickup products
         if (newStatus === ORDER_STATUS.SHIPPED) {
@@ -1046,10 +1195,126 @@ const updateOrderStatusBySeller = async (req, res) => {
             });
         }
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Order status updated successfully", {
-            orderId: order._id,
-            status: order.status,
+        // Create or get chat room for system message
+        const { room } = await findOrCreateOneOnOneRoom(order.userId, sellerId);
+
+        // Prepare system message based on new status
+        let messageTitle = '';
+        let messageTheme = 'info';
+        let additionalMeta = {};
+        let additionalActions = [];
+
+        switch(newStatus) {
+            case ORDER_STATUS.CONFIRMED:
+                messageTitle = 'Order Confirmed';
+                messageTheme = 'success';
+                break;
+            case ORDER_STATUS.SHIPPED:
+                messageTitle = 'Order Shipped';
+                messageTheme = 'info';
+                if (req.body.carrierId && req.body.trackingNumber) {
+                    additionalMeta.carrier = req.body.carrierId;
+                    additionalMeta.trackingNumber = req.body.trackingNumber;
+                    additionalActions.push({
+                        label: "Track Shipment",
+                        url: `/tracking/${req.body.trackingNumber}`,
+                        type: "secondary"
+                    });
+                }
+                break;
+            case ORDER_STATUS.DELIVERED:
+                messageTitle = 'Order Delivered';
+                messageTheme = 'success';
+                break;
+            case ORDER_STATUS.CANCELLED:
+                messageTitle = 'Order Cancelled';
+                messageTheme = 'error';
+                break;
+            default:
+                messageTitle = `Order ${newStatus}`;
+                break;
+        }
+
+        // Create system message
+        const systemMessage = new ChatMessage({
+            chatRoom: room._id,
+            messageType: 'ORDER_STATUS',
+            systemMeta: {
+                statusType: 'ORDER',
+                status: newStatus,
+                orderId: order._id,
+                productId: order.items[0].productId,
+                title: messageTitle,
+                meta: {
+                    orderNumber: order._id.toString(),
+                    previousStatus: currentStatus,
+                    newStatus: newStatus,
+                    totalAmount: `$${(order.grandTotal || 0).toFixed(2)}`,
+                    itemCount: order.items.length,
+                    timestamp: new Date().toISOString(),
+                    ...additionalMeta
+                },
+                actions: [
+                    {
+                        label: "View Order",
+                        url: `/order/${order._id}`,
+                        type: "primary"
+                    },
+                    ...additionalActions
+                ],
+                theme: messageTheme
+            }
         });
+
+        // Start transaction
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
+        try {
+            // Save the system message
+            await systemMessage.save({ session });
+
+            // Update chat room's last message
+            await ChatRoom.findByIdAndUpdate(
+                room._id,
+                { 
+                    lastMessage: systemMessage._id,
+                    updatedAt: new Date()
+                },
+                { session }
+            );
+
+            // Update order status
+            order.status = newStatus;
+            await order.save({ session });
+
+            // Create status history
+            if (currentStatus !== newStatus) {
+                await OrderStatusHistory.create([{
+                    orderId: order._id,
+                    oldStatus: currentStatus,
+                    newStatus,
+                    changedBy: req.user?.userId,
+                    note: 'Status updated by seller'
+                }], { session });
+            }
+
+            await session.commitTransaction();
+
+            // Emit socket events
+            const io = req.app.get('io');
+            await emitSystemMessage(io, systemMessage, room, order.userId, sellerId);
+
+            return apiSuccessRes(HTTP_STATUS.OK, res, "Order status updated successfully", {
+                orderId: order._id,
+                status: order.status,
+            });
+        } catch (err) {
+            await session.abortTransaction();
+            throw err;
+        } finally {
+            session.endSession();
+        }
     } catch (err) {
         console.error("Update order status error:", err);
         return apiErrorRes(

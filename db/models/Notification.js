@@ -6,29 +6,38 @@ const NotificationSchema = new Schema({
     // The recipient user of this notification
     recipientId: {
         type: Schema.Types.ObjectId,
-        ref: 'User'
+        ref: 'User',
+        required: true,
+        index: true
     },
 
-    // The category/type of the notification (user, chat, etc)
+    // The category/type of the notification
     type: {
         type: String,
         required: true,
-        enum: Object.values(NOTIFICATION_TYPES)
+        enum: Object.values(NOTIFICATION_TYPES),
+        index: true
     },
-    // Conditional related fields depending on type
-    userId: {  // For type === 'user'
+
+    // Related fields based on notification type
+    userId: {  // For type === 'user' or sender of any notification
         type: Schema.Types.ObjectId,
         ref: 'User',
-        required: true,
         index: true,
     },
-    chatId: {  // For type === 'chat'
+
+    chatId: {  // For type === 'chat' or 'deal_chat'
         type: Schema.Types.ObjectId,
-        ref: 'Chat',
+        ref: 'ChatRoom',
     },
+    
     orderId: { // For type === 'order'
         type: Schema.Types.ObjectId,
         ref: 'Order',
+    },
+    productId: { // For deal_chat or activity related to products
+        type: Schema.Types.ObjectId,
+        ref: 'SellProduct',
     },
 
     title: {
@@ -46,8 +55,30 @@ const NotificationSchema = new Schema({
         index: true,
     },
 
+    // Additional metadata for the notification
     meta: {
         type: Schema.Types.Mixed,
+        default: {}
+    },
+
+    // For activity notifications
+    activityType: {
+        type: String,
+        enum: ['like', 'comment', 'follow', 'bid', 'review', null],
+        default: null
+    },
+
+    // For alert notifications
+    alertPriority: {
+        type: String,
+        enum: ['low', 'medium', 'high', null],
+        default: null
+    },
+
+    // URL to redirect when notification is clicked
+    redirectUrl: {
+        type: String,
+        default: null
     },
 
     createdAt: {
@@ -60,6 +91,8 @@ const NotificationSchema = new Schema({
         type: Date,
         default: Date.now,
     }
+}, {
+    timestamps: true
 });
 
 // Pre-save hook to update updatedAt
@@ -67,5 +100,8 @@ NotificationSchema.pre('save', function (next) {
     this.updatedAt = Date.now();
     next();
 });
+
+// Index for efficient querying
+NotificationSchema.index({ recipientId: 1, type: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Notification', NotificationSchema);
