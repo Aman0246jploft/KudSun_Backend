@@ -1336,7 +1336,10 @@ const updateOrderStatusByBuyer = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Status is required");
         }
 
-        const order = await Order.findOne({ _id: orderId, userId: buyerId });
+        const order = await Order.findOne({ _id: orderId, userId: buyerId })
+            .populate('items.productId')
+            .populate('sellerId');
+            
         if (!order) {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Order not found for this buyer");
         }
@@ -1387,31 +1390,114 @@ const updateOrderStatusByBuyer = async (req, res) => {
             }
         }
 
-        // Save new status
-        order.status = newStatus;
-        await order.save();
+        // Create or get chat room for system message
+        const { room } = await findOrCreateOneOnOneRoom(buyerId, order.sellerId);
 
-        if (currentStatus !== newStatus) {
-            await OrderStatusHistory.create({
-                orderId: order._id,
-                oldStatus: currentStatus,
-                newStatus,
-                changedBy: req.user?.userId,
-                note: 'Status updated by buyer'
-            });
+        // Prepare system message based on new status
+        let messageTitle = '';
+        let messageTheme = 'info';
+        let additionalMeta = {};
+
+        switch(newStatus) {
+            case ORDER_STATUS.CONFIRM_RECEIPT:
+                messageTitle = 'Order Received';
+                messageTheme = 'success';
+                break;
+            case ORDER_STATUS.RETURNED:
+                messageTitle = 'Return Requested';
+                messageTheme = 'warning';
+                break;
+            default:
+                messageTitle = `Order ${newStatus}`;
+                break;
         }
 
-        return apiSuccessRes(
-            HTTP_STATUS.OK,
-            res,
-            newStatus === ORDER_STATUS.DELIVERED
-                ? "Order marked as delivered. Thank you for confirming receipt!"
-                : "Order status updated successfully",
-            {
+        // Create system message
+        const systemMessage = new ChatMessage({
+            chatRoom: room._id,
+            messageType: 'ORDER_STATUS',
+            content: `Order status updated to ${newStatus}`,
+            systemMeta: {
+                statusType: 'ORDER',
+                status: newStatus,
                 orderId: order._id,
-                status: order.status,
+                productId: order.items[0].productId,
+                title: messageTitle,
+                meta: {
+                    orderNumber: order._id.toString(),
+                    previousStatus: currentStatus,
+                    newStatus: newStatus,
+                    totalAmount: `$${(order.grandTotal || 0).toFixed(2)}`,
+                    itemCount: order.items.length,
+                    timestamp: new Date().toISOString(),
+                    ...additionalMeta
+                },
+                actions: [
+                    {
+                        label: "View Order",
+                        url: `/order/${order._id}`,
+                        type: "primary"
+                    }
+                ],
+                theme: messageTheme
             }
-        );
+        });
+
+        // Start transaction
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
+        try {
+            // Save the system message
+            await systemMessage.save({ session });
+
+            // Update chat room's last message
+            await ChatRoom.findByIdAndUpdate(
+                room._id,
+                { 
+                    lastMessage: systemMessage._id,
+                    updatedAt: new Date()
+                },
+                { session }
+            );
+
+            // Save new status
+            order.status = newStatus;
+            await order.save({ session });
+
+            if (currentStatus !== newStatus) {
+                await OrderStatusHistory.create([{
+                    orderId: order._id,
+                    oldStatus: currentStatus,
+                    newStatus,
+                    changedBy: req.user?.userId,
+                    note: 'Status updated by buyer'
+                }], { session });
+            }
+
+            await session.commitTransaction();
+
+            // Emit socket events
+            const io = req.app.get('io');
+            await emitSystemMessage(io, systemMessage, room, order.sellerId, buyerId);
+
+            return apiSuccessRes(
+                HTTP_STATUS.OK,
+                res,
+                newStatus === ORDER_STATUS.CONFIRM_RECEIPT
+                    ? "Order marked as received. Thank you for confirming receipt!"
+                    : "Order status updated successfully",
+                {
+                    orderId: order._id,
+                    status: order.status,
+                }
+            );
+        } catch (err) {
+            await session.abortTransaction();
+            throw err;
+        } finally {
+            session.endSession();
+        }
     } catch (err) {
         console.error("Update order status by buyer error:", err);
         return apiErrorRes(

@@ -1629,7 +1629,7 @@ const getProduct = async (req, res) => {
         })
             .sort({ createdAt: -1 })
             .limit(10)
-            .select('fixedPrice auctionSettings productImages title saleType userId') // include userId to populate it
+            .select('fixedPrice auctionSettings productImages isSold title saleType userId') // include userId to populate it
             .populate({
                 path: 'userId',
                 select: 'averageRatting userName isLive profileImage is_Verified_Seller is_Id_verified'
