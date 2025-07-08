@@ -10,7 +10,7 @@ const HTTP_STATUS = require('../../utils/statusCode');
 const { uploadImageCloudinary } = require('../../utils/cloudinary');
 const CONSTANTS_MSG = require('../../utils/constantsMessage');
 const { default: mongoose } = require('mongoose');
-const { SALE_TYPE } = require('../../utils/Role');
+const { SALE_TYPE, roleId } = require('../../utils/Role');
 
 // Add a new thread // Draft also
 const addThread = async (req, res) => {
@@ -122,7 +122,7 @@ const updateThread = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, `${draftMode ? 'Draft' : 'Thread'} not found.`);
         }
 
-        if (existing.userId.toString() !== req.user.userId) {
+        if (req.user.roleId !==roleId.SUPER_ADMIN &&existing.userId.toString() !== req.user.userId) {
             return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, "You are not authorized to update this thread.");
         }
 
@@ -193,7 +193,7 @@ const updateThread = async (req, res) => {
 const deleteThread = async (req, res) => {
     try {
         const { id } = req.params;
-        const { isDraft } = req.body; // pass ?isDraft=true if deleting draft
+        const isDraft = req.body?.isDraft; // pass ?isDraft=true if deleting draft
         const draftMode = isDraft === 'true';
 
         const Model = draftMode ? ThreadDraft : Thread;
@@ -222,7 +222,7 @@ const deleteThread = async (req, res) => {
 const changeStatus = async (req, res) => {
     try {
         const { id } = req.params;
-        const { isDraft } = req.body; // pass ?isDraft=true if deleting draft
+        const isDraft = req.body?.isDraft; // pass ?isDraft=true if deleting draft
         const draftMode = isDraft === 'true';
 
         const Model = draftMode ? ThreadDraft : Thread;
@@ -587,7 +587,9 @@ const getThreads = async (req, res) => {
             userId,
             isTrending = false,
             sortBy = 'createdAt', // 'createdAt' | 'budget' | 'comments'
-            sortOrder = 'desc'    // 'asc' | 'desc'
+            sortOrder = 'desc',   // 'asc' | 'desc',
+            minBudget,
+            maxBudget
         } = req.query;
 
         let page = parseInt(pageNo);
@@ -596,6 +598,15 @@ const getThreads = async (req, res) => {
 
 
         const filters = { isDeleted: false };
+        if (minBudget || maxBudget) {
+            filters['budgetRange.min'] = {};
+            if (minBudget) {
+                filters['budgetRange.min'].$gte = parseFloat(minBudget);
+            }
+            if (maxBudget) {
+                filters['budgetRange.min'].$lte = parseFloat(maxBudget);
+            }
+        }
 
         if (categoryId && mongoose.Types.ObjectId.isValid(categoryId)) {
             filters.categoryId = categoryId;
@@ -624,6 +635,8 @@ const getThreads = async (req, res) => {
         } else {
             sortStage = { createdAt: sortDir }; // default
         }
+
+        console.log("54545454", filters)
 
         const threads = await Thread.find(filters)
             .populate('userId', 'userName profileImage isLive is_Id_verified is_Preferred_seller')
@@ -759,7 +772,7 @@ const getThreadById = async (req, res) => {
                     { path: 'districtId', select: 'value' }
                 ]
             })
-            .populate('categoryId', 'name subCategoryId')
+            .populate('categoryId')
             .select('-__v')
             .lean();
 
@@ -818,12 +831,13 @@ const getThreadById = async (req, res) => {
 
         // Get subcategory name from category
         let subCategoryName = null;
-        if (thread.subCategoryId && thread.categoryId?.subCategoryId?.length) {
-            const sub = thread.categoryId.subCategoryId.find(
+        if (thread.subCategoryId && thread.categoryId?.subCategories) {
+            const sub = thread.categoryId.subCategories.find(
                 s => s._id.toString() === thread.subCategoryId.toString()
             );
             if (sub) subCategoryName = sub.name;
         }
+
 
 
         const topComments = await ThreadComment.aggregate([
@@ -1189,7 +1203,8 @@ const getThreadById = async (req, res) => {
             topComments: topComments,
             recommendedThreads,
             myThread: currentUserId && userId === currentUserId,
-            subCategoryId: subCategoryName || null
+            subCategoryId: thread?.subCategoryId || null,
+            subCategoryName
         });
     } catch (error) {
         console.error("Error in getThreadById:", error);
