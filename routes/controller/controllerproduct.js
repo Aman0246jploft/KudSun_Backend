@@ -12,7 +12,52 @@ const CONSTANTS_MSG = require('../../utils/constantsMessage');
 const { SALE_TYPE, DeliveryType, ORDER_STATUS, roleId, conditions } = require('../../utils/Role');
 const { DateTime } = require('luxon');
 
+async function ensureParameterAndValue(categoryId, subCategoryId, key, value, userId = null,role) {
+    const category = await Category.findById(categoryId);
+    if (!category) throw new Error('Invalid categoryId');
 
+    const subCat = category.subCategories.id(subCategoryId);
+    if (!subCat) throw new Error('Invalid subCategoryId');
+
+    let parameter = subCat.parameters.find(p => p.key === key.toLowerCase().trim());
+
+    // If parameter doesn't exist, add it
+    if (!parameter) {
+        parameter = {
+            key: key.toLowerCase().trim(),
+            values: [{
+                value: value.toLowerCase().trim(),
+                isAddedByAdmin: role==roleId.SUPER_ADMIN,
+                addedByUserId: userId || null
+            }],
+            isAddedByAdmin: role==roleId.SUPER_ADMIN,
+            addedByUserId: userId || null
+        };
+        subCat.parameters.push(parameter);
+        await category.save();
+        parameter = subCat.parameters.find(p => p.key === key.toLowerCase().trim()); // re-fetch
+    } else {
+        const existingValue = parameter.values.find(v => v.value === value.toLowerCase().trim());
+        if (!existingValue) {
+            parameter.values.push({
+                value: value.toLowerCase().trim(),
+                isAddedByAdmin: role==roleId.SUPER_ADMIN,
+                addedByUserId: userId || null
+            });
+            await category.save();
+        }
+    }
+
+    const paramRef = subCat.parameters.find(p => p.key === key.toLowerCase().trim());
+    const valueRef = paramRef.values.find(v => v.value === value.toLowerCase().trim());
+
+    return {
+        parameterId: paramRef._id,
+        parameterName: paramRef.key,
+        valueId: valueRef._id,
+        valueName: valueRef.value
+    };
+}
 const addSellerProduct = async (req, res) => {
     try {
         const {
@@ -36,26 +81,41 @@ const addSellerProduct = async (req, res) => {
 
 
         // Parse JSON fields from form-data
+
+
+
         try {
-
             if (req.body.specifics) {
-                const raw = Array.isArray(req.body.specifics)
-                    ? req.body.specifics
-                    : [req.body.specifics];
+                const parsed = typeof req.body.specifics === 'string'
+                    ? JSON.parse(req.body.specifics)
+                    : req.body.specifics;
 
-                specifics = raw
-                    .map(item => {
-                        try {
-                            return JSON.parse(item);
-                        } catch {
-                            return null;
-                        }
-                    })
-                    .filter(item => item && typeof item === 'object');
+                if (typeof parsed !== 'object' || Array.isArray(parsed)) {
+                    return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Specifics must be a key-value object.");
+                }
+
+                for (const [key, value] of Object.entries(parsed)) {
+                    if (!key || !value) continue;
+                    const spec = await ensureParameterAndValue(
+                        categoryId,
+                        subCategoryId,
+                        key,
+                        value,
+                        req.user?.userId,
+                        req.user?.roleId
+                    );
+                    specifics.push(spec);
+                }
+            } else {
+                return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Specifics are required.");
             }
         } catch (e) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid 'specifics' JSON format.");
+            console.error("❌ Error in specifics handling:", e);
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid specifics format or processing failed.");
         }
+
+
+
 
         let tagArray = [];
         if (req.body.tags) {
