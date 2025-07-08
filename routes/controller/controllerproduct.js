@@ -12,7 +12,7 @@ const CONSTANTS_MSG = require('../../utils/constantsMessage');
 const { SALE_TYPE, DeliveryType, ORDER_STATUS, roleId, conditions } = require('../../utils/Role');
 const { DateTime } = require('luxon');
 
-async function ensureParameterAndValue(categoryId, subCategoryId, key, value, userId = null,role) {
+async function ensureParameterAndValue(categoryId, subCategoryId, key, value, userId = null, role) {
     const category = await Category.findById(categoryId);
     if (!category) throw new Error('Invalid categoryId');
 
@@ -27,10 +27,10 @@ async function ensureParameterAndValue(categoryId, subCategoryId, key, value, us
             key: key.toLowerCase().trim(),
             values: [{
                 value: value.toLowerCase().trim(),
-                isAddedByAdmin: role==roleId.SUPER_ADMIN,
+                isAddedByAdmin: role == roleId.SUPER_ADMIN,
                 addedByUserId: userId || null
             }],
-            isAddedByAdmin: role==roleId.SUPER_ADMIN,
+            isAddedByAdmin: role == roleId.SUPER_ADMIN,
             addedByUserId: userId || null
         };
         subCat.parameters.push(parameter);
@@ -41,7 +41,7 @@ async function ensureParameterAndValue(categoryId, subCategoryId, key, value, us
         if (!existingValue) {
             parameter.values.push({
                 value: value.toLowerCase().trim(),
-                isAddedByAdmin: role==roleId.SUPER_ADMIN,
+                isAddedByAdmin: role == roleId.SUPER_ADMIN,
                 addedByUserId: userId || null
             });
             await category.save();
@@ -215,10 +215,7 @@ const addSellerProduct = async (req, res) => {
         }
 
 
-        const validConditions = Object.values(conditions);
-        if (!validConditions.includes(condition)) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid condition value.");
-        }
+
 
         if (saleType === SALE_TYPE.FIXED && (!fixedPrice || isNaN(fixedPrice))) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Fixed price is required.");
@@ -331,8 +328,7 @@ const updateSellerProduct = async (req, res) => {
             if (!deliveryType) return apiErrorRes(400, res, "Missing required field: deliveryType.");
 
             // Condition must be valid
-            const validConditions = ['brand_new', 'like_new', 'good', 'fair', 'works'];
-            if (!validConditions.includes(condition)) return apiErrorRes(400, res, "Invalid condition value.");
+     
 
             // specifics must be array and non-empty
             if (!Array.isArray(specifics) || specifics.length === 0) {
