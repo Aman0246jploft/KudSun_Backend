@@ -298,7 +298,7 @@ const updateSellerProduct = async (req, res) => {
         }
 
         // Prepare fields to update from req.body
-        const {
+        let {
             categoryId,
             subCategoryId,
             title,
@@ -318,6 +318,45 @@ const updateSellerProduct = async (req, res) => {
             isDisable
         } = req.body;
 
+
+        let processedSpecifics = [];
+
+        try {
+            let parsedSpecifics = typeof req.body.specifics === 'string'
+                ? JSON.parse(req.body.specifics)
+                : req.body.specifics;
+
+            if (typeof parsedSpecifics !== 'object' || Array.isArray(parsedSpecifics)) {
+                return apiErrorRes(400, res, "Specifics must be a key-value object.");
+            }
+
+            for (const [key, value] of Object.entries(parsedSpecifics)) {
+                if (!key || !value) continue;
+                const spec = await ensureParameterAndValue(
+                    categoryId,
+                    subCategoryId,
+                    key,
+                    value,
+                    req.user?.userId,
+                    req.user?.roleId
+                );
+                processedSpecifics.push(spec);
+            }
+        } catch (err) {
+            console.error("❌ Error processing specifics:", err);
+            return apiErrorRes(400, res, "Invalid specifics format or processing failed.");
+        }
+
+
+        // Optional: do the same for auctionSettings
+        try {
+            if (typeof auctionSettings === 'string') {
+                auctionSettings = JSON.parse(auctionSettings);
+            }
+        } catch (err) {
+            return apiErrorRes(400, res, "Invalid JSON in auctionSettings field.");
+        }
+
         // Validate required fields ONLY for published (non-draft) products
         if (!isDraftUpdate) {
             if (!categoryId) return apiErrorRes(400, res, "Missing required field: categoryId.");
@@ -328,15 +367,15 @@ const updateSellerProduct = async (req, res) => {
             if (!deliveryType) return apiErrorRes(400, res, "Missing required field: deliveryType.");
 
             // Condition must be valid
-     
 
             // specifics must be array and non-empty
-            if (!Array.isArray(specifics) || specifics.length === 0) {
+            if (!Array.isArray(processedSpecifics) || processedSpecifics.length === 0) {
                 return apiErrorRes(400, res, "Missing or invalid field: specifics must be a non-empty array.");
             }
 
+            specifics = processedSpecifics
             // specifics: each item must have required keys
-            for (const spec of specifics) {
+            for (const spec of processedSpecifics) {
                 const keys = ['parameterId', 'parameterName', 'valueId', 'valueName'];
                 for (const key of keys) {
                     if (!spec[key]) {
