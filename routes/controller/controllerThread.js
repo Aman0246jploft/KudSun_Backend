@@ -122,7 +122,7 @@ const updateThread = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, `${draftMode ? 'Draft' : 'Thread'} not found.`);
         }
 
-        if (req.user.roleId !==roleId.SUPER_ADMIN &&existing.userId.toString() !== req.user.userId) {
+        if (req.user.roleId !== roleId.SUPER_ADMIN && existing.userId.toString() !== req.user.userId) {
             return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, "You are not authorized to update this thread.");
         }
 
@@ -340,7 +340,7 @@ const closeThread = async (req, res) => {
         if (!thread) {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, CONSTANTS_MSG.THREAD_NOT_FOUND, null)
         }
-        thread.isClosed = true
+        thread.isClosed = !thread.isClosed
         await thread.save()
         return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, thread)
 
@@ -831,7 +831,7 @@ const getThreadById = async (req, res) => {
 
         // Get subcategory name from category
         let subCategoryName = null;
-        if (thread.subCategoryId && thread.categoryId?.subCategories) {
+        if (thread.subCategoryId && thread.categoryId?.subCategories?.length) {
             const sub = thread.categoryId.subCategories.find(
                 s => s._id.toString() === thread.subCategoryId.toString()
             );
@@ -852,7 +852,9 @@ const getThreadById = async (req, res) => {
                     as: "author"
                 }
             },
-            { $unwind: "$author" },
+
+            { $unwind: { path: "$author", preserveNullAndEmptyArrays: true } },
+
             {
                 $lookup: {
                     from: "SellProduct",
@@ -877,7 +879,9 @@ const getThreadById = async (req, res) => {
                                 as: "author"
                             }
                         },
-                        { $unwind: "$author" },
+
+            { $unwind: { path: "$author", preserveNullAndEmptyArrays: true } },
+
                         {
                             $lookup: {
                                 from: "SellProduct",
@@ -917,7 +921,8 @@ const getThreadById = async (req, res) => {
                         title: 1,
                         description: 1,
                         fixedPrice: 1,
-                        isSold: 1
+                        isSold: 1,
+                        productImages:1
                     },
                     author: {
                         _id: 1,
@@ -936,7 +941,8 @@ const getThreadById = async (req, res) => {
                             title: 1,
                             description: 1,
                             fixedPrice: 1,
-                            isSold: 1
+                            isSold: 1,
+                            productImages:1
                         },
                         author: {
                             _id: 1,
@@ -958,7 +964,9 @@ const getThreadById = async (req, res) => {
         const allAssociatedProductIdsAgg = await ThreadComment.aggregate([
             { $match: { thread: threadObjectId } },
             { $project: { associatedProducts: 1 } },
-            { $unwind: "$associatedProducts" },
+
+            { $unwind: { path: "$associatedProducts", preserveNullAndEmptyArrays: true } },
+
             { $group: { _id: null, productIds: { $addToSet: "$associatedProducts" } } }
         ]);
 
@@ -983,8 +991,9 @@ const getThreadById = async (req, res) => {
                     as: "seller"
                 }
             },
-            { $unwind: "$seller" },
+        
 
+            { $unwind: { path: "$seller", preserveNullAndEmptyArrays: true } },
 
             {
                 $lookup: {
@@ -1026,7 +1035,7 @@ const getThreadById = async (req, res) => {
                     isSold: 1,
                     saleType: 1,
                     totalBids: 1,
-                    images: 1,
+                    productImages: 1,
                     seller: {
                         _id: 1,
                         userName: 1,
@@ -1061,7 +1070,9 @@ const getThreadById = async (req, res) => {
                     as: "user"
                 }
             },
-            { $unwind: "$user" },
+
+            { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
+
 
             // Lookup likes
             {
@@ -1137,7 +1148,7 @@ const getThreadById = async (req, res) => {
                             }
                         },
                         { $project: { associatedProducts: 1 } },
-                        { $unwind: "$associatedProducts" },
+                       { $unwind: { path: "$associatedProducts", preserveNullAndEmptyArrays: true } },
                         {
                             $group: {
                                 _id: null,
@@ -1418,7 +1429,7 @@ const getRecentFollowedUsers = async (req, res) => {
                                 let: { threadId: '$_id' },
                                 pipeline: [
                                     { $match: { $expr: { $eq: ['$thread', '$$threadId'] }, isDeleted: false, isDisable: false } },
-                                    { $unwind: '$associatedProducts' },
+                                   { $unwind: { path: "$associatedProducts", preserveNullAndEmptyArrays: true } },
                                     { $group: { _id: null, count: { $sum: 1 } } }
                                 ],
                                 as: 'associatedProductCountInfo'
