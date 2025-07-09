@@ -1660,6 +1660,7 @@ const getProduct = async (req, res) => {
                                     _id: 1,
                                     content: 1,
                                     createdAt: 1,
+                                    photos:1,
                                     author: {
                                         _id: '$author._id',
                                         userName: '$author.userName',
@@ -1681,6 +1682,7 @@ const getProduct = async (req, res) => {
                         _id: 1,
                         content: 1,
                         createdAt: 1,
+                        photos:1,
                         totalReplies: 1,
                         replies: 1,
                         author: {
@@ -1869,16 +1871,19 @@ const getProductComment = async (req, res) => {
 
         // Group replies under their parent comment
         const replyMap = {};
+        const replyCountMap = {};
         replies.forEach(reply => {
             const parentId = reply.parent.toString();
             if (!replyMap[parentId]) replyMap[parentId] = [];
             replyMap[parentId].push(reply);
+            replyCountMap[parentId] = (replyCountMap[parentId] || 0) + 1;
         });
 
         // Attach replies to each comment
         const enrichedComments = comments.map(comment => ({
             ...comment,
-            replies: replyMap[comment._id.toString()] || []
+            replies: replyMap[comment._id.toString()] || [],
+            totalReplies: replyCountMap[comment._id.toString()] || 0,
         }));
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Comments fetched successfully", {
