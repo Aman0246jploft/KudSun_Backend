@@ -159,7 +159,15 @@ const addSellerProduct = async (req, res) => {
             // CASE 1: endDate + endTime provided
             if (userEndDate && endTime) {
                 // Combine date + time in the user's timezone
-                biddingEndsAtDateTime = DateTime.fromISO(`${userEndDate}T${endTime}`, { zone: timezone });
+                // biddingEndsAtDateTime = DateTime.fromISO(`${userEndDate}T${endTime}`, { zone: timezone });
+                const [year, month, day] = userEndDate.split('-').map(Number);
+                const [hour, minute] = endTime.split(':').map(Number);
+
+                biddingEndsAtDateTime = DateTime.fromObject(
+                    { year, month, day, hour, minute },
+                    { zone: timezone }
+                );
+
 
                 // Validate
                 if (!biddingEndsAtDateTime.isValid) {
@@ -1659,7 +1667,7 @@ const getProduct = async (req, res) => {
                                     _id: 1,
                                     content: 1,
                                     createdAt: 1,
-                                    photos:1,
+                                    photos: 1,
                                     author: {
                                         _id: '$author._id',
                                         userName: '$author.userName',
@@ -1681,7 +1689,7 @@ const getProduct = async (req, res) => {
                         _id: 1,
                         content: 1,
                         createdAt: 1,
-                        photos:1,
+                        photos: 1,
                         totalReplies: 1,
                         replies: 1,
                         author: {
