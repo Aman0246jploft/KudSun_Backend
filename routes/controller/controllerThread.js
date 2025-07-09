@@ -1,4 +1,3 @@
-
 const express = require('express');
 const multer = require('multer');
 const upload = multer();
@@ -461,6 +460,19 @@ const getThreadComments = async (req, res) => {
             .lean();
 
         const commentIds = comments.map(comment => comment?._id);
+  
+
+        // Get reply counts for each comment
+        const replyCounts = await ThreadComment.aggregate([
+            { $match: { parent: { $in: commentIds } } },
+            { $group: { _id: '$parent', totalReplies: { $sum: 1 } } }
+        ]);
+
+        // Create a map of reply counts
+        const replyCountMap = {};
+        replyCounts.forEach(count => {
+            replyCountMap[count._id.toString()] = count.totalReplies;
+        });
 
         // Fetch all replies for these top-level comments
         const replies = await ThreadComment.find({ parent: { $in: commentIds } })
@@ -477,10 +489,11 @@ const getThreadComments = async (req, res) => {
             replyMap[parentId].push(reply);
         });
 
-        // Attach replies to each comment
+        // Attach replies and total reply count to each comment
         const enrichedComments = comments.map(comment => ({
             ...comment,
             replies: replyMap[comment?._id.toString()] || [],
+            totalReplies: replyCountMap[comment?._id.toString()] || 0
         }));
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Comments fetched successfully", {
@@ -657,7 +670,7 @@ const getThreads = async (req, res) => {
                 { $group: { _id: '$userId', count: { $sum: 1 } } }
             ]),
             ThreadComment.aggregate([
-                { $match: { thread: { $in: threadIds }, parent: null } },
+                { $match: { thread: { $in: threadIds } } },
                 { $group: { _id: '$thread', count: { $sum: 1 } } }
             ]),
             ThreadLike.aggregate([
