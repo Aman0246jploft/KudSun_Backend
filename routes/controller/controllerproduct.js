@@ -74,7 +74,7 @@ const addSellerProduct = async (req, res) => {
             shippingCharge,
             isDraft
         } = req.body;
-        const timezone = req.body.timezone ||req.body.timeZone|| 'UTC';
+        // const timezone = req.body.timezone ||req.body.timeZone|| 'UTC';
 
         let specifics = [];
         let auctionSettings = {};
@@ -147,7 +147,8 @@ const addSellerProduct = async (req, res) => {
                 duration,
                 endDate: userEndDate,
                 endTime,
-                biddingIncrementPrice
+                biddingIncrementPrice,
+                timeZone
             } = auctionSettings;
 
             if (!startingPrice || !reservePrice || !biddingIncrementPrice) {
@@ -159,7 +160,7 @@ const addSellerProduct = async (req, res) => {
             // CASE 1: endDate + endTime provided
             if (userEndDate && endTime) {
                 // Combine date + time in the user's timezone
-                biddingEndsAtDateTime = DateTime.fromISO(`${userEndDate}T${endTime}`, { zone: timezone });
+                biddingEndsAtDateTime = DateTime.fromISO(`${userEndDate}T${endTime}`, { zone: timeZone });
 
                 // Validate
                 if (!biddingEndsAtDateTime.isValid) {
@@ -168,7 +169,7 @@ const addSellerProduct = async (req, res) => {
 
                 // CASE 2: Only duration provided
             } else if (duration) {
-                const now = DateTime.now().setZone(timezone);
+                const now = DateTime.now().setZone(timeZone);
                 biddingEndsAtDateTime = now.plus({ days: Number(duration) });
 
                 if (endTime) {
@@ -186,7 +187,7 @@ const addSellerProduct = async (req, res) => {
             auctionSettings.isBiddingOpen = DateTime.now().setZone('UTC') < biddingEndsAtDateTime.toUTC();
             auctionSettings.endDate = biddingEndsAtDateTime.toISODate();
             auctionSettings.endTime = biddingEndsAtDateTime.toFormat('HH:mm');
-            auctionSettings.timezone = timezone; // Save timezone in DB if you want
+            auctionSettings.timeZone = timeZone; // Save timezone in DB if you want
         }
 
 
@@ -1659,7 +1660,7 @@ const getProduct = async (req, res) => {
                                     _id: 1,
                                     content: 1,
                                     createdAt: 1,
-                                    photos:1,
+                                    photos: 1,
                                     author: {
                                         _id: '$author._id',
                                         userName: '$author.userName',
@@ -1681,7 +1682,7 @@ const getProduct = async (req, res) => {
                         _id: 1,
                         content: 1,
                         createdAt: 1,
-                        photos:1,
+                        photos: 1,
                         totalReplies: 1,
                         replies: 1,
                         author: {
