@@ -3,13 +3,12 @@ const multer = require('multer');
 const upload = multer();
 const router = express.Router();
 const moment = require("moment")
-const { UserAddress, Transaction, Order, SellProduct, Bid, FeeSetting, User, Shipping, OrderStatusHistory, ProductReview, ChatRoom, ChatMessage } = require('../../db');
+const { UserAddress, Transaction, Order, SellProduct, Bid, FeeSetting, User, Shipping, OrderStatusHistory, ProductReview, ChatRoom, ChatMessage, WalletTnx, SellerWithdrawl, SellerBank } = require('../../db');
 const { findOrCreateOneOnOneRoom } = require('../services/serviceChat');
-
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const HTTP_STATUS = require('../../utils/statusCode');
 const { toObjectId, apiSuccessRes, apiErrorRes, parseItems } = require('../../utils/globalFunction');
-const { SALE_TYPE, DEFAULT_AMOUNT, PAYMENT_METHOD, ORDER_STATUS, PAYMENT_STATUS, CHARGE_TYPE, PRICING_TYPE, SHIPPING_STATUS } = require('../../utils/Role');
+const { SALE_TYPE, DEFAULT_AMOUNT, PAYMENT_METHOD, ORDER_STATUS, PAYMENT_STATUS, CHARGE_TYPE, PRICING_TYPE, SHIPPING_STATUS, TNX_TYPE } = require('../../utils/Role');
 const { default: mongoose } = require('mongoose');
 const Joi = require('joi');
 
@@ -1292,6 +1291,85 @@ const updateOrderStatusBySeller = async (req, res) => {
             order.status = newStatus;
             await order.save({ session });
 
+            const totalAmount = order.grandTotal || 0;
+            let serviceCharge = 0;
+            let serviceType = '';
+
+            let taxAmount = 0;
+            let taxType = '';
+
+
+            if (newStatus === ORDER_STATUS.DELIVERED) {
+                const feeSettings = await FeeSetting.find({
+                    name: { $in: ["SERVICE_CHARGE", "TAX"] },
+                    isActive: true,
+                    isDisable: false,
+                    isDeleted: false
+                });
+                const serviceChargeSetting = feeSettings.find(f => f.name === "SERVICE_CHARGE");
+                const taxSetting = feeSettings.find(f => f.name === "TAX");
+
+                if (serviceChargeSetting) {
+                    if (serviceChargeSetting.type === PRICING_TYPE.PERCENTAGE) {
+                        serviceCharge = (totalAmount * serviceChargeSetting.value) / 100;
+                        serviceType = PRICING_TYPE.PERCENTAGE
+                    } else if (serviceChargeSetting.type === PRICING_TYPE.FIXED) {
+                        serviceCharge = serviceChargeSetting.value;
+                        serviceType = PRICING_TYPE.FIXED
+                    }
+                }
+
+                if (taxSetting) {
+                    if (taxSetting.type === PRICING_TYPE.PERCENTAGE) {
+                        taxAmount = (totalAmount * taxSetting.value) / 100;
+                        taxType = PRICING_TYPE.PERCENTAGE
+                    } else if (taxSetting.type === PRICING_TYPE.FIXED) {
+                        taxAmount = taxSetting.value;
+                        taxType = PRICING_TYPE.FIXED
+                    }
+                }
+
+                const netAmount = totalAmount - serviceCharge - taxAmount;
+
+                const sellerWalletTnx = new WalletTnx({
+                    orderId: order._id,
+                    userId: sellerId,
+                    amount: totalAmount,
+                    netAmount: netAmount,
+                    serviceCharge,
+                    taxCharge: taxAmount,
+                    tnxType: TNX_TYPE.CREDIT,
+                    serviceType: serviceType,
+                    taxType: taxType,
+                    tnxStatus: PAYMENT_STATUS.COMPLETED
+                });
+                await sellerWalletTnx.save({ session });
+
+                await User.findByIdAndUpdate(
+                    sellerId,
+                    {
+                        $inc: { walletBalance: netAmount } // increment walletBalance by net earnings
+                    },
+                    { session }
+                );
+
+
+            }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
             // Create status history
             if (currentStatus !== newStatus) {
                 await OrderStatusHistory.create([{
@@ -1349,8 +1427,6 @@ const updateOrderStatusByBuyer = async (req, res) => {
         }
 
         const currentStatus = order.status;
-
-        console.log("currentStatus", currentStatus)
 
         if (currentStatus === newStatus) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Order is already in this status");
@@ -1801,8 +1877,238 @@ const confirmreciptReview = async (req, res) => {
 }
 
 
+const addrequest = async (req, res) => {
+    const session = await mongoose.startSession();
+
+    try {
+        const { withDrawMethodId, amount } = req.body;
+        const userId = req.user.userId;
+
+        await session.withTransaction(async () => {
+            const user = await User.findById(userId).session(session);
+            if (!user) {
+                throw new Error("User not found");
+            }
+
+            if (amount > user.walletBalance) {
+                throw new Error("Insufficient wallet balance");
+            }
+
+            const feeSettings = await FeeSetting.find({
+                name: "WITHDRAWAL_FEE",
+                isActive: true,
+                isDisable: false,
+                isDeleted: false
+            }).session(session);
+
+            const withDrawlSetting = feeSettings.find(f => f.name === "WITHDRAWAL_FEE");
+
+            let withdrawfee = 0;
+            let withdrawfeeType = '';
+
+            if (withDrawlSetting) {
+                if (withDrawlSetting.type === PRICING_TYPE.PERCENTAGE) {
+                    withdrawfee = (amount * withDrawlSetting.value) / 100;
+                    withdrawfeeType = PRICING_TYPE.PERCENTAGE;
+                } else if (withDrawlSetting.type === PRICING_TYPE.FIXED) {
+                    withdrawfee = withDrawlSetting.value;
+                    withdrawfeeType = PRICING_TYPE.FIXED;
+                }
+            }
+            const totalDeduction = Number(amount) + Number(withdrawfee);
+            console.log("totalDeductiontotalDeduction", amount, withdrawfee, totalDeduction)
+
+            if (totalDeduction > user.walletBalance) {
+                throw new Error("Insufficient wallet balance including withdrawal fee");
+            }
+
+            user.walletBalance -= totalDeduction; WalletTnx
+            user.FreezWalletBalance += amount;
+            await user.save({ session });
+
+            const newRequest = new SellerWithdrawl({
+                userId,
+                withDrawMethodId,
+                amount,
+                withdrawfee: withDrawlSetting.value,
+                withdrawfeeType,
+                status: 'pending'
+            });
+
+            await newRequest.save({ session });
+
+            return apiSuccessRes(
+                HTTP_STATUS.CREATED,
+                res,
+                "Withdraw request added successfully",
+                newRequest
+            );
+        });
+
+    } catch (err) {
+        console.error("add request", err);
+        // <-- Remove this line:
+        // await session.abortTransaction();
+
+        return apiErrorRes(
+            HTTP_STATUS.INTERNAL_SERVER_ERROR,
+            res,
+            err.message || "Failed to process withdrawal request"
+        );
+    } finally {
+        session.endSession();
+    }
+};
 
 
+
+
+const changeStatus = async (req, res) => {
+    const session = await mongoose.startSession();
+    try {
+        const { withdrawRequestId, status } = req.body;
+        await session.withTransaction(async () => {
+            const withdrawRequest = await SellerWithdrawl.findById(withdrawRequestId).session(session);
+            if (!withdrawRequest) {
+                throw new Error("Withdraw request not found");
+            }
+            if (withdrawRequest.status !== 'pending') {
+                throw new Error("Request already processed");
+            }
+
+            const user = await User.findById(withdrawRequest.userId).session(session);
+            if (!user) {
+                throw new Error("User not found");
+            }
+
+            if (status === 'Approved') {
+                user.FreezWalletBalance -= withdrawRequest.amount;
+            } else if (status === 'Rejected') {
+                let calculatedFee = 0;
+                if (withdrawRequest.withdrawfeeType === PRICING_TYPE.PERCENTAGE) {
+                    calculatedFee = (withdrawRequest.amount * withdrawRequest.withdrawfee) / 100;
+                } else if (withdrawRequest.withdrawfeeType === PRICING_TYPE.FIXED) {
+                    calculatedFee = withdrawRequest.withdrawfee;
+                }
+
+                const totalRefund = Number(withdrawRequest.amount) + Number(calculatedFee);
+                user.FreezWalletBalance -= withdrawRequest.amount;
+                user.walletBalance += totalRefund;
+            }
+
+            await user.save({ session });
+
+            withdrawRequest.status = status;
+            await withdrawRequest.save({ session });
+
+            await WalletTnx.findOneAndUpdate(
+                { sellerWithdrawlId: withdrawRequest._id },
+                { tnxStatus: status === 'Approved' ? PAYMENT_STATUS.COMPLETED : PAYMENT_STATUS.REJECTED },
+                { session }
+            );
+        });
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, `Withdraw request ${status} successfully`);
+    } catch (err) {
+        console.error("changeStatus error", err);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to change withdrawal request status");
+    } finally {
+        session.endSession();
+    }
+};
+
+
+const getWithdrawalInfo = async (req, res) => {
+    try {
+        const userId = req.user.userId;
+
+        // Fetch user wallet info
+        const user = await User.findById(userId).select('walletBalance FreezWalletBalance').lean();
+        if (!user) {
+            return apiErrorRes(404, res, "User not found");
+        }
+
+        // Fetch active withdrawal methods for the user (example: SellerBank collection)
+        const withdrawalMethods = await SellerBank.find({
+            userId,
+            isActive: true,
+            isDeleted: false
+        }).lean();
+
+        // Fetch current active withdrawal fee settings
+        const feeSetting = await FeeSetting.findOne({
+            name: "WITHDRAWAL_FEE",
+            isActive: true,
+            isDisable: false,
+            isDeleted: false
+        }).lean();
+
+        const withdrawalFeeInfo = feeSetting
+            ? {
+                type: feeSetting.type,
+                value: feeSetting.value
+            }
+            : null;
+
+        return apiSuccessRes(200, res, "Withdrawal info fetched successfully", {
+            walletBalance: user.walletBalance,
+            FreezWalletBalance: user.FreezWalletBalance,
+            withdrawalMethods,
+            withdrawalFeeInfo
+        });
+
+    } catch (err) {
+        console.error("getWithdrawalInfo error", err);
+        return apiErrorRes(500, res, "Failed to fetch withdrawal info");
+    }
+};
+
+
+
+const getAllWithdrawRequests = async (req, res) => {
+    try {
+        // Parse query params
+        let { pageNo = 1, size = 10, minAmount, maxAmount, sortBy = 'createdAt', order = 'desc' } = req.query;
+        pageNo = parseInt(pageNo);
+        size = parseInt(size);
+
+        // Build filter object
+        const filter = {};
+        if (minAmount !== undefined || maxAmount !== undefined) {
+            filter.amount = {};
+            if (minAmount !== undefined) filter.amount.$gte = Number(minAmount);
+            if (maxAmount !== undefined) filter.amount.$lte = Number(maxAmount);
+        }
+
+        // Build sort object
+        const sortOrder = order.toLowerCase() === 'asc' ? 1 : -1;
+        const sort = {};
+        sort[sortBy] = sortOrder;
+
+        // Fetch total count for pagination info
+        const total = await SellerWithdrawl.countDocuments(filter);
+
+        // Fetch paginated data
+        const data = await SellerWithdrawl.find(filter)
+            .populate('userId', 'name email') // example: populate user name and email
+            .populate('withDrawMethodId')     // populate withdrawal method info
+            .sort(sort)
+            .skip((pageNo - 1) * size)
+            .limit(size)
+            .lean();
+
+        return apiSuccessRes(200, res, "Withdrawal requests fetched successfully", {
+            pageNo,
+            size,
+            totalPages: Math.ceil(total / size),
+            totalRecords: total,
+            data
+        });
+    } catch (err) {
+        console.error("getAllWithdrawRequests error", err);
+        return apiErrorRes(500, res, "Failed to fetch withdrawal requests");
+    }
+};
 
 
 
@@ -1816,16 +2122,25 @@ router.get('/confirmreciptReview/:orderId', perApiLimiter(), upload.none(), conf
 router.post('/updateOrderStatusByBuyer/:orderId', perApiLimiter(), upload.none(), updateOrderStatusByBuyer);
 
 router.get('/getSoldProducts', perApiLimiter(), upload.none(), getSoldProducts);
-router.get('/retryPayment/:orderId', perApiLimiter(), upload.none(), retryOrderPayment);
 router.get('/getBoughtProduct', perApiLimiter(), upload.none(), getBoughtProducts);
-//////////////////////////////////////////////////////////////////////////////
-router.post('/updateOrder/:orderId', perApiLimiter(), upload.none(), updateOrderById);
-router.post('/cancelAndRelistProduct', perApiLimiter(), upload.none(), cancelOrderAndRelistProducts);
+router.get('/retryPayment/:orderId', perApiLimiter(), upload.none(), retryOrderPayment);
 router.get('/details/:orderId', perApiLimiter(), upload.none(), getOrderDetails);
+//////////////////////////////////////////////////////////////////////////////
+//WALLET
+router.get('/getWithdrawalInfo', perApiLimiter(), upload.none(), getWithdrawalInfo);
+router.post('/addrequest', perApiLimiter(), upload.none(), addrequest);
+
+router.post('/changeStatus', perApiLimiter(), upload.none(), changeStatus);
+router.get('/getAllWithdrawRequests', perApiLimiter(), upload.none(), getAllWithdrawRequests);
 
 
 
 
+
+
+
+// router.post('/updateOrder/:orderId', perApiLimiter(), upload.none(), updateOrderById);
+// router.post('/cancelAndRelistProduct', perApiLimiter(), upload.none(), cancelOrderAndRelistProducts);
 
 module.exports = router;
 

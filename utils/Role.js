@@ -45,8 +45,14 @@ const PAYMENT_STATUS = {
 
 const PAYMENT_METHOD = {
     COD: 'cash_on_delivery',
-    ONLINE: 'online_payment'
+    ONLINE: 'online_payment',
 };
+
+const TNX_TYPE = {
+    CREDIT:'credit',
+    WITHDRAWL:"withdrawl"
+}
+
 
 const SHIPPING_STATUS = {
     NOT_DISPATCHED: 'not_dispatched',
@@ -113,5 +119,6 @@ module.exports = {
     NOTIFICATION_TYPES,
     SELLER_PAYOUT_METHOD,
     PRICING_TYPE,
-    CHARGE_TYPE
+    CHARGE_TYPE,
+    TNX_TYPE
 }
