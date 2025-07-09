@@ -151,7 +151,7 @@ const addSellerProduct = async (req, res) => {
                 timeZone
             } = auctionSettings;
 
-            console.log("1215",timeZone)
+            console.log("1215", timeZone)
 
             if (!startingPrice || !reservePrice || !biddingIncrementPrice) {
                 console.warn("❌ Missing startingPrice or reservePrice or biddingIncrementPrice in auctionSettings:", auctionSettings);
@@ -163,9 +163,9 @@ const addSellerProduct = async (req, res) => {
             if (userEndDate && endTime) {
                 // Combine date + time in the user's timezone
                 biddingEndsAtDateTime = DateTime.fromISO(`${userEndDate}T${endTime}`, { zone: timeZone });
-                console.log("biddingEndsAtDateTimebiddingEndsAtDateTime",biddingEndsAtDateTime)
-                
-                console.log("21212222222",biddingEndsAtDateTime.toUTC().toJSDate())
+                console.log("biddingEndsAtDateTimebiddingEndsAtDateTime", biddingEndsAtDateTime)
+
+                console.log("21212222222", biddingEndsAtDateTime.toUTC().toJSDate())
 
 
                 // Validate
@@ -835,6 +835,9 @@ const showAuctionProducts = async (req, res) => {
         }, {});
 
         products.forEach(product => {
+            const utcDate = DateTime.fromJSDate(product.auctionSettings.biddingEndsAt, { zone: 'utc' });
+            const localDate = utcDate.setZone(product.auctionSettings.timeZone || 'Asia/Kolkata');
+            
             product.totalBidsPlaced = bidsCountMap[product._id.toString()] || 0;
             const nowTimestamp = new Date()
             const offsetMinutes = nowTimestamp.getTimezoneOffset();
@@ -842,6 +845,7 @@ const showAuctionProducts = async (req, res) => {
             const endTime = new Date(product.auctionSettings.biddingEndsAt).getTime();
             const timeLeftMs = endTime - localNow;
             product.timeRemaining = timeLeftMs > 0 ? formatTimeRemaining(timeLeftMs) : 0;
+            product.auctionSettings.biddingEndsAt = localDate.toISO(); // with offset
         })
 
         let likedProductIds = new Set();
