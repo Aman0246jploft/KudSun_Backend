@@ -163,6 +163,10 @@ const addSellerProduct = async (req, res) => {
             if (userEndDate && endTime) {
                 // Combine date + time in the user's timezone
                 biddingEndsAtDateTime = DateTime.fromISO(`${userEndDate}T${endTime}`, { zone: timeZone });
+                console.log("biddingEndsAtDateTimebiddingEndsAtDateTime",biddingEndsAtDateTime)
+                
+                console.log("21212222222",biddingEndsAtDateTime.toUTC().toJSDate())
+
 
                 // Validate
                 if (!biddingEndsAtDateTime.isValid) {
@@ -185,7 +189,7 @@ const addSellerProduct = async (req, res) => {
                 return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Please provide either (endDate & endTime) or duration.");
             }
 
-            auctionSettings.biddingEndsAt = biddingEndsAtDateTime.toUTC().toJSDate();; // save as JS Date (UTC internally)
+            auctionSettings.biddingEndsAt = biddingEndsAtDateTime.toUTC().toJSDate(); // save as JS Date (UTC internally)
             auctionSettings.isBiddingOpen = DateTime.now().setZone('UTC') < biddingEndsAtDateTime.toUTC();
             auctionSettings.endDate = biddingEndsAtDateTime.toISODate();
             auctionSettings.endTime = biddingEndsAtDateTime.toFormat('HH:mm');
