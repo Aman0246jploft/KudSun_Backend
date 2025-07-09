@@ -44,7 +44,7 @@ const createOrUpdateReview = async (req, res) => {
         const hasOrdered = await Order.exists({
             userId: toObjectId(userId),
             'items.productId': toObjectId(productId),
-            // status: ORDER_STATUS.DELIVERED  // Only allow if delivered
+            status: ORDER_STATUS.CONFIRM_RECEIPT  // Only allow if delivered
         });
 
         if (!hasOrdered) {

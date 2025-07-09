@@ -32,7 +32,8 @@ const ORDER_STATUS = {
     RETURNED: 'returned',
     FAILED: 'failed',
     COMPLETED: 'completed',
-    CONFIRM_RECEIPT: 'confirm_receipt'
+    CONFIRM_RECEIPT: 'confirm_receipt',
+    REVIEW: 'REVIEW'
 };
 
 const PAYMENT_STATUS = {
