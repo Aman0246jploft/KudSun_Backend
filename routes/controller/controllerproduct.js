@@ -151,6 +151,8 @@ const addSellerProduct = async (req, res) => {
                 timeZone
             } = auctionSettings;
 
+            console.log("1215",timeZone)
+
             if (!startingPrice || !reservePrice || !biddingIncrementPrice) {
                 console.warn("❌ Missing startingPrice or reservePrice or biddingIncrementPrice in auctionSettings:", auctionSettings);
                 return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Auction settings are required when saleType is 'auction'");
