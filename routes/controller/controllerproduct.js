@@ -182,7 +182,7 @@ const addSellerProduct = async (req, res) => {
                 return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Please provide either (endDate & endTime) or duration.");
             }
 
-            auctionSettings.biddingEndsAt = biddingEndsAtDateTime.toJSDate(); // save as JS Date (UTC internally)
+            auctionSettings.biddingEndsAt = biddingEndsAtDateTime.toUTC().toJSDate();; // save as JS Date (UTC internally)
             auctionSettings.isBiddingOpen = DateTime.now().setZone('UTC') < biddingEndsAtDateTime.toUTC();
             auctionSettings.endDate = biddingEndsAtDateTime.toISODate();
             auctionSettings.endTime = biddingEndsAtDateTime.toFormat('HH:mm');
@@ -422,7 +422,8 @@ const updateSellerProduct = async (req, res) => {
                     return apiErrorRes(400, res, "Auction settings must include either (endDate & endTime) or duration.");
                 }
 
-                auctionSettings.biddingEndsAt = biddingEndsAtDateTime.toJSDate();
+                // auctionSettings.biddingEndsAt = biddingEndsAtDateTime.toJSDate();
+                auctionSettings.biddingEndsAt = biddingEndsAtDateTime.toUTC().toJSDate();
                 auctionSettings.isBiddingOpen = DateTime.now().setZone('UTC') < biddingEndsAtDateTime.toUTC();
                 auctionSettings.endDate = biddingEndsAtDateTime.toISODate();
                 auctionSettings.endTime = biddingEndsAtDateTime.toFormat('HH:mm');
@@ -794,8 +795,6 @@ const showAuctionProducts = async (req, res) => {
                 .lean(),
             SellProduct.countDocuments(filter)
         ]);
-        console.log("654654654", isTrending, filter)
-        console.log(products)
 
         if (products.length) {
             const categoryIds = [...new Set(products.map(p => p.categoryId?._id?.toString()))];

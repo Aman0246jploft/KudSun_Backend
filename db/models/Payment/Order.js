@@ -65,10 +65,6 @@ const OrderSchema = new Schema({
         type: Schema.Types.ObjectId,
         ref: 'Dispute',
     },
-    walletCredited: {
-        type: Boolean,
-        default: false
-    },
     isDisable: { type: Boolean, default: false },
     isDeleted: { type: Boolean, default: false }
 }, {
