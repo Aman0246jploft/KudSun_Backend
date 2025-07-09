@@ -3,7 +3,7 @@ const multer = require('multer');
 const upload = multer();
 const router = express.Router();
 const moment = require("moment")
-const { UserAddress,Transaction, Order, SellProduct, Bid, FeeSetting, User, Shipping, OrderStatusHistory, ProductReview, ChatRoom, ChatMessage } = require('../../db');
+const { UserAddress, Transaction, Order, SellProduct, Bid, FeeSetting, User, Shipping, OrderStatusHistory, ProductReview, ChatRoom, ChatMessage } = require('../../db');
 const { findOrCreateOneOnOneRoom } = require('../services/serviceChat');
 
 const perApiLimiter = require('../../middlewares/rateLimiter');
@@ -244,7 +244,7 @@ const createOrder = async (req, res) => {
 
         // Create or get chat room with seller after order creation
         const { room } = await findOrCreateOneOnOneRoom(userId, sellerId);
-        
+
         // Create system message for order creation
         const systemMessage = new ChatMessage({
             chatRoom: room._id,
@@ -270,7 +270,7 @@ const createOrder = async (req, res) => {
             }
         });
 
-        console.log(12345,"systemMessage",systemMessage)
+        console.log(12345, "systemMessage", systemMessage)
 
 
         await systemMessage.save({ session });
@@ -278,7 +278,7 @@ const createOrder = async (req, res) => {
         // Update chat room's last message
         await ChatRoom.findByIdAndUpdate(
             room._id,
-            { 
+            {
                 lastMessage: systemMessage._id,
                 updatedAt: new Date()
             },
@@ -350,6 +350,8 @@ const paymentCallback = async (req, res) => {
         // If payment failed: update status + mark products as not sold
         if (paymentStatus === PAYMENT_STATUS.FAILED) {
             order.status = ORDER_STATUS.FAILED;
+        } else if (paymentStatus === PAYMENT_STATUS.COMPLETED) {
+            order.paymentStatus = PAYMENT_STATUS.COMPLETED;
         }
 
         await order.save({ session });
@@ -403,7 +405,7 @@ const paymentCallback = async (req, res) => {
         // Update chat room's last message
         await ChatRoom.findByIdAndUpdate(
             room._id,
-            { 
+            {
                 lastMessage: systemMessage._id,
                 updatedAt: new Date()
             },
@@ -556,11 +558,15 @@ const getBoughtProducts = async (req, res) => {
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(pageSize)
-            .populate({
+            .populate([{
                 path: 'items.productId',
                 model: 'SellProduct',
                 select: 'title productImages fixedPrice status saleType auctionSettings'
-            })
+            },
+            {
+                path: 'sellerId',
+                select: 'userName profileImage isLive is_Id_verified is_Verified_Seller averageRatting'
+            }])
             .lean();
 
 
@@ -1068,7 +1074,7 @@ const updateOrderStatusBySeller = async (req, res) => {
         const order = await Order.findOne({ _id: orderId, sellerId })
             .populate('items.productId')
             .populate('userId');
-            
+
         if (!order) {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Order not found for this seller");
         }
@@ -1082,6 +1088,9 @@ const updateOrderStatusBySeller = async (req, res) => {
         // Populate items.productId to check delivery types
         const populatedOrder = await order.populate('items.productId');
 
+
+
+
         // Check if ALL products are local pickup
         const allLocalPickup = populatedOrder.items.every(
             item => item.productId?.deliveryType === "local pickup"
@@ -1092,14 +1101,19 @@ const updateOrderStatusBySeller = async (req, res) => {
             item => item.productId?.deliveryType !== "local pickup"
         );
 
+
         // Define allowed status transitions based on current status and delivery types
         let allowedTransitions = [];
+
+
+
+
+
 
         if (currentStatus === ORDER_STATUS.PENDING) {
             // From pending, seller can cancel or confirm
             allowedTransitions = [ORDER_STATUS.CANCELLED, ORDER_STATUS.CONFIRMED];
         } else if (currentStatus === ORDER_STATUS.CONFIRMED) {
-
 
             if (allLocalPickup) {
                 // All local pickup: can go directly to DELIVERED or CANCELLED
@@ -1185,16 +1199,6 @@ const updateOrderStatusBySeller = async (req, res) => {
         order.status = newStatus;
         await order.save();
 
-        if (currentStatus !== newStatus) {
-            await OrderStatusHistory.create({
-                orderId: order._id,
-                oldStatus: currentStatus,
-                newStatus,
-                changedBy: req.user?.userId,
-                note: 'Status updated by seller'
-            });
-        }
-
         // Create or get chat room for system message
         const { room } = await findOrCreateOneOnOneRoom(order.userId, sellerId);
 
@@ -1204,7 +1208,7 @@ const updateOrderStatusBySeller = async (req, res) => {
         let additionalMeta = {};
         let additionalActions = [];
 
-        switch(newStatus) {
+        switch (newStatus) {
             case ORDER_STATUS.CONFIRMED:
                 messageTitle = 'Order Confirmed';
                 messageTheme = 'success';
@@ -1277,7 +1281,7 @@ const updateOrderStatusBySeller = async (req, res) => {
             // Update chat room's last message
             await ChatRoom.findByIdAndUpdate(
                 room._id,
-                { 
+                {
                     lastMessage: systemMessage._id,
                     updatedAt: new Date()
                 },
@@ -1339,12 +1343,14 @@ const updateOrderStatusByBuyer = async (req, res) => {
         const order = await Order.findOne({ _id: orderId, userId: buyerId })
             .populate('items.productId')
             .populate('sellerId');
-            
+
         if (!order) {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Order not found for this buyer");
         }
 
         const currentStatus = order.status;
+
+        console.log("currentStatus", currentStatus)
 
         if (currentStatus === newStatus) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Order is already in this status");
@@ -1398,7 +1404,7 @@ const updateOrderStatusByBuyer = async (req, res) => {
         let messageTheme = 'info';
         let additionalMeta = {};
 
-        switch(newStatus) {
+        switch (newStatus) {
             case ORDER_STATUS.CONFIRM_RECEIPT:
                 messageTitle = 'Order Received';
                 messageTheme = 'success';
@@ -1454,7 +1460,7 @@ const updateOrderStatusByBuyer = async (req, res) => {
             // Update chat room's last message
             await ChatRoom.findByIdAndUpdate(
                 room._id,
-                { 
+                {
                     lastMessage: systemMessage._id,
                     updatedAt: new Date()
                 },
@@ -1644,13 +1650,173 @@ const getOrderDetails = async (req, res) => {
     }
 };
 
+const retryOrderPayment = async (req, res) => {
+    try {
+        const { orderId } = req.params;
+        const userId = req.user?.userId;
+
+        if (!orderId) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Order ID is required");
+        }
+
+        // Find the order and validate
+        const order = await Order.findOne({
+            _id: orderId,
+            userId: userId,
+            isDeleted: false
+        }).populate('items.productId');
+
+        if (!order) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Order not found");
+        }
+
+        // Check if payment can be retried
+        if (![PAYMENT_STATUS.PENDING, PAYMENT_STATUS.FAILED].includes(order.paymentStatus)) {
+            return apiErrorRes(
+                HTTP_STATUS.BAD_REQUEST,
+                res,
+                "Payment retry is only allowed for pending or failed payments"
+            );
+        }
+
+        // Check if order is in valid status
+        if (![ORDER_STATUS.PENDING, ORDER_STATUS.FAILED].includes(order.status)) {
+            return apiErrorRes(
+                HTTP_STATUS.BAD_REQUEST,
+                res,
+                "Payment retry is only allowed for pending or failed orders"
+            );
+        }
+
+        // Verify all products are still available
+        for (const item of order.items) {
+            const product = await SellProduct.findOne({
+                _id: item.productId,
+                isDeleted: false,
+                isDisable: false
+            });
+
+            if (!product || product.isSold) {
+                return apiErrorRes(
+                    HTTP_STATUS.BAD_REQUEST,
+                    res,
+                    `Product ${product?.title || 'Unknown'} is no longer available`
+                );
+            }
+        }
+
+        // Return order details needed for payment
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Order ready for payment retry", {
+            orderId: order._id,
+            amount: order.grandTotal,
+            items: order.items.map(item => ({
+                productId: item.productId._id,
+                title: item.productId.title,
+                quantity: item.quantity,
+                price: item.priceAtPurchase
+            }))
+        });
+
+    } catch (err) {
+        console.error("Retry payment error:", err);
+        return apiErrorRes(
+            HTTP_STATUS.INTERNAL_SERVER_ERROR,
+            res,
+            err.message || "Failed to process payment retry"
+        );
+    }
+};
+
+
+
+
+
+
+
+const confirmreciptReview = async (req, res) => {
+    try {
+        const { orderId } = req.params;
+        const userId = req.user?.userId;
+        if (!orderId) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Order ID is required");
+        }
+
+
+        const order = await Order.findOne({
+            _id: orderId,
+            userId: userId
+        })
+            .sort({ createdAt: -1 })
+            .populate([
+                {
+                    path: 'items.productId',
+                    model: 'SellProduct',
+                    select: 'title productImages description fixedPrice saleType auctionSettings userId deliveryType'
+                },
+                {
+                    path: 'userId',
+                    select: 'userName profileImage isLive is_Id_verified is_Verified_Seller'
+                }
+            ])
+            .lean();
+
+
+        const shipping = await Shipping.findOne({ orderId: order._id, isDeleted: false })
+            .populate({ path: 'carrier', select: 'name' })
+            .lean();
+        const reviews = await Promise.all(
+            (order.items || []).map(async (item) => {
+                const review = await ProductReview.findOne({ productId: item.productId?._id, userId: order.userId?._id, isDeleted: false });
+                return review ? {
+                    productId: item.productId?._id,
+                    rating: review.rating,
+                    reviewText: review.reviewText,
+                    reviewImages: review.reviewImages,
+                    createdAt: review.createdAt,
+                } : null;
+            })
+        );
+        let obj = {
+            order,
+            shipping,
+            reviews
+        }
+
+
+        if (!order) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Order not found");
+        }
+        return apiSuccessRes(HTTP_STATUS.OK, res, 'Order details fetched', obj);
+
+
+
+    } catch (err) {
+        console.error("Retry payment error:", err);
+        return apiErrorRes(
+            HTTP_STATUS.INTERNAL_SERVER_ERROR,
+            res,
+            err.message || "Failed to process payment retry"
+        );
+    }
+}
+
+
+
+
+
+
+
 //////////////////////////////////////////////////////////////////////////////
 router.get('/previewOrder', perApiLimiter(), upload.none(), previewOrder);
 router.post('/placeOrder', perApiLimiter(), upload.none(), createOrder);
 router.post('/paymentCallback', paymentCallback);
 router.post('/updateOrderStatusBySeller/:orderId', perApiLimiter(), upload.none(), updateOrderStatusBySeller);
+
+router.get('/confirmreciptReview/:orderId', perApiLimiter(), upload.none(), confirmreciptReview);
 router.post('/updateOrderStatusByBuyer/:orderId', perApiLimiter(), upload.none(), updateOrderStatusByBuyer);
+
 router.get('/getSoldProducts', perApiLimiter(), upload.none(), getSoldProducts);
+router.get('/retryPayment/:orderId', perApiLimiter(), upload.none(), retryOrderPayment);
 router.get('/getBoughtProduct', perApiLimiter(), upload.none(), getBoughtProducts);
 //////////////////////////////////////////////////////////////////////////////
 router.post('/updateOrder/:orderId', perApiLimiter(), upload.none(), updateOrderById);
@@ -1662,3 +1828,7 @@ router.get('/details/:orderId', perApiLimiter(), upload.none(), getOrderDetails)
 
 
 module.exports = router;
+
+
+// PENDING -> CONFIRMED -> SHIPPED -> DELIVERED sor seller
+// SHIPPED -> CONFIRM_RECEIPT 
