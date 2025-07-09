@@ -151,7 +151,6 @@ const addSellerProduct = async (req, res) => {
                 timeZone
             } = auctionSettings;
 
-            console.log("1215", timeZone)
 
             if (!startingPrice || !reservePrice || !biddingIncrementPrice) {
                 console.warn("❌ Missing startingPrice or reservePrice or biddingIncrementPrice in auctionSettings:", auctionSettings);
@@ -162,11 +161,11 @@ const addSellerProduct = async (req, res) => {
             // CASE 1: endDate + endTime provided
             if (userEndDate && endTime) {
                 // Combine date + time in the user's timezone
-                biddingEndsAtDateTime = DateTime.fromISO(`${userEndDate}T${endTime}`, { zone: timeZone });
-                console.log("biddingEndsAtDateTimebiddingEndsAtDateTime", biddingEndsAtDateTime)
-
-                console.log("21212222222", biddingEndsAtDateTime.toUTC().toJSDate())
-
+                biddingEndsAtDateTime = DateTime.fromFormat(
+                    `${userEndDate} ${endTime}`,
+                    'yyyy-MM-dd HH:mm',
+                    { zone }
+                );
 
                 // Validate
                 if (!biddingEndsAtDateTime.isValid) {
@@ -180,19 +179,29 @@ const addSellerProduct = async (req, res) => {
 
                 if (endTime) {
                     const [hours, minutes] = endTime.split(':').map(Number);
-                    biddingEndsAtDateTime = biddingEndsAtDateTime.set({ hour: hours, minute: minutes, second: 0, millisecond: 0 });
+                    biddingEndsAtDateTime = biddingEndsAtDateTime.set({
+                        hour: hours,
+                        minute: minutes,
+                        second: 0,
+                        millisecond: 0
+                    });
                 } else {
                     // No endTime specified, default to 23:59:59
-                    biddingEndsAtDateTime = biddingEndsAtDateTime.set({ hour: 23, minute: 59, second: 59, millisecond: 0 });
+                    biddingEndsAtDateTime = biddingEndsAtDateTime.set({
+                        hour: 23,
+                        minute: 59,
+                        second: 59,
+                        millisecond: 0
+                    });
                 }
             } else {
                 return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Please provide either (endDate & endTime) or duration.");
             }
 
-            auctionSettings.biddingEndsAt = biddingEndsAtDateTime.toUTC().toJSDate(); // save as JS Date (UTC internally)
-            auctionSettings.isBiddingOpen = DateTime.now().setZone('UTC') < biddingEndsAtDateTime.toUTC();
-            auctionSettings.endDate = biddingEndsAtDateTime.toISODate();
-            auctionSettings.endTime = biddingEndsAtDateTime.toFormat('HH:mm');
+            auctionSettings.biddingEndsAt = biddingEndsAtDateTime.toUTC().toJSDate(); // UTC timestamp for backend logic
+            auctionSettings.isBiddingOpen = DateTime.utc() < biddingEndsAtDateTime.toUTC(); // is still open
+            auctionSettings.endDate = biddingEndsAtDateTime.setZone(zone).toISODate(); // save user-timezone date
+            auctionSettings.endTime = biddingEndsAtDateTime.setZone(zone).toFormat('HH:mm');
             auctionSettings.timeZone = timeZone; // Save timezone in DB if you want
         }
 
@@ -835,15 +844,17 @@ const showAuctionProducts = async (req, res) => {
         }, {});
 
         products.forEach(product => {
+            const utcEnd = DateTime.fromJSDate(product.auctionSettings.biddingEndsAt, { zone: 'utc' });
             const utcDate = DateTime.fromJSDate(product.auctionSettings.biddingEndsAt, { zone: 'utc' });
             const localDate = utcDate.setZone(product.auctionSettings.timeZone || 'Asia/Kolkata');
-            
+            const utcNow = DateTime.utc();
+            const timeLeftMs = utcEnd.diff(utcNow).toMillis();
             product.totalBidsPlaced = bidsCountMap[product._id.toString()] || 0;
             const nowTimestamp = new Date()
             const offsetMinutes = nowTimestamp.getTimezoneOffset();
             const localNow = new Date(nowTimestamp.getTime() - offsetMinutes * 60 * 1000);
             const endTime = new Date(product.auctionSettings.biddingEndsAt).getTime();
-            const timeLeftMs = endTime - localNow;
+            // const timeLeftMs = endTime - localNow;
             product.timeRemaining = timeLeftMs > 0 ? formatTimeRemaining(timeLeftMs) : 0;
             product.auctionSettings.biddingEndsAt = localDate.toISO(); // with offset
         })
