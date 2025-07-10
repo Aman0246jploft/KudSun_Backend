@@ -162,6 +162,20 @@ const addSellerProduct = async (req, res) => {
                 // Combine date + time and interpret it in user's timezone correctly
                 const dateTimeString = `${userEndDate}T${endTime}`;
                 biddingEndsAtDateTime = DateTime.fromISO(dateTimeString, { zone: timeZone });
+                console.log('🔍 Debug - Created DateTime:', {
+                    toString: biddingEndsAtDateTime.toString(),
+                    toISO: biddingEndsAtDateTime.toISO(),
+                    zoneName: biddingEndsAtDateTime.zoneName,
+                    offset: biddingEndsAtDateTime.offset,
+                    isValid: biddingEndsAtDateTime.isValid
+                });
+
+                console.log('🔍 Debug - UTC conversion:', {
+                    utcString: biddingEndsAtDateTime.toUTC().toString(),
+                    utcISO: biddingEndsAtDateTime.toUTC().toISO(),
+                    jsDate: biddingEndsAtDateTime.toUTC().toJSDate()
+                });
+
 
                 // Validate
                 if (!biddingEndsAtDateTime.isValid) {
@@ -182,6 +196,16 @@ const addSellerProduct = async (req, res) => {
             } else {
                 return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Please provide either (endDate & endTime) or duration.");
             }
+
+            // Convert to UTC for storage
+            console.log('🔍 Debug - Final processing:', {
+                beforeUTC: biddingEndsAtDateTime.toString(),
+                afterUTC: biddingEndsAtDateTime.toUTC().toString(),
+                jsDate: biddingEndsAtDateTime.toUTC().toJSDate(),
+                systemTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                nodeVersion: process.version,
+                platform: process.platform
+            });
 
             auctionSettings.biddingEndsAt = biddingEndsAtDateTime.toUTC().toJSDate();; // save as JS Date (UTC internally)
             auctionSettings.isBiddingOpen = DateTime.now().setZone('UTC') < biddingEndsAtDateTime.toUTC();
