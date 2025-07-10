@@ -206,8 +206,8 @@ const addSellerProduct = async (req, res) => {
                 nodeVersion: process.version,
                 platform: process.platform
             });
-
-            auctionSettings.biddingEndsAt = new Date(biddingEndsAtDateTime.toUTC().toISO());
+            const utcTimestamp = biddingEndsAtDateTime.toUTC().toMillis();
+            auctionSettings.biddingEndsAt = new Date(utcTimestamp);
             auctionSettings.isBiddingOpen = DateTime.now().setZone('UTC') < biddingEndsAtDateTime.toUTC();
             auctionSettings.endDate = biddingEndsAtDateTime.toISODate();
             auctionSettings.endTime = biddingEndsAtDateTime.toFormat('HH:mm');
