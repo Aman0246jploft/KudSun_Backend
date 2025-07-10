@@ -74,7 +74,7 @@ const addSellerProduct = async (req, res) => {
             shippingCharge,
             isDraft
         } = req.body;
-        // const timezone = req.body.timezone ||req.body.timeZone|| 'UTC';
+        const timezone = req.body.timezone || 'UTC';
 
         let specifics = [];
         let auctionSettings = {};
@@ -147,10 +147,8 @@ const addSellerProduct = async (req, res) => {
                 duration,
                 endDate: userEndDate,
                 endTime,
-                biddingIncrementPrice,
-                timeZone
+                biddingIncrementPrice
             } = auctionSettings;
-
 
             if (!startingPrice || !reservePrice || !biddingIncrementPrice) {
                 console.warn("❌ Missing startingPrice or reservePrice or biddingIncrementPrice in auctionSettings:", auctionSettings);
@@ -161,11 +159,7 @@ const addSellerProduct = async (req, res) => {
             // CASE 1: endDate + endTime provided
             if (userEndDate && endTime) {
                 // Combine date + time in the user's timezone
-                biddingEndsAtDateTime = DateTime.fromFormat(
-                    `${userEndDate} ${endTime}`,
-                    'yyyy-MM-dd HH:mm',
-                    { zone }
-                );
+                biddingEndsAtDateTime = DateTime.fromISO(`${userEndDate}T${endTime}`, { zone: timezone });
 
                 // Validate
                 if (!biddingEndsAtDateTime.isValid) {
@@ -174,35 +168,25 @@ const addSellerProduct = async (req, res) => {
 
                 // CASE 2: Only duration provided
             } else if (duration) {
-                const now = DateTime.now().setZone(timeZone);
+                const now = DateTime.now().setZone(timezone);
                 biddingEndsAtDateTime = now.plus({ days: Number(duration) });
 
                 if (endTime) {
                     const [hours, minutes] = endTime.split(':').map(Number);
-                    biddingEndsAtDateTime = biddingEndsAtDateTime.set({
-                        hour: hours,
-                        minute: minutes,
-                        second: 0,
-                        millisecond: 0
-                    });
+                    biddingEndsAtDateTime = biddingEndsAtDateTime.set({ hour: hours, minute: minutes, second: 0, millisecond: 0 });
                 } else {
                     // No endTime specified, default to 23:59:59
-                    biddingEndsAtDateTime = biddingEndsAtDateTime.set({
-                        hour: 23,
-                        minute: 59,
-                        second: 59,
-                        millisecond: 0
-                    });
+                    biddingEndsAtDateTime = biddingEndsAtDateTime.set({ hour: 23, minute: 59, second: 59, millisecond: 0 });
                 }
             } else {
                 return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Please provide either (endDate & endTime) or duration.");
             }
 
-            auctionSettings.biddingEndsAt = biddingEndsAtDateTime.toUTC().toJSDate(); // UTC timestamp for backend logic
-            auctionSettings.isBiddingOpen = DateTime.utc() < biddingEndsAtDateTime.toUTC(); // is still open
-            auctionSettings.endDate = biddingEndsAtDateTime.setZone(zone).toISODate(); // save user-timezone date
-            auctionSettings.endTime = biddingEndsAtDateTime.setZone(zone).toFormat('HH:mm');
-            auctionSettings.timeZone = timeZone; // Save timezone in DB if you want
+            auctionSettings.biddingEndsAt = biddingEndsAtDateTime.toUTC().toJSDate();; // save as JS Date (UTC internally)
+            auctionSettings.isBiddingOpen = DateTime.now().setZone('UTC') < biddingEndsAtDateTime.toUTC();
+            auctionSettings.endDate = biddingEndsAtDateTime.toISODate();
+            auctionSettings.endTime = biddingEndsAtDateTime.toFormat('HH:mm');
+            auctionSettings.timezone = timezone; // Save timezone in DB if you want
         }
 
 
@@ -298,6 +282,7 @@ const addSellerProduct = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
     }
 };
+
 
 
 const updateSellerProduct = async (req, res) => {
