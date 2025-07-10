@@ -274,7 +274,6 @@ const updateParameterForSubCategory = async (req, res) => {
         const roleId = req.user?.roleId;
 
 
-        console.log(req.params)
 
         if (!newKey && !newValues) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Nothing to update');

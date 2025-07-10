@@ -3,7 +3,7 @@ const multer = require('multer');
 const upload = multer();
 const router = express.Router();
 const moment = require("moment")
-const { UserAddress, Transaction, Order, SellProduct, Bid, FeeSetting, User, Shipping, OrderStatusHistory, ProductReview, ChatRoom, ChatMessage, WalletTnx, SellerWithdrawl, SellerBank } = require('../../db');
+const { UserAddress, Transaction, Order, SellProduct, Bid, FeeSetting, User, Shipping, OrderStatusHistory, ProductReview, ChatRoom, ChatMessage, WalletTnx, SellerWithdrawl, SellerBank, PlatformRevenue } = require('../../db');
 const { findOrCreateOneOnOneRoom } = require('../services/serviceChat');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const HTTP_STATUS = require('../../utils/statusCode');
@@ -290,6 +290,8 @@ const createOrder = async (req, res) => {
         const io = req.app.get('io');
         await emitSystemMessage(io, systemMessage, room, userId, sellerId);
 
+        await trackOrderRevenue(order, feeMap, session);
+
         return apiSuccessRes(HTTP_STATUS.CREATED, res, "Order placed successfully", order);
     } catch (err) {
         await session.abortTransaction();
@@ -299,6 +301,50 @@ const createOrder = async (req, res) => {
     }
 };
 
+const trackOrderRevenue = async (order, feeMap, session) => {
+    const revenueEntries = [];
+
+    // Track Buyer Protection Fee
+    if (order.BuyerProtectionFee > 0) {
+        revenueEntries.push({
+            orderId: order._id,
+            revenueType: 'BUYER_PROTECTION_FEE',
+            amount: order.BuyerProtectionFee,
+            calculationType: order.BuyerProtectionFeeType,
+            calculationValue: feeMap[CHARGE_TYPE.BUYER_PROTECTION_FEE].value,
+            baseAmount: order.totalAmount,
+            status: 'PENDING',
+            description: `Buyer protection fee for order ${order._id}`,
+            metadata: {
+                orderTotal: order.totalAmount,
+                buyerId: order.userId
+            }
+        });
+    }
+
+    // Track Tax
+    if (order.Tax > 0) {
+        revenueEntries.push({
+            orderId: order._id,
+            revenueType: 'TAX',
+            amount: order.Tax,
+            calculationType: order.TaxType,
+            calculationValue: feeMap[CHARGE_TYPE.TAX].value,
+            baseAmount: order.totalAmount,
+            status: 'PENDING',
+            description: `Tax for order ${order._id}`,
+            metadata: {
+                orderTotal: order.totalAmount,
+                buyerId: order.userId
+            }
+        });
+    }
+
+    // Save revenue entries
+    if (revenueEntries.length > 0) {
+        await PlatformRevenue.insertMany(revenueEntries, { session });
+    }
+};
 
 // Sample callback for successful payment
 
@@ -440,6 +486,8 @@ const paymentCallback = async (req, res) => {
         const io = req.app.get('io');
         await emitSystemMessage(io, systemMessage, room, order.userId, order.sellerId);
 
+        await updateOrderRevenue(order, paymentStatus, session);
+
         return apiSuccessRes(HTTP_STATUS.OK, res, "Payment status updated", {
             orderId: order._id,
             paymentStatus: order.paymentStatus,
@@ -453,10 +501,31 @@ const paymentCallback = async (req, res) => {
     }
 };
 
-
-
-
-
+const updateOrderRevenue = async (order, paymentStatus, session) => {
+    if (paymentStatus === PAYMENT_STATUS.COMPLETED) {
+        await PlatformRevenue.updateMany(
+            { orderId: order._id },
+            { 
+                $set: { 
+                    status: 'COMPLETED',
+                    completedAt: new Date()
+                }
+            },
+            { session }
+        );
+    } else if (paymentStatus === PAYMENT_STATUS.FAILED) {
+        await PlatformRevenue.updateMany(
+            { orderId: order._id },
+            { 
+                $set: { 
+                    status: 'CANCELLED',
+                    completedAt: new Date()
+                }
+            },
+            { session }
+        );
+    }
+};
 
 const updateOrderById = async (req, res) => {
     const { orderId } = req.params;
@@ -1937,6 +2006,8 @@ const addrequest = async (req, res) => {
 
             await newRequest.save({ session });
 
+            await trackWithdrawalRevenue(newRequest, withdrawfee, session);
+
             return apiSuccessRes(
                 HTTP_STATUS.CREATED,
                 res,
@@ -1960,8 +2031,24 @@ const addrequest = async (req, res) => {
     }
 };
 
-
-
+const trackWithdrawalRevenue = async (withdrawalRequest, withdrawalFee, session) => {
+    if (withdrawalFee > 0) {
+        await PlatformRevenue.create([{
+            withdrawalId: withdrawalRequest._id,
+            revenueType: 'WITHDRAWAL_FEE',
+            amount: withdrawalFee,
+            calculationType: withdrawalRequest.withdrawfeeType,
+            calculationValue: withdrawalRequest.withdrawfee,
+            baseAmount: withdrawalRequest.amount,
+            status: 'PENDING',
+            description: `Withdrawal fee for request ${withdrawalRequest._id}`,
+            metadata: {
+                withdrawalAmount: withdrawalRequest.amount,
+                sellerId: withdrawalRequest.userId
+            }
+        }], { session });
+    }
+};
 
 const changeStatus = async (req, res) => {
     const session = await mongoose.startSession();
@@ -2006,6 +2093,8 @@ const changeStatus = async (req, res) => {
                 { tnxStatus: status === 'Approved' ? PAYMENT_STATUS.COMPLETED : PAYMENT_STATUS.REJECTED },
                 { session }
             );
+
+            await updateWithdrawalRevenue(withdrawRequest, status, session);
         });
 
         return apiSuccessRes(HTTP_STATUS.OK, res, `Withdraw request ${status} successfully`);
@@ -2017,6 +2106,19 @@ const changeStatus = async (req, res) => {
     }
 };
 
+const updateWithdrawalRevenue = async (withdrawalRequest, status, session) => {
+    const revenueStatus = status === 'Approved' ? 'COMPLETED' : 'CANCELLED';
+    await PlatformRevenue.updateMany(
+        { withdrawalId: withdrawalRequest._id },
+        { 
+            $set: { 
+                status: revenueStatus,
+                completedAt: new Date()
+            }
+        },
+        { session }
+    );
+};
 
 const getWithdrawalInfo = async (req, res) => {
     try {
