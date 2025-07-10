@@ -207,11 +207,14 @@ const addSellerProduct = async (req, res) => {
                 platform: process.platform
             });
 
+            let utcTime = biddingEndsAtDateTime.toUTC().toJSDate()
+
             auctionSettings.biddingEndsAt = biddingEndsAtDateTime.toUTC().toJSDate();; // save as JS Date (UTC internally)
             auctionSettings.isBiddingOpen = DateTime.now().setZone('UTC') < biddingEndsAtDateTime.toUTC();
             auctionSettings.endDate = biddingEndsAtDateTime.toISODate();
             auctionSettings.endTime = biddingEndsAtDateTime.toFormat('HH:mm');
             auctionSettings.timeZone = timeZone; // Save timezone in DB if you want
+            auctionSettings.utcTime=utcTime
         }
 
 
