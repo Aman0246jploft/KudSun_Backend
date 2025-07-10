@@ -207,14 +207,36 @@ const addSellerProduct = async (req, res) => {
                 platform: process.platform
             });
 
-            let utcTime = biddingEndsAtDateTime.toUTC().toJSDate()
+            console.log('🔍 Server Environment Debug:', {
+                nodeVersion: process.version,
+                platform: process.platform,
+                timezone: process.env.TZ,
+                systemTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                currentTime: new Date().toISOString(),
+                luxonNow: DateTime.now().toString(),
+                luxonUTC: DateTime.now().toUTC().toString(),
+                luxonKolkata: DateTime.now().setZone('Asia/Kolkata').toString()
+            });
 
-            auctionSettings.biddingEndsAt = utcTime; // save as JS Date (UTC internally)
+            // Test timezone conversion
+            const testDateTime = DateTime.fromISO('2025-07-12T18:44:00', { zone: 'Asia/Kolkata' });
+            console.log('🔍 Test Conversion:', {
+                original: testDateTime.toString(),
+                originalISO: testDateTime.toISO(),
+                utc: testDateTime.toUTC().toString(),
+                utcISO: testDateTime.toUTC().toISO(),
+                jsDate: testDateTime.toUTC().toJSDate().toISOString()
+            });
+
+            const utcDateTime = biddingEndsAtDateTime.toUTC();
+
+
+            auctionSettings.biddingEndsAt = utcDateTime.toJSDate(); // save as JS Date (UTC internally)
             auctionSettings.isBiddingOpen = DateTime.now().setZone('UTC') < biddingEndsAtDateTime.toUTC();
             auctionSettings.endDate = biddingEndsAtDateTime.toISODate();
             auctionSettings.endTime = biddingEndsAtDateTime.toFormat('HH:mm');
             auctionSettings.timeZone = timeZone; // Save timezone in DB if you want
-         
+
         }
 
 
