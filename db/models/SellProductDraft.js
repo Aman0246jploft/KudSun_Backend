@@ -39,7 +39,7 @@ const SellProductDraftSchema = new Schema({
     }],
     condition: {
         type: String,
-        enum: Object.values(conditions)
+
     },
     saleType: {
         type: String,
@@ -55,15 +55,15 @@ const SellProductDraftSchema = new Schema({
     originPrice: {
         type: Number
     },
-    auctionSettings: {
+  auctionSettings: {
         startingPrice: { type: Number },
         reservePrice: { type: Number },
         biddingIncrementPrice: { type: Number },
         duration: { type: Number },
-        endDate: { type: String },
-        endTime: { type: String },
+        endDate: { type: String },//YYYY-MM-DD
+        endTime: { type: String },//hh-mm
         biddingEndsAt: { type: Date },
-        isBiddingOpen: { type: Boolean },
+        isBiddingOpen: { type: Boolean },// ✅ Add this
         timeZone: { type: String },
     },
     deliveryType: {
