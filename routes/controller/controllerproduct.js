@@ -2214,7 +2214,7 @@ const getProductsWithDraft = async (req, res) => {
             pageNo: page = 1,
             size: limit = 10
         } = req.query;
-        const isDraftMode = isDraft === 'true'||isDraft === true;
+        const isDraftMode = isDraft === 'true' || isDraft === true;
         const Model = isDraftMode ? SellProductDraft : SellProduct;
 
 
@@ -2333,14 +2333,10 @@ const getProductsWithDraft = async (req, res) => {
                     isVerified: product.userId?.is_Verified_Seller,
                     isLive: product.userId?.isLive
                 },
-              
+
                 isSold: product.isSold,
 
-                auction: product.saleType === SALE_TYPE.AUCTION ? {
-                    currentBid: product.auctionSettings?.currentBid,
-                    isBiddingOpen: product.auctionSettings?.isBiddingOpen,
-                    endsAt: product.auctionSettings?.biddingEndsAt
-                } : null,
+                auctionSettings:product.auctionSettings,
                 createdAt: product.createdAt,
                 updatedAt: product.updatedAt
             })),
