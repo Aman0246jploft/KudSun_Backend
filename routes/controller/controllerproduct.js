@@ -237,10 +237,15 @@ const addSellerProduct = async (req, res) => {
             auctionSettings.endTime = biddingEndsAtDateTime.toFormat('HH:mm');
             auctionSettings.timeZone = timeZone; // Save timezone in DB if you want
 
+console.log('🔍 Saving to DB:', {
+            biddingEndsAt: auctionSettings.biddingEndsAt,
+            typeof: typeof auctionSettings.biddingEndsAt
+        });
+
+
         }
 
-
-
+        
         // === Validate required fields ===
         if (!categoryId) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Missing required field: categoryId.");
@@ -326,6 +331,11 @@ const addSellerProduct = async (req, res) => {
             const product = new SellProduct(productData);
             savedProduct = await product.save();
         }
+
+console.log('🔍 After saving:', {
+    savedBiddingEndsAt: savedProduct.auctionSettings?.biddingEndsAt,
+    typeof: typeof savedProduct.auctionSettings?.biddingEndsAt
+});
 
         return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, savedProduct);
     } catch (error) {
