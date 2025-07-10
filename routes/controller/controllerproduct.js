@@ -158,16 +158,16 @@ const addSellerProduct = async (req, res) => {
 
             // CASE 1: endDate + endTime provided
             if (userEndDate && endTime) {
-                // Combine date + time in the user's timezone
-                biddingEndsAtDateTime = DateTime.fromISO(`${userEndDate}T${endTime}`, { zone: timezone });
+                // Combine date + time and interpret it in user's timezone correctly
+                const naiveDateTime = DateTime.fromISO(`${userEndDate}T${endTime}`);
+                biddingEndsAtDateTime = naiveDateTime.setZone(timezone, { keepLocalTime: true });
 
                 // Validate
                 if (!biddingEndsAtDateTime.isValid) {
                     return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid endDate or endTime with provided timezone.");
                 }
-
-                // CASE 2: Only duration provided
-            } else if (duration) {
+            }
+            else if (duration) {
                 const now = DateTime.now().setZone(timezone);
                 biddingEndsAtDateTime = now.plus({ days: Number(duration) });
 
