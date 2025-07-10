@@ -126,14 +126,14 @@ SellProductsSchema.pre('save', function (next) {
         }
     }
 
-    const { endDate, endTime } = this.auctionSettings || {};
-    if (endDate && endTime) {
-        const [hours, minutes] = endTime.split(':').map(Number);
-        const fullEnd = new Date(endDate);
-        fullEnd.setHours(hours || 0, minutes || 0, 0, 0);
-        this.auctionSettings.biddingEndsAt = fullEnd;
-        this.auctionSettings.isBiddingOpen = new Date() < fullEnd;
-    }
+    // const { endDate, endTime } = this.auctionSettings || {};
+    // if (endDate && endTime) {
+    //     const [hours, minutes] = endTime.split(':').map(Number);
+    //     const fullEnd = new Date(endDate);
+    //     fullEnd.setHours(hours || 0, minutes || 0, 0, 0);
+    //     this.auctionSettings.biddingEndsAt = fullEnd;
+    //     this.auctionSettings.isBiddingOpen = new Date() < fullEnd;
+    // }
     // if (endDate && endTime) {
     //     const fullEnd = moment(`${moment(endDate).format("YYYY-MM-DD")} ${endTime}`, "YYYY-MM-DD HH:mm");
     //     if (!fullEnd.isValid()) {
