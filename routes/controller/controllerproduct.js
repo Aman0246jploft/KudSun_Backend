@@ -159,23 +159,9 @@ const addSellerProduct = async (req, res) => {
 
             // CASE 1: endDate + endTime provided
             if (userEndDate && endTime) {
-                // Combine date + time and interpret it in user's timezone correctly
+                // Combine date + time and interpret it in user's timeZone correctly
                 const dateTimeString = `${userEndDate}T${endTime}`;
                 biddingEndsAtDateTime = DateTime.fromISO(dateTimeString, { zone: timeZone });
-                console.log('🔍 Debug - Created DateTime:', {
-                    toString: biddingEndsAtDateTime.toString(),
-                    toISO: biddingEndsAtDateTime.toISO(),
-                    zoneName: biddingEndsAtDateTime.zoneName,
-                    offset: biddingEndsAtDateTime.offset,
-                    isValid: biddingEndsAtDateTime.isValid
-                });
-
-                console.log('🔍 Debug - UTC conversion:', {
-                    utcString: biddingEndsAtDateTime.toUTC().toString(),
-                    utcISO: biddingEndsAtDateTime.toUTC().toISO(),
-                    jsDate: biddingEndsAtDateTime.toUTC().toJSDate()
-                });
-
 
                 // Validate
                 if (!biddingEndsAtDateTime.isValid) {
@@ -197,55 +183,26 @@ const addSellerProduct = async (req, res) => {
                 return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Please provide either (endDate & endTime) or duration.");
             }
 
-            // Convert to UTC for storage
-            console.log('🔍 Debug - Final processing:', {
-                beforeUTC: biddingEndsAtDateTime.toString(),
-                afterUTC: biddingEndsAtDateTime.toUTC().toString(),
-                jsDate: biddingEndsAtDateTime.toUTC().toJSDate(),
-                systemTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                nodeVersion: process.version,
-                platform: process.platform
-            });
 
-            console.log('🔍 Server Environment Debug:', {
-                nodeVersion: process.version,
-                platform: process.platform,
-                timezone: process.env.TZ,
-                systemTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                currentTime: new Date().toISOString(),
-                luxonNow: DateTime.now().toString(),
-                luxonUTC: DateTime.now().toUTC().toString(),
-                luxonKolkata: DateTime.now().setZone('Asia/Kolkata').toString()
-            });
 
-            // Test timezone conversion
+
+            // Test timeZone conversion
             const testDateTime = DateTime.fromISO('2025-07-12T18:44:00', { zone: 'Asia/Kolkata' });
-            console.log('🔍 Test Conversion:', {
-                original: testDateTime.toString(),
-                originalISO: testDateTime.toISO(),
-                utc: testDateTime.toUTC().toString(),
-                utcISO: testDateTime.toUTC().toISO(),
-                jsDate: testDateTime.toUTC().toJSDate().toISOString()
-            });
-
-           let utcTime = biddingEndsAtDateTime.toUTC().toJSDate()
 
 
-           auctionSettings.biddingEndsAt = new Date(biddingEndsAtDateTime.toUTC().toISO());
+
+
+            auctionSettings.biddingEndsAt = new Date(biddingEndsAtDateTime.toUTC().toISO());
             auctionSettings.isBiddingOpen = DateTime.now().setZone('UTC') < biddingEndsAtDateTime.toUTC();
             auctionSettings.endDate = biddingEndsAtDateTime.toISODate();
             auctionSettings.endTime = biddingEndsAtDateTime.toFormat('HH:mm');
-            auctionSettings.timeZone = timeZone; // Save timezone in DB if you want
+            auctionSettings.timeZone = timeZone; // Save timeZone in DB if you want
 
-console.log('🔍 Saving to DB:', {
-            biddingEndsAt: auctionSettings.biddingEndsAt,
-            typeof: typeof auctionSettings.biddingEndsAt
-        });
 
 
         }
 
-        
+
         // === Validate required fields ===
         if (!categoryId) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Missing required field: categoryId.");
@@ -332,11 +289,6 @@ console.log('🔍 Saving to DB:', {
             savedProduct = await product.save();
         }
 
-console.log('🔍 After saving:', {
-    savedBiddingEndsAt: savedProduct.auctionSettings?.biddingEndsAt,
-    typeof: typeof savedProduct.auctionSettings?.biddingEndsAt
-});
-
         return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, savedProduct);
     } catch (error) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
@@ -374,7 +326,7 @@ const updateSellerProduct = async (req, res) => {
             specifics,
             tags,
             auctionSettings,
-            timezone,
+            timeZone,
             removePhotos,
             isDisable
         } = req.body;
@@ -454,7 +406,7 @@ const updateSellerProduct = async (req, res) => {
                 if (!auctionSettings) {
                     return apiErrorRes(400, res, "Auction settings are required.");
                 }
-                const { startingPrice, reservePrice, duration, endDate, endTime, biddingIncrementPrice } = auctionSettings;
+                const { startingPrice, reservePrice, duration, endDate, endTime, biddingIncrementPrice, timeZone } = auctionSettings;
 
 
                 if (startingPrice == null || reservePrice == null || !biddingIncrementPrice) {
@@ -463,7 +415,7 @@ const updateSellerProduct = async (req, res) => {
 
                 // Validate biddingEndsAt calculation like in add product API
                 let biddingEndsAtDateTime;
-                const auctionTimezone = timezone || auctionSettings.timezone || 'UTC';
+                const auctionTimezone = timeZone || auctionSettings.timeZone || 'UTC';
 
                 if (endDate && endTime) {
                     biddingEndsAtDateTime = DateTime.fromISO(`${endDate}T${endTime}`, { zone: auctionTimezone });
@@ -483,12 +435,21 @@ const updateSellerProduct = async (req, res) => {
                     return apiErrorRes(400, res, "Auction settings must include either (endDate & endTime) or duration.");
                 }
 
+                console.log('🔍 Update Timezone Debug:', {
+                    timezone: timeZone,
+                    auctionSettingsTimeZone: auctionSettings.timeZone,
+                    finalTimezone: auctionTimezone,
+                    endDate: endDate,
+                    endTime: endTime
+                });
+
+
                 // auctionSettings.biddingEndsAt = biddingEndsAtDateTime.toJSDate();
                 auctionSettings.biddingEndsAt = biddingEndsAtDateTime.toUTC().toJSDate();
                 auctionSettings.isBiddingOpen = DateTime.now().setZone('UTC') < biddingEndsAtDateTime.toUTC();
                 auctionSettings.endDate = biddingEndsAtDateTime.toISODate();
                 auctionSettings.endTime = biddingEndsAtDateTime.toFormat('HH:mm');
-                auctionSettings.timezone = auctionTimezone;
+                auctionSettings.timeZone = auctionTimezone;
             }
 
             if (deliveryType === DeliveryType.CHARGE_SHIPPING && (shippingCharge == null || isNaN(shippingCharge))) {
@@ -542,6 +503,8 @@ const updateSellerProduct = async (req, res) => {
 
         // Save updated product
         const updatedProduct = await existingProduct.save();
+
+        console.log(existingProduct.auctionSettings)
 
         return apiSuccessRes(200, res, "Product updated successfully", updatedProduct);
 
@@ -1018,7 +981,7 @@ const getLimitedTimeDeals = async (req, res) => {
         const nowTimestamp = Date.now();
         products.forEach(product => {
             const endTime = new Date(product.auctionSettings.biddingEndsAt).getTime();
-            console.log("endTime", endTime)
+
             const timeLeftMs = endTime - nowTimestamp;
             product.timeRemaining = timeLeftMs > 0 ? timeLeftMs : 0;
             product.timeRemainingStr = formatTimeRemaining(product.timeRemaining);
