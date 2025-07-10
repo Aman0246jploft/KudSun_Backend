@@ -2336,7 +2336,7 @@ const getProductsWithDraft = async (req, res) => {
 
                 isSold: product.isSold,
 
-                auctionSettings:product.auctionSettings,
+                auctionSettings: product.auctionSettings,
                 createdAt: product.createdAt,
                 updatedAt: product.updatedAt
             })),
@@ -2351,6 +2351,10 @@ const getProductsWithDraft = async (req, res) => {
 };
 
 
+
+const getProductbycategory = async(req,res) => {
+    
+}
 
 
 
@@ -2397,6 +2401,11 @@ router.get('/getSearchHistory', perApiLimiter(), getSearchHistory);
 router.post('/addComment', perApiLimiter(), upload.array('files', 2), addComment);
 router.get('/getProductComment/:productId', perApiLimiter(), getProductComment);
 router.get('/getCommentByParentId/:parentId', perApiLimiter(), getCommentByParentId);
+
+
+
+router.get('/getProductbycategory/:categoryId', perApiLimiter(), getProductbycategory);
+
 
 
 
