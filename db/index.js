@@ -61,6 +61,7 @@ module.exports = {
     OrderStatusHistory: require("./models/Payment/OrderStatusHistory"),
     Transaction: require("./models/Payment/Transaction"),
 
+    PlatformRevenue: require("./models/PlatformRevenue"),
     WalletTnx: require("./models/Payment/WalletTnx"),
     SellerWithdrawl: require('./models/Payment/SellerWithdrawl'),
     //rbac---->

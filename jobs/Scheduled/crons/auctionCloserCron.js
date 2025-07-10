@@ -20,6 +20,8 @@ mongoose.connect(process.env.DB_STRING, {
             // Use current time in UTC (no offset correction)
             const nowUTC = DateTime.now().toUTC().toJSDate();
 
+            console.log("nowUTCnowUTC",nowUTC)
+
             const feeSettings = await FeeSetting.find({
                 isActive: true,
                 isDisable: false,

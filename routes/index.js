@@ -19,6 +19,8 @@ module.exports = {
     location: require('./controller/controllerLocation'),
     supportKey: require("./controller/controllerSupportKey"),
     sellerBank: require("./controller/controllerSellerBank"),
+
+    revenue: require("./controller/controllerPlatformRevenue"),
     // chat: require("./controller/controllerChat"),
 
 
