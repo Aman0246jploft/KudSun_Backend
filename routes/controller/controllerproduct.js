@@ -74,7 +74,7 @@ const addSellerProduct = async (req, res) => {
             shippingCharge,
             isDraft
         } = req.body;
-        const timezone = req.body.timezone || 'UTC';
+        
 
         let specifics = [];
         let auctionSettings = {};
@@ -147,7 +147,8 @@ const addSellerProduct = async (req, res) => {
                 duration,
                 endDate: userEndDate,
                 endTime,
-                biddingIncrementPrice
+                biddingIncrementPrice,
+                timeZone 
             } = auctionSettings;
 
             if (!startingPrice || !reservePrice || !biddingIncrementPrice) {
@@ -160,15 +161,15 @@ const addSellerProduct = async (req, res) => {
             if (userEndDate && endTime) {
                 // Combine date + time and interpret it in user's timezone correctly
                 const naiveDateTime = DateTime.fromISO(`${userEndDate}T${endTime}`);
-                biddingEndsAtDateTime = naiveDateTime.setZone(timezone, { keepLocalTime: true });
+                biddingEndsAtDateTime = naiveDateTime.setZone(timeZone, { keepLocalTime: true });
 
                 // Validate
                 if (!biddingEndsAtDateTime.isValid) {
-                    return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid endDate or endTime with provided timezone.");
+                    return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid endDate or endTime with provided timeZone.");
                 }
             }
             else if (duration) {
-                const now = DateTime.now().setZone(timezone);
+                const now = DateTime.now().setZone(timeZone);
                 biddingEndsAtDateTime = now.plus({ days: Number(duration) });
 
                 if (endTime) {
@@ -186,7 +187,7 @@ const addSellerProduct = async (req, res) => {
             auctionSettings.isBiddingOpen = DateTime.now().setZone('UTC') < biddingEndsAtDateTime.toUTC();
             auctionSettings.endDate = biddingEndsAtDateTime.toISODate();
             auctionSettings.endTime = biddingEndsAtDateTime.toFormat('HH:mm');
-            auctionSettings.timezone = timezone; // Save timezone in DB if you want
+            auctionSettings.timeZone = timeZone; // Save timezone in DB if you want
         }
 
 
