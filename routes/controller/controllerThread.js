@@ -460,7 +460,7 @@ const getThreadComments = async (req, res) => {
             .lean();
 
         const commentIds = comments.map(comment => comment?._id);
-  
+
 
         // Get reply counts for each comment
         const replyCounts = await ThreadComment.aggregate([
@@ -602,7 +602,8 @@ const getThreads = async (req, res) => {
             sortBy = 'createdAt', // 'createdAt' | 'budget' | 'comments'
             sortOrder = 'desc',   // 'asc' | 'desc',
             minBudget,
-            maxBudget
+            maxBudget,
+            isDraft = 'false'
         } = req.query;
 
         let page = parseInt(pageNo);
@@ -649,9 +650,9 @@ const getThreads = async (req, res) => {
             sortStage = { createdAt: sortDir }; // default
         }
 
-        console.log("54545454", filters)
+        const ThreadModel = isDraft === 'true' ? ThreadDraft : Thread;
 
-        const threads = await Thread.find(filters)
+        const threads = await ThreadModel.find(filters)
             .populate('userId', 'userName profileImage isLive is_Id_verified is_Preferred_seller')
             .populate('categoryId', 'name subCategoryId') // populate but remove later
             .sort(sortStage)
@@ -751,7 +752,7 @@ const getThreads = async (req, res) => {
         });
 
 
-        const total = await Thread.countDocuments(filters);
+        const total = await ThreadModel.countDocuments(filters);
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Products fetched successfully", {
             pageNo: page,
@@ -893,7 +894,7 @@ const getThreadById = async (req, res) => {
                             }
                         },
 
-            { $unwind: { path: "$author", preserveNullAndEmptyArrays: true } },
+                        { $unwind: { path: "$author", preserveNullAndEmptyArrays: true } },
 
                         {
                             $lookup: {
@@ -935,7 +936,7 @@ const getThreadById = async (req, res) => {
                         description: 1,
                         fixedPrice: 1,
                         isSold: 1,
-                        productImages:1
+                        productImages: 1
                     },
                     author: {
                         _id: 1,
@@ -955,7 +956,7 @@ const getThreadById = async (req, res) => {
                             description: 1,
                             fixedPrice: 1,
                             isSold: 1,
-                            productImages:1
+                            productImages: 1
                         },
                         author: {
                             _id: 1,
@@ -1004,7 +1005,7 @@ const getThreadById = async (req, res) => {
                     as: "seller"
                 }
             },
-        
+
 
             { $unwind: { path: "$seller", preserveNullAndEmptyArrays: true } },
 
@@ -1161,7 +1162,7 @@ const getThreadById = async (req, res) => {
                             }
                         },
                         { $project: { associatedProducts: 1 } },
-                       { $unwind: { path: "$associatedProducts", preserveNullAndEmptyArrays: true } },
+                        { $unwind: { path: "$associatedProducts", preserveNullAndEmptyArrays: true } },
                         {
                             $group: {
                                 _id: null,
@@ -1442,7 +1443,7 @@ const getRecentFollowedUsers = async (req, res) => {
                                 let: { threadId: '$_id' },
                                 pipeline: [
                                     { $match: { $expr: { $eq: ['$thread', '$$threadId'] }, isDeleted: false, isDisable: false } },
-                                   { $unwind: { path: "$associatedProducts", preserveNullAndEmptyArrays: true } },
+                                    { $unwind: { path: "$associatedProducts", preserveNullAndEmptyArrays: true } },
                                     { $group: { _id: null, count: { $sum: 1 } } }
                                 ],
                                 as: 'associatedProductCountInfo'
