@@ -74,7 +74,7 @@ const addSellerProduct = async (req, res) => {
             shippingCharge,
             isDraft
         } = req.body;
-        
+
 
         let specifics = [];
         let auctionSettings = {};
@@ -148,7 +148,7 @@ const addSellerProduct = async (req, res) => {
                 endDate: userEndDate,
                 endTime,
                 biddingIncrementPrice,
-                timeZone 
+                timeZone
             } = auctionSettings;
 
             if (!startingPrice || !reservePrice || !biddingIncrementPrice) {
@@ -160,8 +160,8 @@ const addSellerProduct = async (req, res) => {
             // CASE 1: endDate + endTime provided
             if (userEndDate && endTime) {
                 // Combine date + time and interpret it in user's timezone correctly
-                const naiveDateTime = DateTime.fromISO(`${userEndDate}T${endTime}`);
-                biddingEndsAtDateTime = naiveDateTime.setZone(timeZone, { keepLocalTime: true });
+                const dateTimeString = `${userEndDate}T${endTime}`;
+                biddingEndsAtDateTime = DateTime.fromISO(dateTimeString, { zone: timeZone });
 
                 // Validate
                 if (!biddingEndsAtDateTime.isValid) {
