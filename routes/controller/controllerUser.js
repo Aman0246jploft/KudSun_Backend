@@ -2056,7 +2056,7 @@ const getOtherProfile = async (req, res) => {
 
         const [totalThreads, totalProducts, totalReviews] = await Promise.all([
             Thread.countDocuments({ userId, isDeleted: false, isDisable: false }),
-            SellProduct.countDocuments({ userId, isDeleted: false, isDisable: false, saleType: SALE_TYPE.FIXED }),
+            SellProduct.countDocuments({ userId, isDeleted: false, isDisable: false,  }),
             ProductReview.countDocuments({ userId, isDeleted: false, isDisable: false })
         ]);
         return apiSuccessRes(
