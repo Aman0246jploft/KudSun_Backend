@@ -129,11 +129,21 @@ const addOrUpdateSubCategory = async (req, res) => {
             imageUrl = await uploadImageCloudinary(imageFile, 'subcategory-images');
         }
 
+
+
         if (subCategoryId) {
             // Update flow
             const subCategory = category.subCategories.id(subCategoryId);
             if (!subCategory) {
                 return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
+            }
+
+
+            // Handle deletion
+            if (req.body.isDeleted === true || req.body.isDeleted === 'true') {
+                subCategory.deleteOne(); // Mongoose subdocument deletion
+                await category.save();
+                return apiSuccessRes(HTTP_STATUS.OK, res, 'Subcategory deleted successfully');
             }
 
             // Check if the new name is unique among other subcategories

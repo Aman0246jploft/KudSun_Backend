@@ -504,8 +504,6 @@ const updateSellerProduct = async (req, res) => {
         // Save updated product
         const updatedProduct = await existingProduct.save();
 
-        console.log(existingProduct.auctionSettings)
-
         return apiSuccessRes(200, res, "Product updated successfully", updatedProduct);
 
     } catch (error) {
