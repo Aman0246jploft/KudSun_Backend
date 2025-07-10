@@ -2204,14 +2204,19 @@ const getProductsWithDraft = async (req, res) => {
             // Auction Specific
             isAuctionOpen,
 
+            isDraft = false,
+
             // Sorting
             sortBy = 'createdAt',
             sortOrder = 'desc',
 
             // Pagination
-            pageNo:page = 1,
-            size:limit = 10
+            pageNo: page = 1,
+            size: limit = 10
         } = req.query;
+        const isDraftMode = isDraft === 'true'||isDraft === true;
+        const Model = isDraftMode ? SellProductDraft : SellProduct;
+
 
         // Build filter object
         const filter = {
@@ -2219,6 +2224,7 @@ const getProductsWithDraft = async (req, res) => {
             isDisable: false,
             userId: req.user.userId
         };
+
 
         // Text Search
         if (search) {
@@ -2279,7 +2285,7 @@ const getProductsWithDraft = async (req, res) => {
         const skip = (parseInt(page) - 1) * parseInt(limit);
 
         // Fetch products with populated fields
-        const products = await SellProduct.find(filter)
+        const products = await Model.find(filter)
             .populate({
                 path: 'userId',
                 select: 'userName profileImage isLive is_Id_verified is_Verified_Seller averageRatting',
@@ -2301,7 +2307,7 @@ const getProductsWithDraft = async (req, res) => {
         const filteredProducts = products.filter(product => product.userId !== null);
 
         // Get total count for pagination
-        const total = await SellProduct.countDocuments(filter);
+        const total = await Model.countDocuments(filter);
 
         // Format response
         const response = {
