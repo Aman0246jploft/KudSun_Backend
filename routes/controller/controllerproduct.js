@@ -11,6 +11,7 @@ const { uploadImageCloudinary, deleteImageCloudinary } = require('../../utils/cl
 const CONSTANTS_MSG = require('../../utils/constantsMessage');
 const { SALE_TYPE, DeliveryType, ORDER_STATUS, roleId, conditions } = require('../../utils/Role');
 const { DateTime } = require('luxon');
+const { default: mongoose } = require('mongoose');
 
 async function ensureParameterAndValue(categoryId, subCategoryId, key, value, userId = null, role) {
     const category = await Category.findById(categoryId);
@@ -2171,6 +2172,187 @@ const otherUserReview = async (req, res) => {
 
 
 
+const getProductsWithDraft = async (req, res) => {
+    try {
+        const {
+            // Search
+            search,
+
+            // Categories
+            categoryId,
+            subCategoryId,
+
+            // Price Range
+            minPrice,
+            maxPrice,
+
+            // Product Type
+            saleType,
+
+            // Status Filters
+            isNew,
+            isSold,
+
+            // Location
+            location,
+
+            // Seller Filters
+            sellerId,
+            minSellerRating,
+            isVerifiedSeller,
+
+            // Auction Specific
+            isAuctionOpen,
+
+            // Sorting
+            sortBy = 'createdAt',
+            sortOrder = 'desc',
+
+            // Pagination
+            pageNo:page = 1,
+            size:limit = 10
+        } = req.query;
+
+        // Build filter object
+        const filter = {
+            isDeleted: false,
+            isDisable: false,
+            userId: req.user.userId
+        };
+
+        // Text Search
+        if (search) {
+            filter.$or = [
+                { title: { $regex: search, $options: 'i' } },
+                { description: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        // Category Filters
+        if (categoryId) {
+            filter.categoryId = mongoose.Types.ObjectId(categoryId);
+        }
+        if (subCategoryId) {
+            filter.subCategoryId = mongoose.Types.ObjectId(subCategoryId);
+        }
+
+        // Price Range
+        if (minPrice !== undefined || maxPrice !== undefined) {
+            filter.fixedPrice = {};
+            if (minPrice !== undefined) filter.fixedPrice.$gte = Number(minPrice);
+            if (maxPrice !== undefined) filter.fixedPrice.$lte = Number(maxPrice);
+        }
+
+        // Sale Type
+        if (saleType) {
+            filter.saleType = saleType;
+        }
+
+        // Product Status
+        if (isNew !== undefined) {
+            filter.isNew = isNew === 'true';
+        }
+        if (isSold !== undefined) {
+            filter.isSold = isSold === 'true';
+        }
+
+        // Location
+        if (location) {
+            filter.location = { $regex: location, $options: 'i' };
+        }
+
+        // Seller ID
+        if (sellerId) {
+            filter.userId = mongoose.Types.ObjectId(sellerId);
+        }
+
+        // Auction Status
+        if (isAuctionOpen !== undefined && saleType === SALE_TYPE.AUCTION) {
+            filter['auctionSettings.isBiddingOpen'] = isAuctionOpen === 'true';
+        }
+
+        // Build sort object
+        const sort = {};
+        sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
+
+        // Calculate skip value for pagination
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+
+        // Fetch products with populated fields
+        const products = await SellProduct.find(filter)
+            .populate({
+                path: 'userId',
+                select: 'userName profileImage isLive is_Id_verified is_Verified_Seller averageRatting',
+                match: {
+                    isDeleted: false,
+                    isDisable: false,
+                    ...(minSellerRating && { averageRatting: { $gte: Number(minSellerRating) } }),
+                    ...(isVerifiedSeller && { is_Verified_Seller: true })
+                }
+            })
+            .populate('categoryId', 'name')
+            .populate('subCategoryId', 'name')
+            .sort(sort)
+            .skip(skip)
+            .limit(parseInt(limit))
+            .lean();
+
+        // Filter out products where seller doesn't match criteria
+        const filteredProducts = products.filter(product => product.userId !== null);
+
+        // Get total count for pagination
+        const total = await SellProduct.countDocuments(filter);
+
+        // Format response
+        const response = {
+            pageNo: parseInt(page),
+            total,
+            size: parseInt(limit),
+            products: filteredProducts.map(product => ({
+                _id: product._id,
+                title: product.title,
+                description: product.description,
+                price: product.fixedPrice,
+                saleType: product.saleType,
+                images: product.productImages,
+                category: product.categoryId?.name,
+                subCategory: product.subCategoryId?.name,
+                location: product.location,
+                condition: product.condition,
+                seller: {
+                    _id: product.userId?._id,
+                    name: product.userId?.userName,
+                    image: product.userId?.profileImage,
+                    rating: product.userId?.averageRatting,
+                    isVerified: product.userId?.is_Verified_Seller,
+                    isLive: product.userId?.isLive
+                },
+                status: {
+                    isNew: product.isNew,
+                    isSold: product.isSold
+                },
+                auction: product.saleType === SALE_TYPE.AUCTION ? {
+                    currentBid: product.auctionSettings?.currentBid,
+                    isBiddingOpen: product.auctionSettings?.isBiddingOpen,
+                    endsAt: product.auctionSettings?.biddingEndsAt
+                } : null,
+                createdAt: product.createdAt,
+                updatedAt: product.updatedAt
+            })),
+
+        };
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Products fetched successfully", response);
+    } catch (err) {
+        console.error("Get products error:", err);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to fetch products");
+    }
+};
+
+
+
+
+
 router.post('/addSellerProduct', perApiLimiter(), upload.array('files', 10), addSellerProduct);
 
 router.post('/updateSellerProduct/:id', perApiLimiter(), upload.array('files', 10), updateSellerProduct);
@@ -2190,6 +2372,11 @@ router.post('/trending/:id', perApiLimiter(), trending);
 router.get('/showNormalProducts', perApiLimiter(), showNormalProducts);
 router.get('/showAuctionProducts', perApiLimiter(), showAuctionProducts);
 router.get('/getProducts/:id', perApiLimiter(), getProduct);
+
+
+
+router.get('/getProductsWithDraft', perApiLimiter(), getProductsWithDraft);
+
 
 //Category detail Page
 router.get('/limited-time', perApiLimiter(), getLimitedTimeDeals);
