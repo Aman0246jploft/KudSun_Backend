@@ -341,7 +341,11 @@ const loginStepTwoPassword = async (req, res) => {
             ]
         };
 
-        const user = await User.findOne(query).select('+password +loginOtp +loginOtpExpiresAt');
+        const user = await User.findOne(query).select('+password +loginOtp +loginOtpExpiresAt').populate([{ path: 'provinceId', select: 'value' }, { path: 'districtId', select: 'value' }]);
+
+
+
+
         if (!user) {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
         }
@@ -373,6 +377,16 @@ const loginStepTwoPassword = async (req, res) => {
             });
 
 
+            const totalFollowers = await Follow.countDocuments({
+                userId: user._id,
+                isDeleted: false,
+                isDisable: false
+            });
+            const totalFollowing = await Follow.countDocuments({
+                followedBy: user._id,
+                isDeleted: false,
+                isDisable: false
+            });
 
 
 
@@ -380,7 +394,9 @@ const loginStepTwoPassword = async (req, res) => {
 
                 {
                     token,
-                    ...user.toJSON()
+                    ...user.toJSON(),
+                    totalFollowers,
+                    totalFollowing
                 }
             );
 
@@ -425,7 +441,10 @@ const loginStepThreeVerifyOtp = async (req, res) => {
             ]
         };
 
-        const user = await User.findOne(query).select('+loginOtp +loginOtpExpiresAt');
+        const user = await User.findOne(query).select('+loginOtp +loginOtpExpiresAt').populate([
+            { path: 'provinceId', select: 'value' },
+            { path: 'districtId', select: 'value' }
+        ]);
         if (!user) {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
         }
@@ -462,11 +481,29 @@ const loginStepThreeVerifyOtp = async (req, res) => {
         });
 
 
+        // ✅ Count followers (users who follow this user)
+        const totalFollowers = await Follow.countDocuments({
+            userId: user._id,
+            isDeleted: false,
+            isDisable: false
+        });
+
+        // ✅ Count following (users this user follows)
+        const totalFollowing = await Follow.countDocuments({
+            followedBy: user._id,
+            isDeleted: false,
+            isDisable: false
+        });
+
+
+
         return apiSuccessRes(HTTP_STATUS.OK, res, "OTP verified, login successful",
 
             {
                 token,
-                ...user.toJSON()
+                ...user.toJSON(),
+                totalFollowers,
+                totalFollowing
             }
         );
 
@@ -2019,7 +2056,7 @@ const getOtherProfile = async (req, res) => {
 
         const [totalThreads, totalProducts, totalReviews] = await Promise.all([
             Thread.countDocuments({ userId, isDeleted: false, isDisable: false }),
-            SellProduct.countDocuments({ userId, isDeleted: false, isDisable: false,saleType:SALE_TYPE.FIXED }),
+            SellProduct.countDocuments({ userId, isDeleted: false, isDisable: false, saleType: SALE_TYPE.FIXED }),
             ProductReview.countDocuments({ userId, isDeleted: false, isDisable: false })
         ]);
         return apiSuccessRes(
