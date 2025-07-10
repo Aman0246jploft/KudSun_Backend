@@ -31,8 +31,6 @@ mongoose.connect(process.env.DB_STRING, {
                 feeMap[fee.name] = fee;
             });
 
-
-
             // Find auctions that ended (biddingEndsAt <= nowUTC) and still open
             const expiredAuctions = await SellProduct.find({
                 saleType: SALE_TYPE.AUCTION,
