@@ -2333,10 +2333,9 @@ const getProductsWithDraft = async (req, res) => {
                     isVerified: product.userId?.is_Verified_Seller,
                     isLive: product.userId?.isLive
                 },
-                status: {
-                    isNew: product.isNew,
-                    isSold: product.isSold
-                },
+              
+                isSold: product.isSold,
+
                 auction: product.saleType === SALE_TYPE.AUCTION ? {
                     currentBid: product.auctionSettings?.currentBid,
                     isBiddingOpen: product.auctionSettings?.isBiddingOpen,
