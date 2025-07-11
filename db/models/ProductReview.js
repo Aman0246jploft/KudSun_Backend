@@ -5,6 +5,11 @@ const Schema = mongoose.Schema;
 const ReviewSchema = new Schema({
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     productId: { type: Schema.Types.ObjectId, ref: 'SellProduct', required: true },
+    raterRole: {
+        type: String,
+        enum: ['buyer', 'seller'],
+        required: true
+    }, // 'buyer' = buyer rates seller, 'seller' = seller rates buyer
     rating: {
         type: Number,
         required: true,
