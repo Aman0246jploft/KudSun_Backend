@@ -1007,55 +1007,61 @@ const getLimitedTimeDeals = async (req, res) => {
 const getProductsPerSubCategory = async ({
     categoryId,
     sizePerSub = 10,
-    extraMatch = {},
+    extraMatch = {},        // keyword / tags / specifics / condition …
 }) => {
     const catId = toObjectId(categoryId);
-    return SellProduct.aggregate([
-        {                           // 1️⃣  only visible / saleable products
-            $match: {
-                categoryId: catId,
-                isDeleted: false,
-                isDisable: false,
-                isSold: false,
-                ...extraMatch            // keyword, price, etc. (optional)
-            }
-        },
-        { $sort: { createdAt: -1 } }, // 2️⃣  newest first
-        {                           // 3️⃣  bucket by subCategoryId
-            $group: {
-                _id: '$subCategoryId',
-                products: { $push: '$$ROOT' }
-            }
-        },
-        {                           // 4️⃣  keep first N of each bucket
+
+    /*  We start from the Category collection, unwind its subCategories,
+     *  and then $lookup the products (LEFT‑OUTER join ➜ empty array if none).
+     */
+    const pipeline = [
+        { $match: { _id: catId } },
+        { $unwind: '$subCategories' },
+
+        // keep only the meta we need
+        {
             $project: {
-                subCategoryId: '$_id',
-                products: { $slice: ['$products', sizePerSub] }
+                _id: 0,
+                subCategoryId: '$subCategories._id',
+                subCategory: {
+                    name: '$subCategories.name',
+                    slug: '$subCategories.slug',
+                    image: '$subCategories.image'
+                }
             }
         },
-        {                           // 5️⃣  pull sub‑category meta
+
+        // LEFT JOIN SellProduct ➜ 'products' (slice to 10)
+        {
             $lookup: {
-                from: 'Category',
-                let: { subId: '$subCategoryId', catId: catId },
+                from: 'SellProduct',
+                let: { subId: '$subCategoryId' },
                 pipeline: [
-                    { $match: { $expr: { $eq: ['$_id', '$$catId'] } } },
-                    { $unwind: '$subCategories' },
-                    { $match: { $expr: { $eq: ['$subCategories._id', '$$subId'] } } },
                     {
-                        $project: {
-                            _id: 0,
-                            name: '$subCategories.name',
-                            slug: '$subCategories.slug',
-                            image: '$subCategories.image'
+                        $match: {
+                            $expr: {
+                                $and: [
+                                    { $eq: ['$subCategoryId', '$$subId'] },
+                                    { $eq: ['$isDeleted', false] },
+                                    { $eq: ['$isDisable', false] },
+                                    { $eq: ['$isSold', false] },
+                                ]
+                            },
+                            ...extraMatch       // same filters you build in the controller
                         }
-                    }
+                    },
+                    { $sort: { createdAt: -1 } },
+                    { $limit: sizePerSub }
                 ],
-                as: 'subCategory'
+                as: 'products'
             }
         },
-        { $unwind: '$subCategory' },
+
+        // tidy ordering
         { $sort: { 'subCategory.slug': 1 } }
-    ]);
+    ];
+
+    return Category.aggregate(pipeline);
 };
 
 
