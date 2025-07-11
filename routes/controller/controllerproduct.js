@@ -1002,6 +1002,69 @@ const getLimitedTimeDeals = async (req, res) => {
     }
 };
 
+
+
+const getProductsPerSubCategory = async ({
+    categoryId,
+    sizePerSub = 10,
+    extraMatch = {},
+}) => {
+    const catId = toObjectId(categoryId);
+    return SellProduct.aggregate([
+        {                           // 1️⃣  only visible / saleable products
+            $match: {
+                categoryId: catId,
+                isDeleted: false,
+                isDisable: false,
+                isSold: false,
+                ...extraMatch            // keyword, price, etc. (optional)
+            }
+        },
+        { $sort: { createdAt: -1 } }, // 2️⃣  newest first
+        {                           // 3️⃣  bucket by subCategoryId
+            $group: {
+                _id: '$subCategoryId',
+                products: { $push: '$$ROOT' }
+            }
+        },
+        {                           // 4️⃣  keep first N of each bucket
+            $project: {
+                subCategoryId: '$_id',
+                products: { $slice: ['$products', sizePerSub] }
+            }
+        },
+        {                           // 5️⃣  pull sub‑category meta
+            $lookup: {
+                from: 'Category',
+                let: { subId: '$subCategoryId', catId: catId },
+                pipeline: [
+                    { $match: { $expr: { $eq: ['$_id', '$$catId'] } } },
+                    { $unwind: '$subCategories' },
+                    { $match: { $expr: { $eq: ['$subCategories._id', '$$subId'] } } },
+                    {
+                        $project: {
+                            _id: 0,
+                            name: '$subCategories.name',
+                            slug: '$subCategories.slug',
+                            image: '$subCategories.image'
+                        }
+                    }
+                ],
+                as: 'subCategory'
+            }
+        },
+        { $unwind: '$subCategory' },
+        { $sort: { 'subCategory.slug': 1 } }
+    ]);
+};
+
+
+
+
+
+
+
+
 const fetchCombinedProducts = async (req, res) => {
     try {
         const {
@@ -1020,6 +1083,68 @@ const fetchCombinedProducts = async (req, res) => {
             condition, // 'new', 'used', 'refurbished'
             includeEndedAuctions = false
         } = req.query;
+        const LIMITED_DEALS_LIMIT = 10;
+        const now = new Date();
+        const next24Hours = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+        const limitedFilter = {
+            saleType: SALE_TYPE.AUCTION,
+            isDeleted: false,
+            isSold: false,
+            isDisable: false,
+            'auctionSettings.isBiddingOpen': true,
+            'auctionSettings.biddingEndsAt': { $gte: now, $lte: next24Hours },
+
+            // Keep UI filters consistent
+            ...(categoryId && { categoryId: toObjectId(categoryId) }),
+            ...(subCategoryId && { subCategoryId: toObjectId(subCategoryId) }),
+            ...(condition && { condition })
+        };
+
+        if (keyWord) {
+            limitedFilter.$or = [
+                { title: { $regex: keyWord, $options: 'i' } },
+                { description: { $regex: keyWord, $options: 'i' } },
+                { tags: { $regex: keyWord, $options: 'i' } }
+            ];
+        }
+        if (tags) {
+            const tagArray = Array.isArray(tags) ? tags : tags.split(',');
+            limitedFilter.tags = { $in: tagArray };
+        }
+        if (specifics) {
+            const parsed = Array.isArray(specifics) ? specifics : [specifics];
+            limitedFilter['specifics.valueId'] = { $all: parsed.map(id => toObjectId(id)) };
+        }
+
+        // -- pull at most 10 deals
+        const limitedProductsRaw = await SellProduct.find(limitedFilter)
+            .sort({ 'auctionSettings.biddingEndsAt': 1 })
+            .limit(LIMITED_DEALS_LIMIT)               // 👈 hard‑coded cap
+            .select(`
+        title productImages auctionSettings.reservePrice condition
+        tags description originPriceView specifics originPrice createdAt auctionSettings.biddingEndsAt
+      `)
+            .populate('categoryId', 'name')
+            .populate('userId', 'userName averageRatting profileImage is_Id_verified is_Verified_Seller isLive')
+            .lean();
+
+        // Enhance with bid counts & timers (same helper you already use)
+        if (limitedProductsRaw.length) {
+            const ids = limitedProductsRaw.map(p => toObjectId(p._id));
+            const bidAgg = await Bid.aggregate([
+                { $match: { productId: { $in: ids } } },
+                { $group: { _id: '$productId', totalBidsPlaced: { $sum: 1 } } }
+            ]);
+            const bidsMap = bidAgg.reduce((a, c) => ({ ...a, [c._id]: c.totalBidsPlaced }), {});
+            const nowTs = Date.now();
+            limitedProductsRaw.forEach(p => {
+                const end = new Date(p.auctionSettings.biddingEndsAt).getTime();
+                const left = Math.max(end - nowTs, 0);
+                p.timeRemaining = left;
+                p.timeRemainingStr = formatTimeRemaining(left);
+                p.totalBidsPlaced = bidsMap[p._id.toString()] || 0;
+            });
+        }
 
 
 
@@ -1139,6 +1264,12 @@ const fetchCombinedProducts = async (req, res) => {
         const unifiedFilter = {
             $or: saleTypeFilters,
         };
+
+
+
+
+
+
 
         // Step 7: Execute single unified query to get mixed products
         const [allProducts, totalCount] = await Promise.all([
@@ -1273,11 +1404,30 @@ const fetchCombinedProducts = async (req, res) => {
 
 
 
+
+
+        let subCategoryGroups = [];
+        if (categoryId && !subCategoryId) {
+            subCategoryGroups = await getProductsPerSubCategory({
+                categoryId,
+                sizePerSub: 10,      // hard cap – tweak or make another query param
+            });
+        }
+
+
+        let output = {
+            products: finalProducts,
+
+            limitedProducts: limitedProductsRaw,
+            ...(subCategoryGroups.length && { subCategoryGroups })
+        }
+
+
         return apiSuccessRes(HTTP_STATUS.OK, res, "Products fetched successfully", {
             pageNo: page,
             size: limit,
             total: totalCount,
-            products: finalProducts,
+            data: output
         });
 
     } catch (error) {
@@ -1285,6 +1435,18 @@ const fetchCombinedProducts = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Something went wrong");
     }
 };
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2352,8 +2514,8 @@ const getProductsWithDraft = async (req, res) => {
 
 
 
-const getProductbycategory = async(req,res) => {
-    
+const getProductbycategory = async (req, res) => {
+
 }
 
 
@@ -2404,7 +2566,6 @@ router.get('/getCommentByParentId/:parentId', perApiLimiter(), getCommentByParen
 
 
 
-router.get('/getProductbycategory/:categoryId', perApiLimiter(), getProductbycategory);
 
 
 
