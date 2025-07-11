@@ -138,9 +138,16 @@ const UserSchema = new Schema({
         type: Boolean,
         defaut: true
     },
+    //seller
     totalRatingSum: { type: Number, default: 0 },
     totalRatingCount: { type: Number, default: 0 },
     averageRatting: { type: Number, default: 0 },
+
+    //Buyer
+    totalBuyerRatingSum: { type: Number, default: 0 },
+    totalBuyerRatingCount: { type: Number, default: 0 },//seller rate to buyer
+    averageBuyerRatting: { type: Number, default: 0 },
+
     walletBalance: {
         type: Number,
         default: 0,
