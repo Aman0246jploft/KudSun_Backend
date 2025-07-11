@@ -42,6 +42,8 @@ const publicRoutes = [
 
     `/api/v1/user/getOnboardingStep`,
 
+    `/ping`
+
 
 
 
