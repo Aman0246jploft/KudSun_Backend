@@ -3,161 +3,237 @@ const express = require('express');
 const multer = require('multer');
 const upload = multer();
 const router = express.Router();
-const { Dispute, Order } = require('../../db');
+const { Dispute, Order, DisputeHistory } = require('../../db');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const { uploadImageCloudinary } = require('../../utils/cloudinary');
 const HTTP_STATUS = require('../../utils/statusCode');
 const { DISPUTE_STATUS } = require('../../utils/Role');
 const { apiErrorRes, apiSuccessRes } = require('../../utils/globalFunction');
+const { createDisputeSchema, sellerRespondSchema, adminDecisionSchema } = require('../services/validations/disputeValidation');
+const { default: mongoose } = require('mongoose');
 
 
 
+
+const toObjectId = id => new mongoose.Types.ObjectId(id);
+
+
+async function logHistory({ disputeId, event, title, note, actor }, session = null) {
+    return DisputeHistory.create([{ event, title, note, actor }], { session });
+}
+
+
+
+
+/* -------------------- BUYER -------------------- */
 const createDispute = async (req, res) => {
+    /* 1) validate input --------------------------------------------------- */
+    const { value, error } = createDisputeSchema.validate(req.body);
+    if (error) return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, error.message);
+    const { orderId, disputeType, description } = value;
+
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
-        const { orderId, reason, description } = req.body;
-        const userId = req.user.userId;
-
-        if (!orderId || !description) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Order ID and description are required");
+        /* 2) sanity‑check order & ownership ---------------------------------- */
+        const order = await Order.findOne({ _id: orderId, userId: req.user.userId }).session(session);
+        if (!order) {
+            await session.abortTransaction();
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Order not found for this buyer');
         }
 
-        // Upload evidence files to Cloudinary
-        let evidenceUrls = [];
-        if (req.files && req.files.length > 0) {
+        /* 3) upload evidence ------------------------------------------------- */
+        let evidence = [];
+        if (req.files?.length) {
             for (const file of req.files) {
-                const imageUrl = await uploadImageCloudinary(file, 'dispute-evidence');
-                if (imageUrl) evidenceUrls.push(imageUrl);
+                const url = await uploadImageCloudinary(file, 'dispute-evidence');
+                if (url) evidence.push(url);
             }
         }
 
-        // Create the dispute
-        const dispute = new Dispute({
-            raisedBy: userId,
-            orderId: toObjectId(orderId),
-            reason,
+        /* 4) create dispute -------------------------------------------------- */
+        const dispute = await Dispute.create([{
+            raisedBy: req.user.userId,
+            orderId: order._id,
+            sellerId: order.sellerId,
+            disputeType,
             description,
-            evidence: evidenceUrls
-        });
+            evidence
+        }], { session });
+        const saved = dispute[0];
 
-        const savedDispute = await dispute.save({ session });
-
-        // Update the related order to reference this dispute
+        /* 5) reference dispute on order -------------------------------------- */
         await Order.updateOne(
-            { _id: toObjectId(orderId) },
-            { $set: { disputeId: savedDispute._id } },
+            { _id: order._id },
+            { $set: { disputeId: saved._id } },
             { session }
         );
 
-        await session.commitTransaction();
-        session.endSession();
+        /* 6) history --------------------------------------------------------- */
+        await logHistory({
+            disputeId: saved._id,
+            event: 'CREATED',
+            title: 'Dispute raised by buyer',
+            note: description,
+            actor: req.user.userId
+        }, session);
 
-        return apiSuccessRes(HTTP_STATUS.CREATED, res, "Dispute raised successfully", savedDispute);
+        await session.commitTransaction();
+        return apiSuccessRes(HTTP_STATUS.CREATED, res, 'Dispute raised successfully', saved);
 
     } catch (err) {
         await session.abortTransaction();
-        session.endSession();
-        console.error("Create dispute error:", err);
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
+    } finally {
+        session.endSession();
     }
 };
 
+/* -------------------- SELLER -------------------- */
+const sellerRespond = async (req, res) => {
+    const { value, error } = sellerRespondSchema.validate(req.body);
+    if (error) return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, error.message);
+    const { disputeId, responseType, description } = value;
 
-
-const updateDisputeStatus = async (req, res) => {
     try {
-        console.log("req.bodyreq.body", req.body)
-        const { status, disputeId } = req.body;
+        /* 1) ensure seller owns the dispute --------------------------------- */
+        const dispute = await Dispute.findOne({ _id: disputeId, sellerId: req.user.userId, isDeleted: false });
+        if (!dispute) return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Dispute not found for this seller');
 
-        if (!DISPUTE_STATUS[status?.toUpperCase()]) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid dispute status");
+        /* 2) upload attachments --------------------------------------------- */
+        let attachments = [];
+        if (req.files?.length) {
+            for (const f of req.files) {
+                const url = await uploadImageCloudinary(f, 'dispute-seller-attachments');
+                if (url) attachments.push(url);
+            }
         }
 
-        const updated = await Dispute.findByIdAndUpdate(disputeId, { status }, { new: true });
+        /* 3) update --------------------------------------------------------- */
+        dispute.sellerResponse = {
+            responseType,
+            description,
+            attachments,
+            respondedAt: new Date()
+        };
+        dispute.status = DISPUTE_STATUS.UNDER_REVIEW;
+        await dispute.save();
 
-        if (!updated) return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Dispute not found");
+        await logHistory({
+            disputeId,
+            event: 'SELLER_RESPONSE',
+            title: 'Seller responded',
+            note: description,
+            actor: req.user.userId
+        });
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Dispute status updated", updated);
+        return apiSuccessRes(HTTP_STATUS.OK, res, 'Response recorded', dispute);
+    } catch (err) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
+    }
+};
+
+/* -------------------- ADMIN -------------------- */
+const adminDecision = async (req, res) => {
+    const { value, error } = adminDecisionSchema.validate(req.body);
+    if (error) return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, error.message);
+    const { disputeId, decision, decisionNote } = value;
+
+    try {
+        const dispute = await Dispute.findById(disputeId);
+        if (!dispute) return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Dispute not found');
+
+        dispute.adminReview = {
+            reviewedBy: req.user.userId, // admin
+            decision,
+            decisionNote,
+            resolvedAt: new Date()
+        };
+        dispute.status = DISPUTE_STATUS.RESOLVED;
+        await dispute.save();
+
+        await logHistory({
+            disputeId,
+            event: 'ADMIN_DECISION',
+            title: `Admin decided in favour of ${decision}`,
+            note: decisionNote,
+            actor: req.user.userId
+        });
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, 'Dispute resolved', dispute);
     } catch (err) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
     }
 };
 
 
-const deleteDispute = async (req, res) => {
+/** POST /dispute/admin/update-status */
+const updateStatus = async (req, res) => {
+    const { value, error } = updateStatusSchema.validate(req.body);
+    if (error) return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, error.message);
+    const { disputeId, status } = value;
+
     try {
-        const { id } = req.body;
+        const dispute = await Dispute.findByIdAndUpdate(disputeId, { status }, { new: true });
+        if (!dispute) return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Dispute not found');
 
-        const deleted = await Dispute.findByIdAndUpdate(id, { isDeleted: true });
+        await logHistory({
+            disputeId,
+            event: 'STATUS_UPDATE',
+            title: `Status changed to ${status}`,
+            note: '',
+            actor: req.user.userId
+        });
 
-        if (!deleted) return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Dispute not found");
-
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Dispute deleted");
+        return apiSuccessRes(HTTP_STATUS.OK, res, 'Status updated', dispute);
     } catch (err) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
     }
 };
 
 
-
-const listUserDisputes = async (req, res) => {
+const adminListAll = async (req, res) => {
     try {
-        const userId = req.user.userId;
+        const pageNo = Number(req.query.pageNo) || 1;
+        const size = Number(req.query.size) || 10;
+        const status = req.query.status;          // optional
+        const type = req.query.disputeType;     // optional
+        const keyword = req.query.q?.trim();       // optional free‑text search
 
-        const pageNo = parseInt(req.query.pageNo) || 1;
-        const size = parseInt(req.query.size) || 10;
+        /* build filter ---------------------------------------------------- */
+        const filter = { isDeleted: false };
+        if (status) filter.status = status;
+        if (type) filter.disputeType = type;
+
+        /* simple keyword search on disputeId, orderId or description ------ */
+        if (keyword) {
+            const k = new RegExp(keyword, 'i');
+            filter.$or = [
+                { disputeId: k },
+                { description: k },
+                { orderId: keyword.match(/^[a-f\d]{24}$/i) ? keyword : undefined }
+            ].filter(Boolean);
+        }
 
         const skip = (pageNo - 1) * size;
 
-        const [disputes, totalCount] = await Promise.all([
-            Dispute.find({ raisedBy: userId, isDeleted: false })
+        const [items, total] = await Promise.all([
+            Dispute.find(filter)
                 .populate('orderId')
+                .populate('raisedBy', 'name email')
+                .populate('sellerId', 'name email')
                 .sort({ createdAt: -1 })
                 .skip(skip)
                 .limit(size),
-            Dispute.countDocuments({ raisedBy: userId, isDeleted: false })
+            Dispute.countDocuments(filter)
         ]);
-        let obj = {
-            disputes,
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, 'All disputes fetched', {
             pageNo,
             size,
-            totalCount
-        }
-
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Disputes fetched successfully", obj);
-    } catch (err) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
-    }
-};
-
-
-const listAllDisputes = async (req, res) => {
-    try {
-        const pageNo = parseInt(req.query.pageNo) || 1;
-        const size = parseInt(req.query.size) || 10;
-
-        const skip = (pageNo - 1) * size;
-
-        const [disputes, totalCount] = await Promise.all([
-            Dispute.find({ isDeleted: false })
-                .populate('raisedBy')
-                .populate('orderId')
-                .sort({ createdAt: -1 })
-                .skip(skip)
-                .limit(size),
-            Dispute.countDocuments({ isDeleted: false })
-        ]);
-
-        return apiSuccessRes(HTTP_STATUS.OK, res, "All disputes fetched", {
-            disputes,
-            pagination: {
-                pageNo,
-                size,
-                totalCount,
-                totalPages: Math.ceil(totalCount / size)
-            }
+            total,
+            disputes: items,
         });
     } catch (err) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
@@ -167,10 +243,10 @@ const listAllDisputes = async (req, res) => {
 
 
 router.post('/create', perApiLimiter(), upload.array('file', 3), createDispute);
-router.post('/updateDisputeStatus', perApiLimiter(), upload.any(), updateDisputeStatus);
-router.post('/deleteDispute', perApiLimiter(), upload.any(), deleteDispute);
-router.get('/listUserDisputes', perApiLimiter(), listUserDisputes);
-router.get('/listAllDisputes', perApiLimiter(), listAllDisputes);
+router.post('/sellerRespond', perApiLimiter(), upload.any(), sellerRespond);
+router.post('/adminDecision', perApiLimiter(), upload.any(), adminDecision);
+router.post('/updateStatus', perApiLimiter(), updateStatus);
+router.get('/adminListAll', perApiLimiter(), adminListAll);
 
 
 
