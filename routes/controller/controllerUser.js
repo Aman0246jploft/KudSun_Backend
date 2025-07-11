@@ -309,6 +309,11 @@ const loginStepOne = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.UNPROCESSABLE_ENTITY, res, CONSTANTS_MSG.ACCOUNT_DELETED);
         }
 
+        if(req.body?.language&&req.body.language!==""){
+            user.language=req.body?.language
+            user.save()
+        }
+
         // No token needed here, frontend just proceeds with step 2
         let obj = { token: null, ...user.toJSON(), detectedType }
 
