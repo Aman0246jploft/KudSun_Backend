@@ -1760,7 +1760,6 @@ const getProduct = async (req, res) => {
                 return {
                     ...bid.userId,                 // populated user info
                     bidAmount: bid.amount,
-                    placedAt: bid.placedAt,
                     myBid: loginUserId?.toString() === uid
                 };
             });
