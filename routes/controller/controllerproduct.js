@@ -1746,7 +1746,7 @@ const getProduct = async (req, res) => {
 
         // --- Auction Info (if applicable)
         if (product.saleType === SALE_TYPE.AUCTION) {
-            const allBids = await Bid.find({ productId: id }).populate({                           // ⭐ ADDED
+            const allBids = await Bid.find({ productId: id }).populate({                        
                 path: 'userId',
                 select: '_id userName profileImage isLive createdAt'
             }).sort({ placedAt: -1 }).lean({ getters: true });    

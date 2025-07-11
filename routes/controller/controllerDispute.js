@@ -221,8 +221,8 @@ const adminListAll = async (req, res) => {
         const [items, total] = await Promise.all([
             Dispute.find(filter)
                 .populate('orderId')
-                .populate('raisedBy', 'name email')
-                .populate('sellerId', 'name email')
+                .populate('raisedBy', 'userName profileImage email')
+                .populate('sellerId', 'userName profileImage email')
                 .sort({ createdAt: -1 })
                 .skip(skip)
                 .limit(size),

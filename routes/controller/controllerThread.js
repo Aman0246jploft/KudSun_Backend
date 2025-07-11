@@ -1214,7 +1214,9 @@ const getThreadById = async (req, res) => {
 
 
 
-
+        if (thread.categoryId && thread.categoryId.subCategories) {
+            delete thread.categoryId.subCategories;
+        }
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Thread fetched successfully", {
             ...thread,
