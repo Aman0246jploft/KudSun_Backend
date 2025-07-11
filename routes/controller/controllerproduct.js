@@ -1746,39 +1746,25 @@ const getProduct = async (req, res) => {
 
         // --- Auction Info (if applicable)
         if (product.saleType === SALE_TYPE.AUCTION) {
-            const allBids = await Bid.find({ productId: id }).sort({ placedAt: -1 }).lean();
+            const allBids = await Bid.find({ productId: id }).populate({                           // ⭐ ADDED
+                path: 'userId',
+                select: '_id userName profileImage isLive createdAt'
+            }).sort({ placedAt: -1 }).lean({ getters: true });    
 
             const totalBids = allBids.length;
             const isReserveMet = allBids.some(bid => bid.isReserveMet === true);
             const currentHighestBid = allBids.reduce((max, bid) => bid.amount > max.amount ? bid : max, { amount: 0 });
 
-            const bidderMap = new Map();
-            const latestBidMap = new Map();
-
-            for (const bid of allBids) {
-                const userIdStr = bid.userId.toString();
-                if (!bidderMap.has(userIdStr)) {
-                    bidderMap.set(userIdStr, bid.amount);
-                    latestBidMap.set(userIdStr, bid);
-                }
-            }
-
-            const bidderIds = Array.from(bidderMap.keys());
-
-            const bidderUsers = await User.find({ _id: { $in: bidderIds } })
-                .select('_id userName profileImage isLive createdAt')
-                .lean();
-
-            const bidders = bidderUsers.map(user => {
-                const userIdStr = user._id.toString();
-                const isCurrentUser = loginUserId?.toString() === userIdStr;
-
+            const bidders = allBids.map(bid => {
+                const uid = bid.userId._id.toString();
                 return {
-                    ...user,
-                    latestBidAmount: bidderMap.get(userIdStr),
-                    myBid: isCurrentUser ? true : false
+                    ...bid.userId,                 // populated user info
+                    bidAmount: bid.amount,
+                    placedAt: bid.placedAt,
+                    myBid: loginUserId?.toString() === uid
                 };
             });
+
 
 
             product.auctionDetails = {
