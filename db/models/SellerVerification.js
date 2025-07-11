@@ -11,7 +11,7 @@ const SellerVerificationSchema = new Schema({
 
     idDocumentFrontUrl: { type: String, required: true }, // URL of ID front image
     selfieWithIdUrl: { type: String, required: true },    // URL of selfie with ID image
-
+  
     paymentPayoutMethod: {
         type: String,
         enum: Object.values(SELLER_PAYOUT_METHOD),

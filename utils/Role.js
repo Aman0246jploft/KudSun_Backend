@@ -49,8 +49,8 @@ const PAYMENT_METHOD = {
 };
 
 const TNX_TYPE = {
-    CREDIT:'credit',
-    WITHDRAWL:"withdrawl"
+    CREDIT: 'credit',
+    WITHDRAWL: "withdrawl"
 }
 
 
@@ -69,12 +69,21 @@ const DEFAULT_AMOUNT = {
 };
 
 const DISPUTE_STATUS = {
-    PENDING: 'pending',
-    UNDER_REVIEW: 'under_review',
-    RESOLVED: 'resolved',
-    REJECTED: 'rejected',
-    CLOSED: 'closed'
+    PENDING: 'PENDING',
+    UNDER_REVIEW: 'UNDER_REVIEW',
+    RESOLVED: 'RESOLVED',
+    CANCELLED: 'CANCELLED'
 };
+const DISPUTE_DECISION = {
+    BUYER: 'BUYER',
+    SELLER: 'SELLER'
+};
+
+const DISPUTE_RESPONSE_TYPE = {
+    REFUND: 'REFUND',
+    DENY: 'DENY'
+};
+
 
 const SELLER_PAYOUT_METHOD = {
     PROMPT_PAY: "PromptPay",
@@ -120,5 +129,13 @@ module.exports = {
     SELLER_PAYOUT_METHOD,
     PRICING_TYPE,
     CHARGE_TYPE,
-    TNX_TYPE
+    TNX_TYPE,
+
+
+
+
+
+
+    DISPUTE_DECISION,
+    DISPUTE_RESPONSE_TYPE
 }
