@@ -37,6 +37,13 @@ const contactUsSchema = new Schema({
         default: false
     },
 
+
+    reply: {
+        subject: { type: String },
+        body: { type: String, maxLength: 1200 },
+        repliedAt: { type: Date, default: null }
+    },
+
     isDisable: {
         type: Boolean,
         default: false
@@ -48,6 +55,16 @@ const contactUsSchema = new Schema({
     }
 }, {
     timestamps: true
+});
+
+
+
+
+contactUsSchema.pre('save', function (next) {
+    if (this.isModified('reply') && this.reply.body) {
+        this.isRead = true;
+  }
+  next();
 });
 
 module.exports = mongoose.model('ContactUs', contactUsSchema, 'ContactUs');

@@ -207,73 +207,7 @@ async function setupSocket(server) {
             }
         });
 
-        // socket.on('markMessagesAsSeen', async ({ roomId }) => {
-        //     try {
-        //         const userId = socket.user?.userId;
-        //         if (!roomId || !userId) return;
-        //         const unseenMessages = await ChatMessage.find({
-        //             chatRoom: toObjectId(roomId),
-        //             seenBy: { $ne: toObjectId(userId) },
-        //             sender: { $ne: toObjectId(userId) }
-        //         });
-
-        //         console.log("📥 Unseen messages for user:", unseenMessages.length);
-
-
-        //         // Mark messages as seen (exclude user's own messages)
-        //         const result = await ChatMessage.updateMany(
-        //             {
-        //                 chatRoom: toObjectId(roomId),
-        //                 seenBy: { $ne: toObjectId(userId) },
-        //                 sender: { $ne: toObjectId(userId) }
-        //             },
-        //             { $addToSet: { seenBy: toObjectId(userId) } }
-        //         );
-
-        //         if (result.modifiedCount > 0) {
-        //             // Broadcast seen event to room
-        //             io.to(roomId).emit('messagesSeen', {
-        //                 roomId,
-        //                 userId,
-        //                 seenAt: new Date().toISOString()
-        //             });
-
-        //             // Fetch room with participants
-        //             const room = await ChatRoom.findById(roomId)
-        //                 .populate('participants', '_id userName profileImage')
-        //                 .populate('lastMessage');
-
-        //             if (!room) return;
-
-        //             const roomObj = room.toObject();
-
-        //             // Notify each participant with updated unread count
-        //             await Promise.all(room.participants.map(async (participant) => {
-        //                 const participantId = participant._id?.toString();
-
-        //                 let unreadCount = 0;
-        //                 if (participantId !== userId) {
-        //                     unreadCount = await ChatMessage.countDocuments({
-        //                         chatRoom: roomId,
-        //                         seenBy: { $ne: toObjectId(participantId) },
-        //                         sender: { $ne: toObjectId(participantId) }
-        //                     });
-        //                 }
-
-        //                 io.to(`user_${participantId}`).emit('roomUpdated', {
-        //                     ...roomObj,
-        //                     participants: roomObj.participants.filter(p => p._id?.toString() !== participantId),
-        //                     unreadCount
-        //                 });
-        //             }));
-        //         }
-
-        //     } catch (error) {
-        //         console.error('❌ Error in markMessagesAsSeen:', error);
-        //         socket.emit('error', { message: 'Failed to mark messages as seen' });
-        //     }
-        // });
-
+    
 
 
         socket.on('markMessagesAsSeen', async ({ roomId }) => {
