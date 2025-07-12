@@ -231,7 +231,7 @@ const changeStatus = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, `${draftMode ? 'Draft' : 'Thread'} not found.`);
         }
 
-        if (existing.userId.toString() !== req.user.userId) {
+        if (req.user.roleId !== roleId.SUPER_ADMIN  &&existing.userId.toString() !== req.user.userId) {
             return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, "You are not authorized to Change Status .");
         }
 

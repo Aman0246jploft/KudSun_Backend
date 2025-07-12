@@ -1904,7 +1904,7 @@ const getDashboardSummary = async (req, res) => {
             // Users (excluding SUPER_ADMIN, GUEST)
             User.countDocuments({
                 isDeleted: false,
-                isDisable: false,
+                // isDisable: false,
                 roleId: { $nin: [roleId.SUPER_ADMIN, roleId.GUEST] }
             }),
 
