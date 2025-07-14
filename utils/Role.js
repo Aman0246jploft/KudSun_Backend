@@ -34,6 +34,7 @@ const ORDER_STATUS = {
     COMPLETED: 'completed',
     CONFIRM_RECEIPT: 'confirm_receipt',
     
+    REVIEW: 'REVIEW',
     DISPUTE:'Dispute'
 };
 

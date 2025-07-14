@@ -2358,7 +2358,7 @@ const getProductsWithDraft = async (req, res) => {
             size: limit = 10
         } = req.query;
         const isDraftMode = isDraft === 'true' || isDraft === true;
-        console.log("isDraftMode",isDraftMode)
+
         const Model = isDraftMode ? SellProductDraft : SellProduct;
 
 
