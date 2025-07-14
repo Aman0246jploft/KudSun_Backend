@@ -505,8 +505,8 @@ const updateOrderRevenue = async (order, paymentStatus, session) => {
     if (paymentStatus === PAYMENT_STATUS.COMPLETED) {
         await PlatformRevenue.updateMany(
             { orderId: order._id },
-            { 
-                $set: { 
+            {
+                $set: {
                     status: 'COMPLETED',
                     completedAt: new Date()
                 }
@@ -516,8 +516,8 @@ const updateOrderRevenue = async (order, paymentStatus, session) => {
     } else if (paymentStatus === PAYMENT_STATUS.FAILED) {
         await PlatformRevenue.updateMany(
             { orderId: order._id },
-            { 
-                $set: { 
+            {
+                $set: {
                     status: 'CANCELLED',
                     completedAt: new Date()
                 }
@@ -619,6 +619,18 @@ const getBoughtProducts = async (req, res) => {
             isDeleted: false,
             isDisable: false
         };
+
+        let { paymentStatus, status } = req.query
+        if (paymentStatus) {
+
+            query["paymentStatus"] = paymentStatus || PAYMENT_STATUS.COMPLETED
+        }
+        // ORDER_STATUS
+        if (status) {
+            query["status"] = status
+
+        }
+
         const total = await Order.countDocuments(query);
 
 
@@ -842,9 +854,18 @@ const getSoldProducts = async (req, res) => {
             sellerId,
             isDeleted: false,
             isDisable: false,
-            paymentStatus: PAYMENT_STATUS.COMPLETED
         };
 
+        let { paymentStatus, status } = req.query
+        if (paymentStatus) {
+
+            query["paymentStatus"] = paymentStatus || PAYMENT_STATUS.COMPLETED
+        }
+        // ORDER_STATUS
+        if (status) {
+            query["status"] = status
+
+        }
         const total = await Order.countDocuments(query);
 
         const orders = await Order.find(query)
@@ -2110,8 +2131,8 @@ const updateWithdrawalRevenue = async (withdrawalRequest, status, session) => {
     const revenueStatus = status === 'Approved' ? 'COMPLETED' : 'CANCELLED';
     await PlatformRevenue.updateMany(
         { withdrawalId: withdrawalRequest._id },
-        { 
-            $set: { 
+        {
+            $set: {
                 status: revenueStatus,
                 completedAt: new Date()
             }
@@ -2217,6 +2238,7 @@ const getAllWithdrawRequests = async (req, res) => {
 //////////////////////////////////////////////////////////////////////////////
 router.get('/previewOrder', perApiLimiter(), upload.none(), previewOrder);
 router.post('/placeOrder', perApiLimiter(), upload.none(), createOrder);
+
 router.post('/paymentCallback', paymentCallback);
 router.post('/updateOrderStatusBySeller/:orderId', perApiLimiter(), upload.none(), updateOrderStatusBySeller);
 
@@ -2225,13 +2247,14 @@ router.post('/updateOrderStatusByBuyer/:orderId', perApiLimiter(), upload.none()
 
 router.get('/getSoldProducts', perApiLimiter(), upload.none(), getSoldProducts);
 router.get('/getBoughtProduct', perApiLimiter(), upload.none(), getBoughtProducts);
+
 router.get('/retryPayment/:orderId', perApiLimiter(), upload.none(), retryOrderPayment);
 router.get('/details/:orderId', perApiLimiter(), upload.none(), getOrderDetails);
+
 //////////////////////////////////////////////////////////////////////////////
-//WALLET
+////////////////////////////////////WALLET////////////////////////////////////
 router.get('/getWithdrawalInfo', perApiLimiter(), upload.none(), getWithdrawalInfo);
 router.post('/addrequest', perApiLimiter(), upload.none(), addrequest);
-
 router.post('/changeStatus', perApiLimiter(), upload.none(), changeStatus);
 router.get('/getAllWithdrawRequests', perApiLimiter(), upload.none(), getAllWithdrawRequests);
 
