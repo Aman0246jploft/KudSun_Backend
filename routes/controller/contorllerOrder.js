@@ -854,7 +854,9 @@ const getBoughtProducts = async (req, res) => {
 
 const previewOrder = async (req, res) => {
     try {
-        let { addressId, items } = req.body;
+        // let { addressId, items } = req.body;
+        let { items } = req.body;
+
         let totalShippingCharge = 0;
         const userId = req.user.userId;
 
@@ -865,8 +867,9 @@ const previewOrder = async (req, res) => {
         if (!Array.isArray(items) || items.length === 0) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Invalid order items');
         }
+        const address = await UserAddress.findOne({ userId, isActive: true, });
 
-        const address = await UserAddress.findOne({ userId, isActive: true, _id: toObjectId(addressId) });
+        // const address = await UserAddress.findOne({ userId, isActive: true, _id: toObjectId(addressId) });
         if (!address) {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Address not found');
         }
