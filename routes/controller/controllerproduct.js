@@ -542,7 +542,6 @@ const toggleProductDisable = async (req, res) => {
 };
 
 
-
 const showNormalProducts = async (req, res) => {
     try {
         const {
