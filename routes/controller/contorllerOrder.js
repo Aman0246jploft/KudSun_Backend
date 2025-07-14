@@ -870,9 +870,9 @@ const previewOrder = async (req, res) => {
         const address = await UserAddress.findOne({ userId, isActive: true, });
 
         // const address = await UserAddress.findOne({ userId, isActive: true, _id: toObjectId(addressId) });
-        if (!address) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Address not found');
-        }
+        // if (!address) {
+        //     return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Address not found');
+        // }
 
         const productIds = items.map(i => toObjectId(i.productId));
 
