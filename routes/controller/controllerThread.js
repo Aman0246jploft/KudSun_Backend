@@ -231,7 +231,7 @@ const changeStatus = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, `${draftMode ? 'Draft' : 'Thread'} not found.`);
         }
 
-        if (req.user.roleId !== roleId.SUPER_ADMIN  &&existing.userId.toString() !== req.user.userId) {
+        if (req.user.roleId !== roleId.SUPER_ADMIN && existing.userId.toString() !== req.user.userId) {
             return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, "You are not authorized to Change Status .");
         }
 
@@ -1088,6 +1088,40 @@ const getThreadById = async (req, res) => {
             { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
 
 
+
+
+
+
+            {
+                $lookup: {
+                    from: "Location",              // ← collection that stores provinces
+                    localField: "user.provinceId", // ObjectId on the user doc
+                    foreignField: "_id",
+                    as: "province"
+                }
+            },
+            { $unwind: { path: "$province", preserveNullAndEmptyArrays: true } },
+
+            // district
+            {
+                $lookup: {
+                    from: "Location",              // or "District" if you use two collections
+                    localField: "user.districtId",
+                    foreignField: "_id",
+                    as: "district"
+                }
+            },
+            { $unwind: { path: "$district", preserveNullAndEmptyArrays: true } },
+
+
+
+
+
+
+
+
+
+
             // Lookup likes
             {
                 $lookup: {
@@ -1192,8 +1226,14 @@ const getThreadById = async (req, res) => {
                         isLive: "$user.isLive",
                         is_Id_verified: "$user.is_Id_verified",
                         is_Verified_Seller: "$user.is_Verified_Seller",
-                        provinceId: "$user.provinceId",
-                        districtId: "$user.districtId"
+                        provinceId: {
+                            _id: "$province._id",
+                            value: "$province.value"
+                        },
+                        districtId: {
+                            _id: "$district._id",
+                            value: "$district.value"
+                        }
                     },
 
                     totalLikes: { $ifNull: [{ $arrayElemAt: ["$likeStats.count", 0] }, 0] },

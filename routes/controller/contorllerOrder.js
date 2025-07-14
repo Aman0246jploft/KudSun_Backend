@@ -285,7 +285,7 @@ const createOrder = async (req, res) => {
         );
 
         await session.commitTransaction();
-        session.endSession();
+
 
         const io = req.app.get('io');
         await emitSystemMessage(io, systemMessage, room, userId, sellerId);
@@ -294,11 +294,14 @@ const createOrder = async (req, res) => {
 
         return apiSuccessRes(HTTP_STATUS.CREATED, res, "Order placed successfully", order);
     } catch (err) {
-        await session.abortTransaction();
-        session.endSession();
+        await session.abortTransaction(); // ✅ move here only
         console.error("Order creation error:", err);
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to place order");
+    } finally {
+        session.endSession(); // ✅ always close the session
     }
+
+
 };
 
 const trackOrderRevenue = async (order, feeMap, session) => {
@@ -347,6 +350,163 @@ const trackOrderRevenue = async (order, feeMap, session) => {
 };
 
 // Sample callback for successful payment
+
+// const paymentCallback = async (req, res) => {
+//     const schema = Joi.object({
+//         orderId: Joi.string().required(),
+//         paymentStatus: Joi.string().valid(PAYMENT_STATUS.COMPLETED, PAYMENT_STATUS.FAILED).required(),
+//         paymentId: Joi.string().required(),
+//         cardType: Joi.string().required(),
+//         cardLast4: Joi.string().required(),
+//     });
+
+//     const { error, value } = schema.validate(req.body);
+//     if (error) {
+//         return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, error.details[0].message);
+//     }
+
+//     const { orderId, paymentStatus, paymentId, cardType, cardLast4 } = value;
+
+//     const session = await mongoose.startSession();
+//     session.startTransaction();
+
+//     try {
+//         const order = await Order.findOne({ _id: orderId })
+//             .populate('userId')
+//             .populate('sellerId')
+//             .session(session);
+
+//         if (!order) {
+//             await session.abortTransaction();
+//             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Order not found");
+//         }
+
+//         if (order.paymentStatus === PAYMENT_STATUS.COMPLETED) {
+//             await session.abortTransaction();
+//             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Payment already completed");
+//         }
+
+//         if (order.paymentStatus === PAYMENT_STATUS.FAILED && paymentStatus === PAYMENT_STATUS.COMPLETED) {
+//             await session.abortTransaction();
+//             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Payment cannot be marked as success after failure");
+//         }
+
+//         // Update order payment info
+//         order.paymentStatus = paymentStatus;
+//         order.paymentId = paymentId;
+
+//         // If payment failed: update status + mark products as not sold
+//         if (paymentStatus === PAYMENT_STATUS.FAILED) {
+//             order.status = ORDER_STATUS.FAILED;
+//         } else if (paymentStatus === PAYMENT_STATUS.COMPLETED) {
+//             order.paymentStatus = PAYMENT_STATUS.COMPLETED;
+//         }
+
+//         await order.save({ session });
+
+//         // Find or create chat room between buyer and seller
+//         const { room } = await findOrCreateOneOnOneRoom(order.userId, order.sellerId);
+
+//         // Create system message for payment status
+//         const systemMessage = new ChatMessage({
+//             chatRoom: room._id,
+//             messageType: 'PAYMENT_STATUS',
+//             systemMeta: {
+//                 statusType: 'PAYMENT',
+//                 status: paymentStatus,
+//                 orderId: order._id,
+//                 productId: order.items[0].productId, // First product in order
+//                 title: paymentStatus === PAYMENT_STATUS.COMPLETED ? 'Payment Completed' : 'Payment Failed',
+//                 meta: {
+//                     orderNumber: order._id.toString(),
+//                     amount: `$${(order.grandTotal || 0).toFixed(2)}`,
+//                     itemCount: order.items.length,
+//                     paymentId: paymentId,
+//                     paymentMethod: order.paymentMethod,
+//                     cardInfo: paymentStatus === PAYMENT_STATUS.COMPLETED ? `${cardType} ending in ${cardLast4}` : null,
+//                     timestamp: new Date().toISOString()
+//                 },
+//                 actions: paymentStatus === PAYMENT_STATUS.COMPLETED ? [
+//                     {
+//                         label: "View Order",
+//                         url: `/order/${order._id}`,
+//                         type: "primary"
+//                     }
+//                 ] : [
+//                     {
+//                         label: "Try Payment Again",
+//                         url: `/payment/retry/${order._id}`,
+//                         type: "primary"
+//                     },
+//                     {
+//                         label: "View Order",
+//                         url: `/order/${order._id}`,
+//                         type: "secondary"
+//                     }
+//                 ],
+//                 theme: paymentStatus === PAYMENT_STATUS.COMPLETED ? 'success' : 'error'
+//             }
+//         });
+
+//         await systemMessage.save({ session });
+
+//         // Update chat room's last message
+//         await ChatRoom.findByIdAndUpdate(
+//             room._id,
+//             {
+//                 lastMessage: systemMessage._id,
+//                 updatedAt: new Date()
+//             },
+//             { session }
+//         );
+
+//         await session.commitTransaction();
+//         session.endSession();
+
+//         // Log transaction
+//         if ([PAYMENT_STATUS.COMPLETED, PAYMENT_STATUS.FAILED].includes(paymentStatus)) {
+//             await Transaction.create({
+//                 orderId: order._id,
+//                 userId: order.userId,
+//                 amount: order.grandTotal,
+//                 paymentMethod: order.paymentMethod,
+//                 paymentStatus,
+//                 paymentGatewayId: paymentId,
+//                 cardType: cardType || undefined,
+//                 cardLast4: cardLast4 || undefined,
+//             });
+//         }
+
+//         if (order.status !== ORDER_STATUS.FAILED) {
+//             await OrderStatusHistory.create({
+//                 orderId: order._id,
+//                 oldStatus: order.status,
+//                 newStatus: order.status,
+//                 note: 'Payment status updated'
+//             });
+//         }
+
+//         const io = req.app.get('io');
+//         await emitSystemMessage(io, systemMessage, room, order.userId, order.sellerId);
+
+//         await updateOrderRevenue(order, paymentStatus, session);
+//         await session.commitTransaction();
+//         return apiSuccessRes(HTTP_STATUS.OK, res, "Payment status updated", {
+//             orderId: order._id,
+//             paymentStatus: order.paymentStatus,
+//             orderStatus: order.status,
+//         });
+//     } catch (err) {
+//         await session.abortTransaction();
+//         session.endSession();
+//         console.error("Payment callback error:", err);
+//         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to update payment status");
+//     }finally {
+//   session.endSession();                     // always clean up
+// }
+// };
+
+
 
 const paymentCallback = async (req, res) => {
     const schema = Joi.object({
@@ -457,9 +617,13 @@ const paymentCallback = async (req, res) => {
             { session }
         );
 
-        await session.commitTransaction();
-        session.endSession();
+        // Update order revenue (if this function uses session, make sure it doesn't commit)
+        await updateOrderRevenue(order, paymentStatus, session);
 
+        // Commit the transaction once all database operations are complete
+        await session.commitTransaction();
+
+        // Post-transaction operations (these don't need to be in the transaction)
         // Log transaction
         if ([PAYMENT_STATUS.COMPLETED, PAYMENT_STATUS.FAILED].includes(paymentStatus)) {
             await Transaction.create({
@@ -486,8 +650,6 @@ const paymentCallback = async (req, res) => {
         const io = req.app.get('io');
         await emitSystemMessage(io, systemMessage, room, order.userId, order.sellerId);
 
-        await updateOrderRevenue(order, paymentStatus, session);
-
         return apiSuccessRes(HTTP_STATUS.OK, res, "Payment status updated", {
             orderId: order._id,
             paymentStatus: order.paymentStatus,
@@ -495,11 +657,14 @@ const paymentCallback = async (req, res) => {
         });
     } catch (err) {
         await session.abortTransaction();
-        session.endSession();
         console.error("Payment callback error:", err);
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to update payment status");
+    } finally {
+        session.endSession();
     }
 };
+
+
 
 const updateOrderRevenue = async (order, paymentStatus, session) => {
     if (paymentStatus === PAYMENT_STATUS.COMPLETED) {
@@ -2243,6 +2408,7 @@ router.post('/previewOrder', perApiLimiter(), upload.none(), previewOrder);
 router.post('/placeOrder', perApiLimiter(), upload.none(), createOrder);
 
 router.post('/paymentCallback', paymentCallback);
+
 router.post('/updateOrderStatusBySeller/:orderId', perApiLimiter(), upload.none(), updateOrderStatusBySeller);
 
 router.get('/confirmreciptReview/:orderId', perApiLimiter(), upload.none(), confirmreciptReview);
