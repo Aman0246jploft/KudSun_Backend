@@ -1446,16 +1446,6 @@ const fetchCombinedProducts = async (req, res) => {
 
 
 
-
-
-
-
-
-
-
-
-
-
 const fetchUserProducts = async (req, res) => {
     try {
         const {
