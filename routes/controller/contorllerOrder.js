@@ -778,6 +778,7 @@ const getBoughtProducts = async (req, res) => {
         const pageSize = Math.min(100, Math.max(1, parseInt(req.query.size) || 10));
         const skip = (pageNo - 1) * pageSize;
         const ALLOWED_BUYER_NEXT_STATUSES = {
+            [ORDER_STATUS.SHIPPED]: ORDER_STATUS.CONFIRM_RECEIPT,  // Buyer confirms delivery
             [ORDER_STATUS.DELIVERED]: ORDER_STATUS.CONFIRM_RECEIPT,  // Buyer confirms delivery
             [ORDER_STATUS.CONFIRM_RECEIPT]: ORDER_STATUS.REVIEW,  // Buyer confirms delivery
 
@@ -1084,9 +1085,10 @@ const getSoldProducts = async (req, res) => {
                 } else {
                     allowedNextStatuses = ORDER_STATUS.SHIPPED;
                 }
-            } else if (currentStatus === ORDER_STATUS.SHIPPED) {
-                allowedNextStatuses = ORDER_STATUS.DELIVERED;
-            }
+            } 
+            // else if (currentStatus === ORDER_STATUS.SHIPPED) {
+            //     allowedNextStatuses = ORDER_STATUS.DELIVERED;
+            // }
             // else {
             //     allowedNextStatuses = ALLOWED_NEXT_STATUSES[currentStatus] || [];
             // }
@@ -1649,19 +1651,6 @@ const updateOrderStatusBySeller = async (req, res) => {
             }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
             // Create status history
             if (currentStatus !== newStatus) {
                 await OrderStatusHistory.create([{
@@ -1700,6 +1689,193 @@ const updateOrderStatusBySeller = async (req, res) => {
 };
 
 
+// const updateOrderStatusByBuyer = async (req, res) => {
+//     try {
+//         const buyerId = req.user?.userId;
+//         const { orderId } = req.params;
+//         let { status: newStatus } = req.body;
+
+//         if (!newStatus) {
+//             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Status is required");
+//         }
+
+//         const order = await Order.findOne({ _id: orderId, userId: buyerId })
+//             .populate('items.productId')
+//             .populate('sellerId');
+
+//         if (!order) {
+//             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Order not found for this buyer");
+//         }
+
+//         const currentStatus = order.status;
+
+//         if (currentStatus === newStatus) {
+//             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Order is already in this status");
+//         }
+
+//         // Populate product data
+//         const populatedOrder = await order.populate('items.productId');
+
+//         let allowedTransitions = [];
+
+//         if (currentStatus === ORDER_STATUS.SHIPPED) {
+//             // After shipped, buyer can confirm delivery or request return
+//             allowedTransitions = [ORDER_STATUS.CONFIRM_RECEIPT];
+//             // allowedTransitions = [ORDER_STATUS.CONFIRM_RECEIPT, ORDER_STATUS.RETURNED];
+//         } else if (currentStatus === ORDER_STATUS.DELIVERED) {
+//             // After delivery, buyer can request return
+//             allowedTransitions = [ORDER_STATUS.RETURNED];
+//         } else {
+//             return apiErrorRes(
+//                 HTTP_STATUS.BAD_REQUEST,
+//                 res,
+//                 `Buyers can only update orders after they are shipped or delivered`
+//             );
+//         }
+
+//         if (!allowedTransitions.includes(newStatus)) {
+//             return apiErrorRes(
+//                 HTTP_STATUS.BAD_REQUEST,
+//                 res,
+//                 `Cannot move order from ${currentStatus} to ${newStatus}`
+//             );
+//         }
+
+//         // If buyer is requesting return, unlock isSold flag
+//         if (newStatus === ORDER_STATUS.RETURNED) {
+//             for (const item of populatedOrder.items) {
+//                 const product = item.productId;
+//                 const sellerProduct = await SellProduct.findOne({ _id: product._id });
+//                 if (sellerProduct?.saleType === 'fixed') {
+//                     sellerProduct.isSold = false;
+//                     await sellerProduct.save();
+//                 }
+//             }
+//         }
+
+//         // Create or get chat room for system message
+//         const { room } = await findOrCreateOneOnOneRoom(buyerId, order.sellerId);
+
+//         // Prepare system message based on new status
+//         let messageTitle = '';
+//         let messageTheme = 'info';
+//         let additionalMeta = {};
+
+//         switch (newStatus) {
+//             case ORDER_STATUS.CONFIRM_RECEIPT:
+//                 messageTitle = 'Order Received';
+//                 messageTheme = 'success';
+//                 break;
+//             case ORDER_STATUS.RETURNED:
+//                 messageTitle = 'Return Requested';
+//                 messageTheme = 'warning';
+//                 break;
+//             default:
+//                 messageTitle = `Order ${newStatus}`;
+//                 break;
+//         }
+
+//         // Create system message
+//         const systemMessage = new ChatMessage({
+//             chatRoom: room._id,
+//             messageType: 'ORDER_STATUS',
+//             content: `Order status updated to ${newStatus}`,
+//             systemMeta: {
+//                 statusType: 'ORDER',
+//                 status: newStatus,
+//                 orderId: order._id,
+//                 productId: order.items[0].productId,
+//                 title: messageTitle,
+//                 meta: {
+//                     orderNumber: order._id.toString(),
+//                     previousStatus: currentStatus,
+//                     newStatus: newStatus,
+//                     totalAmount: `$${(order.grandTotal || 0).toFixed(2)}`,
+//                     itemCount: order.items.length,
+//                     timestamp: new Date().toISOString(),
+//                     ...additionalMeta
+//                 },
+//                 actions: [
+//                     {
+//                         label: "View Order",
+//                         url: `/order/${order._id}`,
+//                         type: "primary"
+//                     }
+//                 ],
+//                 theme: messageTheme
+//             }
+//         });
+
+//         // Start transaction
+//         const session = await mongoose.startSession();
+//         session.startTransaction();
+
+//         try {
+//             // Save the system message
+//             await systemMessage.save({ session });
+
+//             // Update chat room's last message
+//             await ChatRoom.findByIdAndUpdate(
+//                 room._id,
+//                 {
+//                     lastMessage: systemMessage._id,
+//                     updatedAt: new Date()
+//                 },
+//                 { session }
+//             );
+
+//             // Save new status
+//             order.status = newStatus;
+//             await order.save({ session });
+
+//             if (currentStatus !== newStatus) {
+//                 await OrderStatusHistory.create([{
+//                     orderId: order._id,
+//                     oldStatus: currentStatus,
+//                     newStatus,
+//                     changedBy: req.user?.userId,
+//                     note: 'Status updated by buyer'
+//                 }], { session });
+//             }
+
+//             await session.commitTransaction();
+
+//             // Emit socket events
+//             const io = req.app.get('io');
+//             await emitSystemMessage(io, systemMessage, room, order.sellerId, buyerId);
+
+//             return apiSuccessRes(
+//                 HTTP_STATUS.OK,
+//                 res,
+//                 newStatus === ORDER_STATUS.CONFIRM_RECEIPT
+//                     ? "Order marked as received. Thank you for confirming receipt!"
+//                     : "Order status updated successfully",
+//                 {
+//                     orderId: order._id,
+//                     status: order.status,
+//                 }
+//             );
+//         } catch (err) {
+//             await session.abortTransaction();
+//             throw err;
+//         } finally {
+//             session.endSession();
+//         }
+//     } catch (err) {
+//         console.error("Update order status by buyer error:", err);
+//         return apiErrorRes(
+//             HTTP_STATUS.INTERNAL_SERVER_ERROR,
+//             res,
+//             err.message || "Failed to update order status"
+//         );
+//     }
+// };
+
+// Get detailed order info for UI
+
+
+
+
 const updateOrderStatusByBuyer = async (req, res) => {
     try {
         const buyerId = req.user?.userId;
@@ -1730,12 +1906,11 @@ const updateOrderStatusByBuyer = async (req, res) => {
         let allowedTransitions = [];
 
         if (currentStatus === ORDER_STATUS.SHIPPED) {
-            // After shipped, buyer can confirm delivery or request return
+            // After shipped, buyer can confirm receipt (will auto-handle DELIVERED in background)
             allowedTransitions = [ORDER_STATUS.CONFIRM_RECEIPT];
-            // allowedTransitions = [ORDER_STATUS.CONFIRM_RECEIPT, ORDER_STATUS.RETURNED];
         } else if (currentStatus === ORDER_STATUS.DELIVERED) {
-            // After delivery, buyer can request return
-            allowedTransitions = [ORDER_STATUS.RETURNED];
+            // After delivery, buyer can confirm receipt or request return
+            allowedTransitions = [ORDER_STATUS.CONFIRM_RECEIPT, ORDER_STATUS.RETURNED];
         } else {
             return apiErrorRes(
                 HTTP_STATUS.BAD_REQUEST,
@@ -1750,6 +1925,12 @@ const updateOrderStatusByBuyer = async (req, res) => {
                 res,
                 `Cannot move order from ${currentStatus} to ${newStatus}`
             );
+        }
+
+        // If user is confirming receipt from SHIPPED status, first mark as DELIVERED
+        let shouldAutoDeliver = false;
+        if (currentStatus === ORDER_STATUS.SHIPPED && newStatus === ORDER_STATUS.CONFIRM_RECEIPT) {
+            shouldAutoDeliver = true;
         }
 
         // If buyer is requesting return, unlock isSold flag
@@ -1773,6 +1954,10 @@ const updateOrderStatusByBuyer = async (req, res) => {
         let additionalMeta = {};
 
         switch (newStatus) {
+            case ORDER_STATUS.DELIVERED:
+                messageTitle = 'Order Delivered';
+                messageTheme = 'success';
+                break;
             case ORDER_STATUS.CONFIRM_RECEIPT:
                 messageTitle = 'Order Received';
                 messageTheme = 'success';
@@ -1822,7 +2007,61 @@ const updateOrderStatusByBuyer = async (req, res) => {
         session.startTransaction();
 
         try {
-            // Save the system message
+            // If auto-delivering, first update to DELIVERED status
+            if (shouldAutoDeliver) {
+                // First create DELIVERED status entry
+                await OrderStatusHistory.create([{
+                    orderId: order._id,
+                    oldStatus: currentStatus,
+                    newStatus: ORDER_STATUS.DELIVERED,
+                    changedBy: req.user?.userId,
+                    note: 'Auto-delivered during confirm receipt'
+                }], { session });
+
+                // Update order to DELIVERED first
+                order.status = ORDER_STATUS.DELIVERED;
+                await order.save({ session });
+
+                // Create system message for DELIVERED status
+                const deliveredMessage = new ChatMessage({
+                    chatRoom: room._id,
+                    messageType: 'ORDER_STATUS',
+                    content: `Order status updated to ${ORDER_STATUS.DELIVERED}`,
+                    systemMeta: {
+                        statusType: 'ORDER',
+                        status: ORDER_STATUS.DELIVERED,
+                        orderId: order._id,
+                        productId: order.items[0].productId,
+                        title: 'Order Delivered',
+                        meta: {
+                            orderNumber: order._id.toString(),
+                            previousStatus: currentStatus,
+                            newStatus: ORDER_STATUS.DELIVERED,
+                            totalAmount: `${(order.grandTotal || 0).toFixed(2)}`,
+                            itemCount: order.items.length,
+                            timestamp: new Date().toISOString(),
+                            ...additionalMeta
+                        },
+                        actions: [
+                            {
+                                label: "View Order",
+                                url: `/order/${order._id}`,
+                                type: "primary"
+                            }
+                        ],
+                        theme: 'success'
+                    }
+                });
+
+                await deliveredMessage.save({ session });
+
+                // Emit socket event for delivered status
+                const io = req.app.get('io');
+                await emitSystemMessage(io, deliveredMessage, room, order.sellerId, buyerId);
+            }
+
+            // Now handle the final status (CONFIRM_RECEIPT)
+            // Save the system message for final status
             await systemMessage.save({ session });
 
             // Update chat room's last message
@@ -1835,32 +2074,35 @@ const updateOrderStatusByBuyer = async (req, res) => {
                 { session }
             );
 
-            // Save new status
+            // Save final status
             order.status = newStatus;
             await order.save({ session });
 
-            if (currentStatus !== newStatus) {
-                await OrderStatusHistory.create([{
-                    orderId: order._id,
-                    oldStatus: currentStatus,
-                    newStatus,
-                    changedBy: req.user?.userId,
-                    note: 'Status updated by buyer'
-                }], { session });
-            }
+            // Create status history for final status
+            await OrderStatusHistory.create([{
+                orderId: order._id,
+                oldStatus: shouldAutoDeliver ? ORDER_STATUS.DELIVERED : currentStatus,
+                newStatus,
+                changedBy: req.user?.userId,
+                note: 'Status updated by buyer'
+            }], { session });
 
             await session.commitTransaction();
 
-            // Emit socket events
+            // Emit socket events for final status
             const io = req.app.get('io');
             await emitSystemMessage(io, systemMessage, room, order.sellerId, buyerId);
+
+            // Prepare success message
+            let successMessage = "Order status updated successfully";
+            if (newStatus === ORDER_STATUS.CONFIRM_RECEIPT) {
+                successMessage = "Order marked as received. Thank you for confirming receipt!";
+            }
 
             return apiSuccessRes(
                 HTTP_STATUS.OK,
                 res,
-                newStatus === ORDER_STATUS.CONFIRM_RECEIPT
-                    ? "Order marked as received. Thank you for confirming receipt!"
-                    : "Order status updated successfully",
+                successMessage,
                 {
                     orderId: order._id,
                     status: order.status,
@@ -1882,7 +2124,8 @@ const updateOrderStatusByBuyer = async (req, res) => {
     }
 };
 
-// Get detailed order info for UI
+
+
 const getOrderDetails = async (req, res) => {
     try {
         const { orderId } = req.params;
