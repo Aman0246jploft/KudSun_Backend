@@ -1049,6 +1049,7 @@ const getThreadById = async (req, res) => {
                     isSold: 1,
                     saleType: 1,
                     totalBids: 1,
+                    photo:1,
                     productImages: 1,
                     seller: {
                         _id: 1,
@@ -1218,6 +1219,7 @@ const getThreadById = async (req, res) => {
                     budgetRange: 1,
                     createdAt: 1,
                     budgetFlexible: 1,
+                    photos:1,
                     tags: 1,
 
                     user: {

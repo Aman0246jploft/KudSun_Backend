@@ -33,7 +33,7 @@ const ORDER_STATUS = {
     FAILED: 'failed',
     COMPLETED: 'completed',
     CONFIRM_RECEIPT: 'confirm_receipt',
-    REVIEW: 'REVIEW',
+    
     DISPUTE:'Dispute'
 };
 
