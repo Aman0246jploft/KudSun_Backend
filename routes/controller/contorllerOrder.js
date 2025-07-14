@@ -834,7 +834,7 @@ const getBoughtProducts = async (req, res) => {
                 }
             }
             const currentStatus = order.status;
-            order.allowedNextStatuses = ALLOWED_BUYER_NEXT_STATUSES[currentStatus] || ""
+            order.allowedNextStatuses = order.paymentStatus === PAYMENT_STATUS.PENDING ? "Pay now" : ALLOWED_BUYER_NEXT_STATUSES[currentStatus] || ""
         }
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Bought products fetched successfully", {
