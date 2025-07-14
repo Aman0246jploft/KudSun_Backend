@@ -2698,7 +2698,7 @@ router.get('/retryPayment/:orderId', perApiLimiter(), upload.none(), retryOrderP
 router.get('/details/:orderId', perApiLimiter(), upload.none(), getOrderDetails);
 
 //////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////WALLET////////////////////////////////////
+/////////////////////////////******WALLET******///////////////////////////////
 router.get('/getWithdrawalInfo', perApiLimiter(), upload.none(), getWithdrawalInfo);
 router.post('/addrequest', perApiLimiter(), upload.none(), addrequest);
 router.post('/changeStatus', perApiLimiter(), upload.none(), changeStatus);
