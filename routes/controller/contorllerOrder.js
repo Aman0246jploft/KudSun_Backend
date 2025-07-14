@@ -778,8 +778,8 @@ const getBoughtProducts = async (req, res) => {
         const pageSize = Math.min(100, Math.max(1, parseInt(req.query.size) || 10));
         const skip = (pageNo - 1) * pageSize;
         const ALLOWED_BUYER_NEXT_STATUSES = {
-            [ORDER_STATUS.DELIVERED]: [ORDER_STATUS.CONFIRM_RECEIPT],  // Buyer confirms delivery
-            [ORDER_STATUS.CONFIRM_RECEIPT]: [ORDER_STATUS.REVIEW],  // Buyer confirms delivery
+            [ORDER_STATUS.DELIVERED]: ORDER_STATUS.CONFIRM_RECEIPT,  // Buyer confirms delivery
+            [ORDER_STATUS.CONFIRM_RECEIPT]: ORDER_STATUS.REVIEW,  // Buyer confirms delivery
 
         };
         // Query for active orders by user
@@ -834,7 +834,7 @@ const getBoughtProducts = async (req, res) => {
                 }
             }
             const currentStatus = order.status;
-            order.allowedNextStatuses = ALLOWED_BUYER_NEXT_STATUSES[currentStatus] || []
+            order.allowedNextStatuses = ALLOWED_BUYER_NEXT_STATUSES[currentStatus] || ""
         }
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Bought products fetched successfully", {
@@ -1074,18 +1074,18 @@ const getSoldProducts = async (req, res) => {
 
             const allLocalPickup = order.items.every(item => item.productId?.deliveryType === "local pickup");
 
-            let allowedNextStatuses = [];
+            let allowedNextStatuses = '';
 
             if (currentStatus === ORDER_STATUS.PENDING) {
-                allowedNextStatuses = [ORDER_STATUS.CONFIRMED];
+                allowedNextStatuses = ORDER_STATUS.CONFIRMED;
             } else if (currentStatus === ORDER_STATUS.CONFIRMED) {
                 if (allLocalPickup) {
-                    allowedNextStatuses = [ORDER_STATUS.DELIVERED];
+                    allowedNextStatuses = ORDER_STATUS.DELIVERED;
                 } else {
-                    allowedNextStatuses = [ORDER_STATUS.SHIPPED];
+                    allowedNextStatuses = ORDER_STATUS.SHIPPED;
                 }
             } else if (currentStatus === ORDER_STATUS.SHIPPED) {
-                allowedNextStatuses = [ORDER_STATUS.DELIVERED];
+                allowedNextStatuses = ORDER_STATUS.DELIVERED;
             }
             // else {
             //     allowedNextStatuses = ALLOWED_NEXT_STATUSES[currentStatus] || [];
