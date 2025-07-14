@@ -3,7 +3,7 @@ const multer = require('multer');
 const upload = multer();
 const router = express.Router();
 const moment = require("moment")
-const { UserAddress, Transaction, Order, SellProduct, Bid, FeeSetting, User, Shipping, OrderStatusHistory, ProductReview, ChatRoom, ChatMessage, WalletTnx, SellerWithdrawl, SellerBank, PlatformRevenue } = require('../../db');
+const { UserAddress, Transaction, Order, SellProduct, Bid, FeeSetting, User, Shipping, OrderStatusHistory, ProductReview, ChatRoom, ChatMessage, WalletTnx, SellerWithdrawl, SellerBank, PlatformRevenue, Dispute } = require('../../db');
 const { findOrCreateOneOnOneRoom } = require('../services/serviceChat');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const HTTP_STATUS = require('../../utils/statusCode');
@@ -1085,7 +1085,7 @@ const getSoldProducts = async (req, res) => {
                 } else {
                     allowedNextStatuses = ORDER_STATUS.SHIPPED;
                 }
-            } 
+            }
             // else if (currentStatus === ORDER_STATUS.SHIPPED) {
             //     allowedNextStatuses = ORDER_STATUS.DELIVERED;
             // }
@@ -2170,13 +2170,13 @@ const getOrderDetails = async (req, res) => {
             .lean();
 
         // Dispute info
-        const dispute = await require('../../db/models/Dispute').findOne({ orderId: order._id, isDeleted: false }).lean();
+        const dispute = await Dispute.findOne({ orderId: order._id, isDeleted: false }).lean();
 
         // Reviews (for each product in order)
-        const Review = require('../../db/models/ProductReview');
+
         const reviews = await Promise.all(
             (order.items || []).map(async (item) => {
-                const review = await Review.findOne({ productId: item.productId?._id, userId: order.userId?._id, isDeleted: false });
+                const review = await ProductReview.findOne({ productId: item.productId?._id, userId: order.userId?._id, isDeleted: false });
                 return review ? {
                     productId: item.productId?._id,
                     rating: review.rating,
