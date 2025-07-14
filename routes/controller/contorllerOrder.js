@@ -713,7 +713,10 @@ const previewOrder = async (req, res) => {
         console.log("itemsitems", items)
 
         for (const item of items) {
-            const product = await SellProduct.findOne({ _id: toObjectId(item.productId), isDeleted: false, isDisable: false });
+            const product = await SellProduct.findOne({ _id: toObjectId(item.productId), isDeleted: false, isDisable: false }).populate([{
+                path: "userId",
+                select: "userName profileImage isLive"
+            }]).lean();
             console.log("product", product)
             if (!product) {
                 return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, `Product not found or unavailable: ${item.productId}`);
