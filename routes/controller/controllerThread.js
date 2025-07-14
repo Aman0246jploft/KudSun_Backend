@@ -1213,6 +1213,7 @@ const getThreadById = async (req, res) => {
                 $project: {
                     _id: 1,
                     title: 1,
+                    isClosed:1,
                     description: 1,
                     budgetRange: 1,
                     createdAt: 1,
