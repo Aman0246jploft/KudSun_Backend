@@ -2574,7 +2574,4 @@ router.get('/getCommentByParentId/:parentId', perApiLimiter(), getCommentByParen
 
 
 
-
-
-
 module.exports = router;

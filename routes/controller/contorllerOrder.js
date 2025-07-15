@@ -857,11 +857,30 @@ const getBoughtProducts = async (req, res) => {
             /** -------- 2. Work out the next step (or none) -------- */
             if (order.paymentStatus === PAYMENT_STATUS.PENDING) {
                 // Still waiting for payment ⇒ always show “Pay now”
+                order.labalStatuses = 'Unpaid';
                 order.allowedNextStatuses = 'Pay now';
             } else if (!order.isReviewed) {
+                if (order.status == ORDER_STATUS.SHIPPED) {
+                    order.labalStatuses = 'Shipped';
+
+                    order.allowedNextStatuses =
+                        ALLOWED_BUYER_NEXT_STATUSES[order.status] || '';
+
+                } else if (order.status == ORDER_STATUS.DELIVERED) {
+                    order.labalStatuses = 'Shipped';
+
+                    order.allowedNextStatuses =
+                        ALLOWED_BUYER_NEXT_STATUSES[order.status] || '';
+
+                } else if (ORDER_STATUS.CONFIRM_RECEIPT) {
+                    order.labalStatuses = 'Shipped';
+
+                    order.allowedNextStatuses =
+                        ALLOWED_BUYER_NEXT_STATUSES[order.status] || '';
+
+                }
                 // No payment due and not reviewed yet ⇒ show normal progression
-                order.allowedNextStatuses =
-                    ALLOWED_BUYER_NEXT_STATUSES[order.status] || '';
+
             } else {
                 // Already reviewed ⇒ no further action
                 order.allowedNextStatuses = '';
@@ -1145,19 +1164,24 @@ const getSoldProducts = async (req, res) => {
 
 
             let allowedNextStatuses = '';
+            let labalStatuses = ''
 
             if (currentStatus === ORDER_STATUS.PENDING) {
+                labalStatuses = ''
                 allowedNextStatuses = ORDER_STATUS.CONFIRMED;
             } else if (currentStatus === ORDER_STATUS.CONFIRMED) {
                 if (allLocalPickup) {
                     allowedNextStatuses = ORDER_STATUS.DELIVERED;
                 } else {
+                    labalStatuses = "Unsent"
+
                     allowedNextStatuses = ORDER_STATUS.SHIPPED;
                 }
             }
 
             if (!order.isReviewed && (order.status == ORDER_STATUS.DELIVERED || order.status == ORDER_STATUS.CONFIRM_RECEIPT)) {
                 // if you need multiple actions, turn this into an array.
+                labalStatuses = "Unreviewed"
                 allowedNextStatuses = "REVIEW";
             }
             // else if (currentStatus === ORDER_STATUS.SHIPPED) {
