@@ -243,7 +243,7 @@ const adminListAll = async (req, res) => {
 
 
 router.post('/create', perApiLimiter(), upload.array('file', 3), createDispute);
-router.post('/sellerRespond', perApiLimiter(), upload.any(), sellerRespond);
+router.post('/sellerRespond', perApiLimiter(), upload.array('file', 3), sellerRespond);
 router.post('/adminDecision', perApiLimiter(), upload.any(), adminDecision);
 router.post('/updateStatus', perApiLimiter(), updateStatus);
 router.get('/adminListAll', perApiLimiter(), adminListAll);
