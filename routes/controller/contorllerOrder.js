@@ -820,8 +820,24 @@ const getBoughtProducts = async (req, res) => {
             .lean();
 
 
+        const orderIds = orders.map(o => o._id);
+
+        const disputes = await Dispute.find({
+            orderId: { $in: orderIds },
+            raisedBy: userId,
+            isDeleted: false,
+            isDisable: false
+        })
+            .select(
+                "disputeId disputeType status orderId createdAt evidence sellerResponse adminReview"
+            )
+            .lean();
+        const disputesByOrder = {};
+        for (const d of disputes) disputesByOrder[d.orderId?.toString()] = d;
+
 
         for (const order of orders) {
+            order.dispute = disputesByOrder[order._id.toString()] || null;
 
             for (const item of order.items || []) {
                 const productId = item.productId?._id;
@@ -1076,6 +1092,22 @@ const getSoldProducts = async (req, res) => {
             ])
             .lean();
 
+        const orderIds = orders.map(o => o._id);
+
+        const disputes = await Dispute.find({
+            orderId: { $in: orderIds },
+
+            isDeleted: false,
+            isDisable: false
+        })
+            .select(
+                "disputeId disputeType status orderId createdAt evidence sellerResponse adminReview"
+            )
+            .lean();
+        const disputesByOrder = {};
+        for (const d of disputes) disputesByOrder[d.orderId?.toString()] = d;
+
+
         // Filter each order's items to only include the seller's products (defensive step)
         const productIds = [];
         for (const order of orders) {
@@ -1097,7 +1129,8 @@ const getSoldProducts = async (req, res) => {
         const reviewedSet = new Set(existingReviews.map((r) => r.productId.toString()));
 
         for (const order of orders) {
-            // ... your existing item filtering
+            order.dispute = disputesByOrder[order._id.toString()] || null;
+
 
             // Compute allowed next statuses based on current order status and delivery types
             const currentStatus = order.status;
