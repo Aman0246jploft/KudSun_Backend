@@ -1077,7 +1077,7 @@ const fetchCombinedProducts = async (req, res) => {
             size = 10,
             keyWord,
             categoryId,
-            subCategoryId,
+            subCategoryId,// Can be single ID, comma-separated string, or array
             tags,
             specifics,
             saleType, // 'normal', 'auction', or 'all' (default)
@@ -1091,6 +1091,28 @@ const fetchCombinedProducts = async (req, res) => {
         const LIMITED_DEALS_LIMIT = 10;
         const now = new Date();
         const next24Hours = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+
+
+        const parseSubCategoryIds = (subCategoryId) => {
+            if (!subCategoryId) return null;
+
+            if (Array.isArray(subCategoryId)) {
+                return subCategoryId.map(id => toObjectId(id));
+            }
+
+            if (typeof subCategoryId === 'string') {
+                // Handle comma-separated string
+                const ids = subCategoryId.split(',').map(id => id.trim()).filter(id => id);
+                return ids.length > 0 ? ids.map(id => toObjectId(id)) : null;
+            }
+
+            return [toObjectId(subCategoryId)];
+        };
+
+        const subCategoryIds = parseSubCategoryIds(subCategoryId);
+
+
+
         const limitedFilter = {
             saleType: SALE_TYPE.AUCTION,
             isDeleted: false,
@@ -1101,7 +1123,7 @@ const fetchCombinedProducts = async (req, res) => {
 
             // Keep UI filters consistent
             ...(categoryId && { categoryId: toObjectId(categoryId) }),
-            ...(subCategoryId && { subCategoryId: toObjectId(subCategoryId) }),
+            ...(subCategoryIds && { subCategoryId: toObjectId(subCategoryIds) }),
             ...(condition && { condition })
         };
 
@@ -1153,11 +1175,11 @@ const fetchCombinedProducts = async (req, res) => {
 
 
 
-        const page = parseInt(pageNo);
+        // Step 1: Get sold product IDs for normal products (cached approach recommended)
+        const page = Number.isInteger(+pageNo) && +pageNo > 0 ? +pageNo : 1;
         const limit = parseInt(size);
         const skip = (page - 1) * limit;
 
-        // Step 1: Get sold product IDs for normal products (cached approach recommended)
 
 
         // Step 2: Build base filter
@@ -1209,8 +1231,9 @@ const fetchCombinedProducts = async (req, res) => {
                 updatedFilter.categoryId = toObjectId(categoryId);
             }
 
-            if (subCategoryId && subCategoryId !== "") {
-                updatedFilter.subCategoryId = toObjectId(subCategoryId);
+             // Enhanced subcategory filter - supports multiple IDs
+            if (subCategoryIds && subCategoryIds.length > 0) {
+                updatedFilter.subCategoryId = { $in: subCategoryIds };
             }
 
             // Tags filter
