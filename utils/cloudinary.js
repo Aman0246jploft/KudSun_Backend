@@ -110,6 +110,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const stream = require('stream');
+const dayjs = require('dayjs');
 
 // Multer memory storage
 const storage = multer.memoryStorage();
@@ -133,6 +134,8 @@ async function uploadImageCloudinary(file, userId) {
       const userFolder = path.join(UPLOAD_BASE_PATH, userId);
       const filePath = path.join(userFolder, finalFileName);
 
+      const ts = dayjs().format('YYYYMMDD-HHmmss-SSS');
+      const finalName = `${safeFileName}-${ts}${ext}`;
       // Create user-specific folder if it doesn't exist
       fs.mkdirSync(userFolder, { recursive: true });
 
@@ -140,7 +143,7 @@ async function uploadImageCloudinary(file, userId) {
       fs.writeFileSync(filePath, file.buffer);
 
       // Return accessible public URL
-      const fileUrl = `${BASE_URL}/uploads/${userId}/${finalFileName}`;
+      const fileUrl = `${BASE_URL}/uploads/${userId}/${finalName}`;
       resolve(fileUrl);
 
     } catch (error) {
