@@ -20,7 +20,7 @@ mongoose.connect(process.env.DB_STRING, {
             // Use current time in UTC (no offset correction)
             const nowUTC = DateTime.now().toUTC().toJSDate();
 
-            console.log("nowUTCnowUTC",nowUTC)
+            console.log("nowUTCnowUTC", nowUTC)
 
             const feeSettings = await FeeSetting.find({
                 isActive: true,
@@ -80,6 +80,7 @@ mongoose.connect(process.env.DB_STRING, {
 
                     const orderPayload = {
                         userId: highestBid.userId,
+                        sellerId: product.userId,
                         items: [{
                             productId: product._id,
                             quantity: 1,
@@ -99,12 +100,14 @@ mongoose.connect(process.env.DB_STRING, {
                     };
                     if (userAddressInfo && userAddressInfo !== "") {
                         orderPayload["addressId"] = userAddressInfo?._id;
-                 
+
                     }
                     const existingOrder = await Order.findOne({
                         userId: highestBid.userId,
                         "items.productId": product._id
                     });
+
+       
 
                     if (!existingOrder) {
                         const newOrder = new Order(orderPayload);

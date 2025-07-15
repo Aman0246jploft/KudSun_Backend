@@ -19,7 +19,7 @@ const toObjectId = id => new mongoose.Types.ObjectId(id);
 
 
 async function logHistory({ disputeId, event, title, note, actor }, session = null) {
-    return DisputeHistory.create([{ event, title, note, actor }], { session });
+    return DisputeHistory.create([{disputeId, event, title, note, actor }], { session });
 }
 
 
@@ -221,8 +221,8 @@ const adminListAll = async (req, res) => {
         const [items, total] = await Promise.all([
             Dispute.find(filter)
                 .populate('orderId')
-                .populate('raisedBy', 'userName profileImage email')
-                .populate('sellerId', 'userName profileImage email')
+                .populate('raisedBy', 'userName profileImage isLive is_Id_verified is_Verified_Seller averageRatting')
+                .populate('sellerId', 'userName profileImage isLive is_Id_verified is_Verified_Seller averageRatting')
                 .sort({ createdAt: -1 })
                 .skip(skip)
                 .limit(size),
@@ -240,6 +240,44 @@ const adminListAll = async (req, res) => {
     }
 };
 
+const disputeByOrderId = async (req, res) => {
+    try {
+        const { orderId } = req.params;
+        
+        if (!orderId) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Order ID is required');
+        }
+
+        // Find dispute by order ID
+        const dispute = await Dispute.findOne({ 
+            orderId: orderId, 
+            isDeleted: false 
+        })
+        .populate({path:"orderId"})
+        .populate('raisedBy', 'userName profileImage isLive is_Id_verified is_Verified_Seller averageRatting')
+        .populate('sellerId', 'userName profileImage isLive is_Id_verified is_Verified_Seller averageRatting').lean()
+
+        if (!dispute) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'No dispute found for this order');
+        }
+
+        // Get dispute history
+        const disputeHistory = await DisputeHistory.find({ disputeId: dispute._id })
+            .populate('actor', 'userName profileImage isLive is_Id_verified is_Verified_Seller averageRatting')
+            .sort({ createdAt: -1 }).lean()
+
+        const response = {
+            dispute,
+            history: disputeHistory
+        };
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, 'Dispute details fetched successfully', response);
+
+    } catch (err) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
+    }
+}
+
 
 
 router.post('/create', perApiLimiter(), upload.array('file', 3), createDispute);
@@ -247,6 +285,9 @@ router.post('/sellerRespond', perApiLimiter(), upload.array('file', 3), sellerRe
 router.post('/adminDecision', perApiLimiter(), upload.any(), adminDecision);
 router.post('/updateStatus', perApiLimiter(), updateStatus);
 router.get('/adminListAll', perApiLimiter(), adminListAll);
+router.get('/disputeByOrderId/:orderId', perApiLimiter(), disputeByOrderId);
+
+
 
 
 
