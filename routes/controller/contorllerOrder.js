@@ -1095,17 +1095,17 @@ const getSoldProducts = async (req, res) => {
 
         for (const order of orders) {
             // ... your existing item filtering
-            
+
             // Compute allowed next statuses based on current order status and delivery types
             const currentStatus = order.status;
-            
+
             const allLocalPickup = order.items.every(item => item.productId?.deliveryType === "local pickup");
-            
+
             order.items.forEach((item) => {
                 order.isReviewed = reviewedSet.has(item.productId?._id?.toString());
- 
+
             });
-            // console.log(order.items.isReviewed,existingReviews)
+
 
 
             let allowedNextStatuses = '';
@@ -1120,10 +1120,7 @@ const getSoldProducts = async (req, res) => {
                 }
             }
 
-            const sellerStillNeedsToReview = order.items.some((i) => !i.isReviewed);
-            // console.log("111111",sellerStillNeedsToReview)
-
-            if (sellerStillNeedsToReview && order.status == ORDER_STATUS.DELIVERED || order.status == ORDER_STATUS.CONFIRM_RECEIPT) {
+            if (!order.isReviewed && (order.status == ORDER_STATUS.DELIVERED || order.status == ORDER_STATUS.CONFIRM_RECEIPT)) {
                 // if you need multiple actions, turn this into an array.
                 allowedNextStatuses = "REVIEW";
             }
