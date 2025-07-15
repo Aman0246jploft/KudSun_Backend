@@ -885,7 +885,10 @@ const previewOrder = async (req, res) => {
         if (!Array.isArray(items) || items.length === 0) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Invalid order items');
         }
-        const address = await UserAddress.findOne({ userId, isActive: true, });
+        const address = await UserAddress.findOne({ userId, isActive: true, }).populate([
+            { path: 'provinceId', select: 'value' },
+            { path: 'districtId', select: 'value' }
+        ]);
 
         // const address = await UserAddress.findOne({ userId, isActive: true, _id: toObjectId(addressId) });
         // if (!address) {
