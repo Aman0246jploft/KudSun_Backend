@@ -102,7 +102,7 @@ const getVideo = async (req, res) => {
   try {
     // Get all documents first
     const allSettings = await AppSetting.find().select('value key');
-
+  
     // Filter to find the specific documents
     const Auction_rules = allSettings.find(setting => setting.key === "11videoXYZ");
 
