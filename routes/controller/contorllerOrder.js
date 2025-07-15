@@ -70,7 +70,7 @@ const createOrder = async (req, res) => {
         if (!Array.isArray(items) || items.length === 0) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Invalid order data');
         }
-        const address = await UserAddress.findOne({ userId, isActive: true, _id: toObjectId(addressId) });
+        const address = await UserAddress.findOne({ userId, _id: toObjectId(addressId) });
         if (!address) {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Address not found');
         }
@@ -901,7 +901,7 @@ const previewOrder = async (req, res) => {
         if (!Array.isArray(items) || items.length === 0) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Invalid order items');
         }
-        const address = await UserAddress.findOne({ userId, isActive: true, }).populate([
+        const address = await UserAddress.findOne({ userId, isActive: true }).populate([
             { path: 'provinceId', select: 'value' },
             { path: 'districtId', select: 'value' }
         ]);

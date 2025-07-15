@@ -1316,7 +1316,7 @@ const fetchCombinedProducts = async (req, res) => {
                     auctionSettings
                 `)
                 .populate("categoryId", "name")
-                .populate("userId", "userName profileImage is_Id_verified isLive")
+                .populate("userId", "userName profileImage is_Id_verified isLive averageRatting")
                 .lean(),
             SellProduct.countDocuments(unifiedFilter)
         ]);
@@ -1427,7 +1427,7 @@ const fetchCombinedProducts = async (req, res) => {
 
             return {
                 ...rest,
-                 auctionSettings: p.auctionSettings || null,
+                auctionSettings: p.auctionSettings || null,
                 ...(p.timeRemainingFormatted && { timeRemainingFormatted: p.timeRemainingFormatted }),
                 ...(typeof p.totalBidsPlaced !== 'undefined' && { totalBidsPlaced: p.totalBidsPlaced }),
             };
