@@ -889,13 +889,12 @@ const previewOrder = async (req, res) => {
                 path: "userId",
                 select: "userName profileImage isLive"
             }]).lean();
-            console.log("product", product)
+
             if (!product) {
                 return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, `Product not found or unavailable: ${item.productId}`);
             }
 
-            const seller = await User.findOne({ _id: product.userId });
-            console.log("seller", seller)
+            const seller = await User.findOne({ _id: product.userId }).populate([{path:"provinceId",select:'_id value'},{path:"districtId",select:'_id value'}]).lean()
             if (!seller || seller.isDeleted || seller.isDisable) {
                 return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `Seller of product ${product.title} is deleted or disabled`);
             }
