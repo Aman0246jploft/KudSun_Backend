@@ -5,7 +5,7 @@ const Schema = mongoose.Schema;
 const ReviewSchema = new Schema({
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     productId: { type: Schema.Types.ObjectId, ref: 'SellProduct', required: true },
-    orderId: { type: Schema.Types.ObjectId, ref: 'Order', required: true },
+    // orderId: { type: Schema.Types.ObjectId, ref: 'Order', required: true },
     raterRole: {
         type: String,
         enum: ['buyer', 'seller'],

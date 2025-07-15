@@ -2463,7 +2463,7 @@ const getProductsWithDraft = async (req, res) => {
                 description: product.description,
                 price: product.fixedPrice,
                 saleType: product.saleType,
-                images: product.productImages,
+                productImages: product.productImages,
                 category: product.categoryId?.name,
                 subCategory: product.subCategoryId?.name,
                 location: product.location,

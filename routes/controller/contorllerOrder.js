@@ -820,22 +820,36 @@ const getBoughtProducts = async (req, res) => {
             .lean();
 
 
+
         for (const order of orders) {
+
             for (const item of order.items || []) {
                 const productId = item.productId?._id;
-                item.isReviewed = false;
-                if (item.status === ORDER_STATUS.CONFIRM_RECEIPT && productId) {
+                order.isReviewed = false;
+                if (order.status === ORDER_STATUS.CONFIRM_RECEIPT && productId) {
                     const reviewExists = await ProductReview.exists({
                         userId,
                         productId,
+
                         isDeleted: false,
                         isDisable: false
                     });
-                    item.isReviewed = !!reviewExists;
+
+                    order.isReviewed = !!reviewExists;
                 }
             }
-            const currentStatus = order.status;
-            order.allowedNextStatuses = order.paymentStatus === PAYMENT_STATUS.PENDING ? "Pay now" : ALLOWED_BUYER_NEXT_STATUSES[currentStatus] || ""
+            /** -------- 2. Work out the next step (or none) -------- */
+            if (order.paymentStatus === PAYMENT_STATUS.PENDING) {
+                // Still waiting for payment ⇒ always show “Pay now”
+                order.allowedNextStatuses = 'Pay now';
+            } else if (!order.isReviewed) {
+                // No payment due and not reviewed yet ⇒ show normal progression
+                order.allowedNextStatuses =
+                    ALLOWED_BUYER_NEXT_STATUSES[order.status] || '';
+            } else {
+                // Already reviewed ⇒ no further action
+                order.allowedNextStatuses = '';
+            }
         }
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Bought products fetched successfully", {
@@ -894,7 +908,7 @@ const previewOrder = async (req, res) => {
                 return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, `Product not found or unavailable: ${item.productId}`);
             }
 
-            const seller = await User.findOne({ _id: product.userId }).populate([{path:"provinceId",select:'_id value'},{path:"districtId",select:'_id value'}]).lean()
+            const seller = await User.findOne({ _id: product.userId }).populate([{ path: "provinceId", select: '_id value' }, { path: "districtId", select: '_id value' }]).lean()
             if (!seller || seller.isDeleted || seller.isDisable) {
                 return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `Seller of product ${product.title} is deleted or disabled`);
             }
@@ -1060,11 +1074,24 @@ const getSoldProducts = async (req, res) => {
             .lean();
 
         // Filter each order's items to only include the seller's products (defensive step)
+        const productIds = [];
         for (const order of orders) {
-            order.items = order.items.filter(item => {
-                return item.productId?.userId?.toString() === sellerId.toString();
-            });
+            for (const item of order.items) {
+                if (item?.productId?._id) productIds.push(item.productId._id);
+            }
         }
+
+        const existingReviews = productIds.length
+            ? await ProductReview.find({
+                userId: sellerId,
+                raterRole: "seller",
+                productId: { $in: productIds },
+                isDeleted: false,
+                isDisable: false
+            }).select("productId").lean()
+            : [];
+
+        const reviewedSet = new Set(existingReviews.map((r) => r.productId.toString()));
 
         for (const order of orders) {
             // ... your existing item filtering
@@ -1073,6 +1100,11 @@ const getSoldProducts = async (req, res) => {
             const currentStatus = order.status;
 
             const allLocalPickup = order.items.every(item => item.productId?.deliveryType === "local pickup");
+
+            order.items.forEach((item) => {
+                item.isReviewed = reviewedSet.has(item.productId?._id?.toString());
+            });
+
 
             let allowedNextStatuses = '';
 
@@ -1085,6 +1117,13 @@ const getSoldProducts = async (req, res) => {
                     allowedNextStatuses = ORDER_STATUS.SHIPPED;
                 }
             }
+
+            const sellerStillNeedsToReview = order.items.some((i) => !i.isReviewed);
+
+            if (sellerStillNeedsToReview && order.status == ORDER_STATUS.DELIVERED || order.status == ORDER_STATUS.CONFIRM_RECEIPT) {
+                // if you need multiple actions, turn this into an array.
+                allowedNextStatuses = "REVIEW";
+            }
             // else if (currentStatus === ORDER_STATUS.SHIPPED) {
             //     allowedNextStatuses = ORDER_STATUS.DELIVERED;
             // }
@@ -1093,7 +1132,6 @@ const getSoldProducts = async (req, res) => {
             // }
             order.allowedNextStatuses = allowedNextStatuses;
         }
-
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Sold products fetched successfully", {
             pageNo,
