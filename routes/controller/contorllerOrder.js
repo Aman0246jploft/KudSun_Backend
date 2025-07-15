@@ -2211,7 +2211,7 @@ const getOrderDetails = async (req, res) => {
             .populate({
                 path: 'items.productId',
                 model: 'SellProduct',
-                select: 'title productImages fixedPrice saleType auctionSettings shippingCharge deliveryType',
+                select: 'title productImages _id fixedPrice saleType auctionSettings shippingCharge deliveryType',
             })
             .populate({
                 path: 'userId',
@@ -2224,6 +2224,18 @@ const getOrderDetails = async (req, res) => {
             .populate({
                 path: 'addressId',
                 model: 'UserAddress',
+                populate: [
+                    {
+                        path: 'provinceId',
+                        model: 'Location',
+                        select: 'value',
+                    },
+                    {
+                        path: 'districtId',
+                        model: 'Location',
+                        select: 'value',
+                    }
+                ]
             })
             .lean();
 
@@ -2249,14 +2261,23 @@ const getOrderDetails = async (req, res) => {
 
         const reviews = await Promise.all(
             (order.items || []).map(async (item) => {
-                const review = await ProductReview.findOne({ productId: item.productId?._id, userId: order.userId?._id, isDeleted: false });
-                return review ? {
+                const productReviews = await ProductReview.find({ productId: item.productId?._id })
+                    .populate({
+                        path: 'userId',
+                        select: 'profileImage userName'
+                    })
+                    .lean();
+
+                // Add isYourReview flag to each review
+                const enrichedReviews = productReviews.map((review) => ({
+                    ...review,
+                    isYourReview: review.userId?._id?.toString() === req.user.userId.toString()
+                }));
+
+                return {
                     productId: item.productId?._id,
-                    rating: review.rating,
-                    reviewText: review.reviewText,
-                    reviewImages: review.reviewImages,
-                    createdAt: review.createdAt,
-                } : null;
+                    reviews: enrichedReviews
+                };
             })
         );
 
@@ -2284,7 +2305,7 @@ const getOrderDetails = async (req, res) => {
             buyer: order.userId || null,
             items: (order.items || []).map(item => ({
                 title: item.productId?.title || '',
-                image: item.productId?.productImages?.[0] || '',
+                productImages: item.productId?.productImages || '',
                 price: item.priceAtPurchase || 0,
                 quantity: item.quantity || 1,
                 saleType: item.productId?.saleType || '',
@@ -2314,7 +2335,7 @@ const getOrderDetails = async (req, res) => {
                 resolved: dispute.status === 'resolved',
                 createdAt: dispute.createdAt,
             } : null,
-            reviews: reviews.filter(Boolean),
+            reviews: reviews && reviews[0] || [],
             transaction: transaction ? {
                 transactionId: transaction._id,
                 paymentGatewayId: transaction.paymentGatewayId,

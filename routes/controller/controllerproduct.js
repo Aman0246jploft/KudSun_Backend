@@ -1231,7 +1231,7 @@ const fetchCombinedProducts = async (req, res) => {
                 updatedFilter.categoryId = toObjectId(categoryId);
             }
 
-             // Enhanced subcategory filter - supports multiple IDs
+            // Enhanced subcategory filter - supports multiple IDs
             if (subCategoryIds && subCategoryIds.length > 0) {
                 updatedFilter.subCategoryId = { $in: subCategoryIds };
             }
@@ -1363,7 +1363,9 @@ const fetchCombinedProducts = async (req, res) => {
                         timeRemaining: timeRemainingMs,
                         timeRemainingFormatted: formatTimeRemaining(timeRemainingMs),
                         hasEnded: endTime <= now,
-                        endTime: product.auctionSettings.biddingEndsAt
+                        isBiddingOpen: product.auctionSettings.isBiddingOpen,
+                        endTime: product.auctionSettings.biddingEndsAt,
+                        biddingEndsAt: product.auctionSettings.biddingEndsAt,
                     };
                 }
             }
@@ -1425,6 +1427,7 @@ const fetchCombinedProducts = async (req, res) => {
 
             return {
                 ...rest,
+                 auctionSettings: p.auctionSettings || null,
                 ...(p.timeRemainingFormatted && { timeRemainingFormatted: p.timeRemainingFormatted }),
                 ...(typeof p.totalBidsPlaced !== 'undefined' && { totalBidsPlaced: p.totalBidsPlaced }),
             };
