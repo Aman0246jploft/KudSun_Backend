@@ -1687,7 +1687,7 @@ const updateOrderStatusBySeller = async (req, res) => {
             order.status = newStatus;
             await order.save({ session });
 
-            const totalAmount = order.grandTotal || 0;
+            const totalAmount = order.totalAmount || 0;
             let serviceCharge = 0;
             let serviceType = '';
 
@@ -1695,7 +1695,7 @@ const updateOrderStatusBySeller = async (req, res) => {
             let taxType = '';
 
 
-            if (newStatus === ORDER_STATUS.DELIVERED) {
+            if (newStatus === ORDER_STATUS.DELIVERED || newStatus === ORDER_STATUS.CONFIRMED) {
                 const feeSettings = await FeeSetting.find({
                     name: { $in: ["SERVICE_CHARGE", "TAX"] },
                     isActive: true,
