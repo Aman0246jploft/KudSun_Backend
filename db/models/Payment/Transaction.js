@@ -9,6 +9,7 @@ const TransactionSchema = new Schema({
     amount: { type: Number, required: true },
     paymentMethod: { type: String, enum: Object.values(PAYMENT_METHOD), required: true },
     paymentStatus: { type: String, enum: Object.values(PAYMENT_STATUS), required: true },
+    type: { type: String, enum: ['PAYMENT', 'REFUND'], default: 'PAYMENT' },
     paymentGatewayId: { type: String, required: true }, // e.g., Stripe/PayPal txn id
     cardType: { type: String }, // e.g., 'Visa', 'Mastercard'
     cardLast4: { type: String }, // last 4 digits only

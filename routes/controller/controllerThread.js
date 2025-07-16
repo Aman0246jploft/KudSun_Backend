@@ -212,10 +212,11 @@ const updateThread = async (req, res) => {
 const deleteThread = async (req, res) => {
     try {
         const { id } = req.params;
-        const isDraft = req.body?.isDraft; // pass ?isDraft=true if deleting draft
+        const isDraft = req.query?.isDraft; // pass ?isDraft=true if deleting draft
         const draftMode = isDraft === 'true';
 
         const Model = draftMode ? ThreadDraft : Thread;
+
 
         const existing = await Model.findById(id);
         if (!existing) {
