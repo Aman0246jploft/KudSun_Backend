@@ -217,8 +217,8 @@ const deleteThread = async (req, res) => {
 
         const Model = draftMode ? ThreadDraft : Thread;
 
-
         const existing = await Model.findById(id);
+        console.log(existing)
         if (!existing) {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, `${draftMode ? 'Draft' : 'Thread'} not found.`);
         }
