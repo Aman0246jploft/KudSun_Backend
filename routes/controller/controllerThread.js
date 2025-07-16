@@ -756,9 +756,10 @@ const getThreads = async (req, res) => {
         const enrichedThreads = threads.map(thread => {
             const tid = thread?._id.toString();
             const uid = thread.userId?._id?.toString() || '';
-            const { subCategoryId, ...rest } = thread;
+            const { subCategoryId,photos, ...rest } = thread;
             return {
-                ...thread,
+                ...rest,
+                image:thread?.image||thread?.photos,
                 totalFollowers: followerMap[uid] || 0,
                 totalComments: commentMap[tid] || 0,
                 totalLikes: likeMap[tid] || 0,

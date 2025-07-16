@@ -51,7 +51,10 @@ const sellerWalletTnxSchema = new Schema({
         type: String,
 
     },
-
+    notes: {
+        type: String,
+        default: ''
+    },
 
     tnxStatus: {
         type: String,

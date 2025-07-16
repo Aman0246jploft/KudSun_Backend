@@ -856,7 +856,7 @@ const getBoughtProducts = async (req, res) => {
             }
             /** -------- 2. Work out the next step (or none) -------- */
             if (order.paymentStatus === PAYMENT_STATUS.PENDING) {
-                // Still waiting for payment ⇒ always show “Pay now”
+                // Still waiting for payment ⇒ always show "Pay now"
                 order.labalStatuses = 'Unpaid';
                 order.allowedNextStatuses = 'Pay now';
             } else if (!order.isReviewed) {
@@ -1193,7 +1193,7 @@ const getSoldProducts = async (req, res) => {
             //     allowedNextStatuses = ALLOWED_NEXT_STATUSES[currentStatus] || [];
             // }
             order.allowedNextStatuses = allowedNextStatuses;
-            
+
             order.labalStatuses = labalStatuses;
 
         }
@@ -1687,7 +1687,8 @@ const updateOrderStatusBySeller = async (req, res) => {
             order.status = newStatus;
             await order.save({ session });
 
-            const totalAmount = order.totalAmount || 0;
+            // Use product cost only for seller payout calculation (not grand total)
+            const productCost = order.totalAmount || 0; // This is the original product cost
             let serviceCharge = 0;
             let serviceType = '';
 
@@ -1707,7 +1708,7 @@ const updateOrderStatusBySeller = async (req, res) => {
 
                 if (serviceChargeSetting) {
                     if (serviceChargeSetting.type === PRICING_TYPE.PERCENTAGE) {
-                        serviceCharge = (totalAmount * serviceChargeSetting.value) / 100;
+                        serviceCharge = (productCost * serviceChargeSetting.value) / 100;
                         serviceType = PRICING_TYPE.PERCENTAGE
                     } else if (serviceChargeSetting.type === PRICING_TYPE.FIXED) {
                         serviceCharge = serviceChargeSetting.value;
@@ -1717,7 +1718,7 @@ const updateOrderStatusBySeller = async (req, res) => {
 
                 if (taxSetting) {
                     if (taxSetting.type === PRICING_TYPE.PERCENTAGE) {
-                        taxAmount = (totalAmount * taxSetting.value) / 100;
+                        taxAmount = (productCost * taxSetting.value) / 100;
                         taxType = PRICING_TYPE.PERCENTAGE
                     } else if (taxSetting.type === PRICING_TYPE.FIXED) {
                         taxAmount = taxSetting.value;
@@ -1725,13 +1726,13 @@ const updateOrderStatusBySeller = async (req, res) => {
                     }
                 }
 
-                const netAmount = totalAmount - serviceCharge - taxAmount;
+                const netAmount = productCost - serviceCharge - taxAmount;
 
                 const sellerWalletTnx = new WalletTnx({
                     orderId: order._id,
                     userId: sellerId,
-                    amount: totalAmount,
-                    netAmount: netAmount,
+                    amount: productCost, // Original product cost
+                    netAmount: netAmount, // After deducting platform fees
                     serviceCharge,
                     taxCharge: taxAmount,
                     tnxType: TNX_TYPE.CREDIT,
@@ -2801,7 +2802,440 @@ const getAllWithdrawRequests = async (req, res) => {
     }
 };
 
+const getAllTransactionsForAdmin = async (req, res) => {
+    try {
+        // Parse query params
+        let {
+            pageNo = 1,
+            size = 10,
+            minAmount,
+            maxAmount,
+            sortBy = 'createdAt',
+            order = 'desc',
+            status,
+            paymentStatus,
+            sellerId,
+            buyerId,
+            dateFrom,
+            dateTo
+        } = req.query;
 
+        pageNo = parseInt(pageNo);
+        size = parseInt(size);
+
+        // Build filter object
+        const filter = {};
+
+        if (minAmount !== undefined || maxAmount !== undefined) {
+            filter.amount = {};
+            if (minAmount !== undefined) filter.amount.$gte = Number(minAmount);
+            if (maxAmount !== undefined) filter.amount.$lte = Number(maxAmount);
+        }
+
+        if (status) filter.status = status;
+        if (paymentStatus) filter.paymentStatus = paymentStatus;
+        if (sellerId) filter.sellerId = toObjectId(sellerId);
+        if (buyerId) filter.userId = toObjectId(buyerId);
+
+        // Date range filter
+        if (dateFrom || dateTo) {
+            filter.createdAt = {};
+            if (dateFrom) filter.createdAt.$gte = new Date(dateFrom);
+            if (dateTo) filter.createdAt.$lte = new Date(dateTo);
+        }
+
+        // Build sort object
+        const sortOrder = order.toLowerCase() === 'asc' ? 1 : -1;
+        const sort = {};
+        sort[sortBy] = sortOrder;
+
+        // Fetch total count for pagination info
+        const total = await Order.countDocuments(filter);
+
+        // Fetch paginated orders with all related data
+        const orders = await Order.find(filter)
+            .populate([
+                {
+                    path: 'userId',
+                    select: 'userName profileImage email phone'
+                },
+                {
+                    path: 'sellerId',
+                    select: 'userName profileImage email phone'
+                },
+                {
+                    path: 'items.productId',
+                    select: 'title productImages fixedPrice saleType'
+                }
+            ])
+            .sort(sort)
+            .skip((pageNo - 1) * size)
+            .limit(size)
+            .lean();
+
+        // Get wallet transactions for these orders
+        const orderIds = orders.map(order => order._id);
+        const walletTransactions = await WalletTnx.find({
+            orderId: { $in: orderIds },
+            tnxType: TNX_TYPE.CREDIT // Seller payouts
+        }).lean();
+
+        // Create a map of wallet transactions by orderId
+        const walletTnxMap = {};
+        walletTransactions.forEach(tnx => {
+            walletTnxMap[tnx.orderId.toString()] = tnx;
+        });
+
+        // Format response data
+        const formattedOrders = orders.map(order => {
+            const walletTnx = walletTnxMap[order._id.toString()];
+            console.log(walletTnx)
+
+            return {
+                orderId: order._id,
+                orderNumber: order._id.toString(),
+                orderDate: order.createdAt,
+                status: order.status,
+                paymentStatus: order.paymentStatus,
+
+                // Buyer Information
+                buyer: {
+                    id: order.userId?._id,
+                    name: order.userId?.userName,
+                    email: order.userId?.email,
+                    phone: order.userId?.phone,
+                    profileImage: order.userId?.profileImage
+                },
+
+                // Seller Information
+                seller: {
+                    id: order.sellerId?._id,
+                    name: order.sellerId?.userName,
+                    email: order.sellerId?.email,
+                    phone: order.sellerId?.phone,
+                    profileImage: order.sellerId?.profileImage
+                },
+
+                // Payment Details
+                buyerPayment: {
+                    totalAmount: order.totalAmount || 0,
+                    shippingCharge: order.shippingCharge || 0,
+                    buyerProtectionFee: order.BuyerProtectionFee || 0,
+                    tax: order.Tax || 0,
+                    grandTotal: order.grandTotal || 0,
+                    paymentMethod: order.paymentMethod,
+                    paymentId: order.paymentId
+                },
+
+                // Seller Payout Details
+                sellerPayout: walletTnx ? {
+                    payoutAmount: walletTnx.netAmount || 0,
+                    productAmount: walletTnx.amount || 0,
+                    serviceCharge: walletTnx.serviceCharge || 0,
+                    taxCharge: walletTnx.taxCharge || 0,
+                    serviceType: walletTnx.serviceType,
+                    taxType: walletTnx.taxType,
+                    payoutStatus: walletTnx.tnxStatus,
+                    payoutDate: walletTnx.createdAt,
+                    transactionId: walletTnx._id
+                } : null,
+
+                // Product Details
+                products: order.items.map(item => ({
+                    productId: item.productId?._id,
+                    title: item.productId?.title,
+                    images: item.productId?.productImages,
+                    price: item.priceAtPurchase,
+                    quantity: item.quantity,
+                    saleType: item.productId?.saleType
+                })),
+
+
+                // Platform Revenue
+                platformRevenue: {
+                    buyerProtectionFee: order.BuyerProtectionFee || 0,
+                    tax: +order.Tax + +walletTnx?.taxCharge || 0,
+                    serviceCharge: walletTnx?.serviceCharge || 0,
+                    totalRevenue: (+order.BuyerProtectionFee || 0) + (+order.Tax + +walletTnx?.taxCharge || 0) + (+walletTnx?.serviceCharge || 0)
+                }
+            };
+        });
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Transactions fetched successfully", {
+            pageNo,
+            size,
+            totalPages: Math.ceil(total / size),
+            totalRecords: total,
+            transactions: formattedOrders
+        });
+
+    } catch (err) {
+        console.error("getAllTransactionsForAdmin error:", err);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to fetch transactions");
+    }
+};
+
+const markSellerAsPaid = async (req, res) => {
+    const session = await mongoose.startSession();
+
+    try {
+        const { orderId, payoutAmount, serviceCharge, taxCharge, notes } = req.body;
+
+        if (!orderId) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Order ID is required");
+        }
+
+        await session.withTransaction(async () => {
+            // Find the order
+            const order = await Order.findById(orderId)
+                .populate('sellerId')
+                .session(session);
+
+            if (!order) {
+                throw new Error("Order not found");
+            }
+
+            // Check if seller is already paid
+            const existingPayout = await WalletTnx.findOne({
+                orderId: order._id,
+                tnxType: TNX_TYPE.CREDIT,
+                tnxStatus: PAYMENT_STATUS.COMPLETED
+            }).session(session);
+
+            if (existingPayout) {
+                throw new Error("Seller is already paid for this order");
+            }
+
+            // Calculate amounts
+            const productCost = order.totalAmount || 0;
+            const calculatedServiceCharge = serviceCharge || 0;
+            const calculatedTaxCharge = taxCharge || 0;
+            const netAmount = productCost - calculatedServiceCharge - calculatedTaxCharge;
+
+            // Validate amounts
+            if (netAmount < 0) {
+                throw new Error("Net amount cannot be negative");
+            }
+
+            if (payoutAmount && payoutAmount !== productCost) {
+                throw new Error("Payout amount must match product cost");
+            }
+
+            // Create wallet transaction
+            const sellerWalletTnx = new WalletTnx({
+                orderId: order._id,
+                userId: order.sellerId._id,
+                amount: productCost,
+                netAmount: netAmount,
+                serviceCharge: calculatedServiceCharge,
+                taxCharge: calculatedTaxCharge,
+                tnxType: TNX_TYPE.CREDIT,
+                serviceType: calculatedServiceCharge > 0 ? 'MANUAL' : 'FIXED',
+                taxType: calculatedTaxCharge > 0 ? 'MANUAL' : 'FIXED',
+                tnxStatus: PAYMENT_STATUS.COMPLETED,
+                notes: notes || 'Manual payout by admin'
+            });
+
+            await sellerWalletTnx.save({ session });
+
+            // Update seller's wallet balance
+            await User.findByIdAndUpdate(
+                order.sellerId._id,
+                {
+                    $inc: { walletBalance: netAmount }
+                },
+                { session }
+            );
+
+            // Update order status to delivered if not already
+            if (order.status !== ORDER_STATUS.DELIVERED) {
+                order.status = ORDER_STATUS.DELIVERED;
+                await order.save({ session });
+
+                // Create status history
+                await OrderStatusHistory.create([{
+                    orderId: order._id,
+                    oldStatus: order.status,
+                    newStatus: ORDER_STATUS.DELIVERED,
+                    changedBy: req.user?.userId,
+                    note: 'Manual payout by admin'
+                }], { session });
+            }
+
+            // Create or get chat room for system message
+            const { room } = await findOrCreateOneOnOneRoom(order.userId, order.sellerId);
+
+            // Create system message for manual payout
+            const systemMessage = new ChatMessage({
+                chatRoom: room._id,
+                messageType: 'PAYMENT_STATUS',
+                systemMeta: {
+                    statusType: 'PAYMENT',
+                    status: 'COMPLETED',
+                    orderId: order._id,
+                    productId: order.items[0].productId,
+                    title: 'Manual Payout Completed',
+                    meta: {
+                        orderNumber: order._id.toString(),
+                        amount: `$${netAmount.toFixed(2)}`,
+                        itemCount: order.items.length,
+                        paymentMethod: 'Manual Admin Payout',
+                        timestamp: new Date().toISOString(),
+                        notes: notes || 'Payout processed by admin'
+                    },
+                    actions: [
+                        {
+                            label: "View Order",
+                            url: `/order/${order._id}`,
+                            type: "primary"
+                        }
+                    ],
+                    theme: 'success'
+                }
+            });
+
+            await systemMessage.save({ session });
+
+            // Update chat room's last message
+            await ChatRoom.findByIdAndUpdate(
+                room._id,
+                {
+                    lastMessage: systemMessage._id,
+                    updatedAt: new Date()
+                },
+                { session }
+            );
+
+            // Emit socket events
+            const io = req.app.get('io');
+            await emitSystemMessage(io, systemMessage, room, order.userId, order.sellerId);
+
+            return apiSuccessRes(HTTP_STATUS.OK, res, "Seller marked as paid successfully", {
+                orderId: order._id,
+                sellerId: order.sellerId._id,
+                sellerName: order.sellerId.userName,
+                payoutAmount: productCost,
+                netAmount: netAmount,
+                serviceCharge: calculatedServiceCharge,
+                taxCharge: calculatedTaxCharge,
+                transactionId: sellerWalletTnx._id,
+                walletBalance: (await User.findById(order.sellerId._id).session(session)).walletBalance
+            });
+        });
+
+    } catch (err) {
+        console.error("markSellerAsPaid error:", err);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to mark seller as paid");
+    } finally {
+        session.endSession();
+    }
+};
+
+const getSellerPayoutStatus = async (req, res) => {
+    try {
+        const { orderId } = req.params;
+
+        if (!orderId) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Order ID is required");
+        }
+
+        // Find the order
+        const order = await Order.findById(orderId)
+            .populate('sellerId', 'userName email phone')
+            .populate('items.productId', 'title productImages')
+            .lean();
+
+        if (!order) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Order not found");
+        }
+
+        // Check if seller is already paid
+        const existingPayout = await WalletTnx.findOne({
+            orderId: order._id,
+            tnxType: TNX_TYPE.CREDIT
+        }).lean();
+
+        // Calculate what the payout should be
+        const productCost = order.totalAmount || 0;
+        const feeSettings = await FeeSetting.find({
+            name: { $in: ["SERVICE_CHARGE", "TAX"] },
+            isActive: true,
+            isDisable: false,
+            isDeleted: false
+        }).lean();
+
+        const serviceChargeSetting = feeSettings.find(f => f.name === "SERVICE_CHARGE");
+        const taxSetting = feeSettings.find(f => f.name === "TAX");
+
+        let serviceCharge = 0;
+        let taxCharge = 0;
+
+        if (serviceChargeSetting) {
+            if (serviceChargeSetting.type === PRICING_TYPE.PERCENTAGE) {
+                serviceCharge = (productCost * serviceChargeSetting.value) / 100;
+            } else {
+                serviceCharge = serviceChargeSetting.value;
+            }
+        }
+
+        if (taxSetting) {
+            if (taxSetting.type === PRICING_TYPE.PERCENTAGE) {
+                taxCharge = (productCost * taxSetting.value) / 100;
+            } else {
+                taxCharge = taxSetting.value;
+            }
+        }
+
+        const netAmount = productCost - serviceCharge - taxCharge;
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Payout status fetched successfully", {
+            orderId: order._id,
+            orderNumber: order._id.toString(),
+            orderStatus: order.status,
+            paymentStatus: order.paymentStatus,
+
+            seller: {
+                id: order.sellerId._id,
+                name: order.sellerId.userName,
+                email: order.sellerId.email,
+                phone: order.sellerId.phone
+            },
+
+            products: order.items.map(item => ({
+                productId: item.productId._id,
+                title: item.productId.title,
+                images: item.productId.productImages,
+                price: item.priceAtPurchase,
+                quantity: item.quantity
+            })),
+
+            payoutCalculation: {
+                productCost: productCost,
+                serviceCharge: serviceCharge,
+                taxCharge: taxCharge,
+                netAmount: netAmount,
+                serviceChargeType: serviceChargeSetting?.type || 'FIXED',
+                taxChargeType: taxSetting?.type || 'FIXED'
+            },
+
+            payoutStatus: existingPayout ? {
+                isPaid: true,
+                paidAmount: existingPayout.amount,
+                netPaidAmount: existingPayout.netAmount,
+                paidDate: existingPayout.createdAt,
+                transactionId: existingPayout._id,
+                notes: existingPayout.notes
+            } : {
+                isPaid: false,
+                canBePaid: order.status === ORDER_STATUS.DELIVERED || order.status === ORDER_STATUS.CONFIRMED
+            }
+        });
+
+    } catch (err) {
+        console.error("getSellerPayoutStatus error:", err);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to get payout status");
+    }
+};
 
 //////////////////////////////////////////////////////////////////////////////
 router.post('/previewOrder', perApiLimiter(), upload.none(), previewOrder);
@@ -2827,6 +3261,13 @@ router.post('/addrequest', perApiLimiter(), upload.none(), addrequest);
 router.post('/changeStatus', perApiLimiter(), upload.none(), changeStatus);
 router.get('/getAllWithdrawRequests', perApiLimiter(), upload.none(), getAllWithdrawRequests);
 
+//////////////////////////////////////////////////////////////////////////////
+/////////////////////////////******ADMIN TRANSACTIONS******///////////////////////////////
+router.get('/admin/transactions', perApiLimiter(), upload.none(), getAllTransactionsForAdmin);
+
+router.post('/admin/markSellerPaid', perApiLimiter(), upload.none(), markSellerAsPaid);
+router.get('/admin/payoutStatus/:orderId', perApiLimiter(), upload.none(), getSellerPayoutStatus);
+
 
 
 
@@ -2836,8 +3277,11 @@ router.get('/getAllWithdrawRequests', perApiLimiter(), upload.none(), getAllWith
 // router.post('/updateOrder/:orderId', perApiLimiter(), upload.none(), updateOrderById);
 // router.post('/cancelAndRelistProduct', perApiLimiter(), upload.none(), cancelOrderAndRelistProducts);
 
-module.exports = router;
 
 
 // PENDING -> CONFIRMED -> SHIPPED -> DELIVERED sor seller
 // SHIPPED -> CONFIRM_RECEIPT 
+
+
+
+module.exports = router;
