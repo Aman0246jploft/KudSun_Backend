@@ -287,10 +287,4 @@ router.post('/updateStatus', perApiLimiter(), updateStatus);
 router.get('/adminListAll', perApiLimiter(), adminListAll);
 router.get('/disputeByOrderId/:orderId', perApiLimiter(), disputeByOrderId);
 
-
-
-
-
-
-
 module.exports = router;
