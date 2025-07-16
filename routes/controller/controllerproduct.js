@@ -1438,7 +1438,7 @@ const fetchCombinedProducts = async (req, res) => {
 
 
         let subCategoryGroups = [];
-        if (categoryId && !subCategoryId) {
+        if (categoryId ) {
             subCategoryGroups = await getProductsPerSubCategory({
                 categoryId,
                 sizePerSub: 10,      // hard cap – tweak or make another query param
