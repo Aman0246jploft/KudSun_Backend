@@ -44,6 +44,7 @@ const NotificationSchema = new Schema({
         type: String,
         required: true,
     },
+
     message: {
         type: String,
         required: true,
@@ -65,13 +66,6 @@ const NotificationSchema = new Schema({
     activityType: {
         type: String,
         enum: ['like', 'comment', 'follow', 'bid', 'review', null],
-        default: null
-    },
-
-    // For alert notifications
-    alertPriority: {
-        type: String,
-        enum: ['low', 'medium', 'high', null],
         default: null
     },
 

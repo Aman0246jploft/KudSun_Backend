@@ -1193,6 +1193,9 @@ const getSoldProducts = async (req, res) => {
             //     allowedNextStatuses = ALLOWED_NEXT_STATUSES[currentStatus] || [];
             // }
             order.allowedNextStatuses = allowedNextStatuses;
+            
+            order.labalStatuses = labalStatuses;
+
         }
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Sold products fetched successfully", {
