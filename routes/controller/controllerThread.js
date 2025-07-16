@@ -756,9 +756,7 @@ const getThreads = async (req, res) => {
         const enrichedThreads = threads.map(thread => {
             const tid = thread?._id.toString();
             const uid = thread.userId?._id?.toString() || '';
-
-
-
+            const { subCategoryId, ...rest } = thread;
             return {
                 ...thread,
                 totalFollowers: followerMap[uid] || 0,
@@ -767,7 +765,10 @@ const getThreads = async (req, res) => {
                 totalAssociatedProducts: productMap[tid] || 0,
                 myThread: currentUserId && uid === currentUserId,
                 isLiked: likedThreadSet.has(tid),
-                subCategoryId: subCategoryNameMap[thread.subCategoryId] || null
+                subCategory: {
+                    id: subCategoryId,
+                    name: subCategoryNameMap[subCategoryId] || null
+                },
             };
         });
 
