@@ -1803,7 +1803,7 @@ const selectProductForAssociation = async (req, res) => {
 //thread
 router.post('/create', perApiLimiter(), upload.array('files', 10), addThread);
 router.post('/updateThread/:id', perApiLimiter(), upload.array('files', 10), updateThread);
-router.post('/delete/:id', perApiLimiter(), deleteThread);
+router.get('/delete/:id', perApiLimiter(), deleteThread);
 router.post('/changeStatus/:id', perApiLimiter(), changeStatus);
 router.post('/trending/:id', perApiLimiter(), trending);
 
