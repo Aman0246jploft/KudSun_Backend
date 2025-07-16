@@ -1193,7 +1193,7 @@ const getSoldProducts = async (req, res) => {
             //     allowedNextStatuses = ALLOWED_NEXT_STATUSES[currentStatus] || [];
             // }
             order.allowedNextStatuses = allowedNextStatuses;
-
+            
             order.labalStatuses = labalStatuses;
 
         }
@@ -2817,7 +2817,8 @@ const getAllTransactionsForAdmin = async (req, res) => {
             sellerId,
             buyerId,
             dateFrom,
-            dateTo
+            dateTo,
+            paidToSeller // New filter for paid to seller status
         } = req.query;
 
         pageNo = parseInt(pageNo);
@@ -2875,23 +2876,31 @@ const getAllTransactionsForAdmin = async (req, res) => {
 
         // Get wallet transactions for these orders
         const orderIds = orders.map(order => order._id);
+        
+        // Get both credit and withdrawal transactions
         const walletTransactions = await WalletTnx.find({
             orderId: { $in: orderIds },
-            tnxType: TNX_TYPE.CREDIT // Seller payouts
+            tnxType: { $in: [TNX_TYPE.CREDIT, TNX_TYPE.WITHDRAWL] }
         }).lean();
 
-        // Create a map of wallet transactions by orderId
-        const walletTnxMap = {};
+        // Create maps for both credit and withdrawal transactions
+        const creditTnxMap = {};
+        const withdrawalTnxMap = {};
+        
         walletTransactions.forEach(tnx => {
-            walletTnxMap[tnx.orderId.toString()] = tnx;
+            if (tnx.tnxType === TNX_TYPE.CREDIT) {
+                creditTnxMap[tnx.orderId.toString()] = tnx;
+            } else if (tnx.tnxType === TNX_TYPE.WITHDRAWL) {
+                withdrawalTnxMap[tnx.orderId.toString()] = tnx;
+            }
         });
 
         // Format response data
-        const formattedOrders = orders.map(order => {
-            const walletTnx = walletTnxMap[order._id.toString()];
-            console.log(walletTnx)
-
-            return {
+        let formattedOrders = orders.map(order => {
+            const creditTnx = creditTnxMap[order._id.toString()];
+            const withdrawalTnx = withdrawalTnxMap[order._id.toString()];
+            
+            const orderData = {
                 orderId: order._id,
                 orderNumber: order._id.toString(),
                 orderDate: order.createdAt,
@@ -2928,16 +2937,25 @@ const getAllTransactionsForAdmin = async (req, res) => {
                 },
 
                 // Seller Payout Details
-                sellerPayout: walletTnx ? {
-                    payoutAmount: walletTnx.netAmount || 0,
-                    productAmount: walletTnx.amount || 0,
-                    serviceCharge: walletTnx.serviceCharge || 0,
-                    taxCharge: walletTnx.taxCharge || 0,
-                    serviceType: walletTnx.serviceType,
-                    taxType: walletTnx.taxType,
-                    payoutStatus: walletTnx.tnxStatus,
-                    payoutDate: walletTnx.createdAt,
-                    transactionId: walletTnx._id
+                sellerPayout: creditTnx ? {
+                    payoutAmount: creditTnx.netAmount || 0,
+                    productAmount: creditTnx.amount || 0,
+                    serviceCharge: creditTnx.serviceCharge || 0,
+                    taxCharge: creditTnx.taxCharge || 0,
+                    serviceType: creditTnx.serviceType,
+                    taxType: creditTnx.taxType,
+                    payoutStatus: creditTnx.tnxStatus,
+                    payoutDate: creditTnx.createdAt,
+                    transactionId: creditTnx._id,
+                    isPaidToSeller: !!withdrawalTnx,
+                    withdrawalDetails: withdrawalTnx ? {
+                        withdrawalId: withdrawalTnx._id,
+                        withdrawalAmount: withdrawalTnx.amount,
+                        withdrawalFee: withdrawalTnx.withdrawfee,
+                        netAmountPaid: withdrawalTnx.netAmount,
+                        withdrawalDate: withdrawalTnx.createdAt,
+                        notes: withdrawalTnx.notes
+                    } : null
                 } : null,
 
                 // Product Details
@@ -2950,16 +2968,29 @@ const getAllTransactionsForAdmin = async (req, res) => {
                     saleType: item.productId?.saleType
                 })),
 
-
                 // Platform Revenue
                 platformRevenue: {
                     buyerProtectionFee: order.BuyerProtectionFee || 0,
-                    tax: +order.Tax + +walletTnx?.taxCharge || 0,
-                    serviceCharge: walletTnx?.serviceCharge || 0,
-                    totalRevenue: (+order.BuyerProtectionFee || 0) + (+order.Tax + +walletTnx?.taxCharge || 0) + (+walletTnx?.serviceCharge || 0)
+                    tax: +order.Tax + +(creditTnx?.taxCharge || 0),
+                    serviceCharge: creditTnx?.serviceCharge || 0,
+                    withdrawalFee: withdrawalTnx?.withdrawfee || 0,
+                    totalRevenue: (+order.BuyerProtectionFee || 0) + 
+                                (+order.Tax + +(creditTnx?.taxCharge || 0)) + 
+                                +(creditTnx?.serviceCharge || 0) +
+                                +(withdrawalTnx?.withdrawfee || 0)
                 }
             };
+
+            return orderData;
         });
+
+        // Filter by paidToSeller if specified
+        if (paidToSeller !== undefined) {
+            const isPaid = paidToSeller === 'true' || paidToSeller === true;
+            formattedOrders = formattedOrders.filter(order => 
+                order.sellerPayout?.isPaidToSeller === isPaid
+            );
+        }
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Transactions fetched successfully", {
             pageNo,
@@ -2979,14 +3010,14 @@ const markSellerAsPaid = async (req, res) => {
     const session = await mongoose.startSession();
 
     try {
-        const { orderId, payoutAmount, serviceCharge, taxCharge, notes } = req.body;
+        const { orderId, notes } = req.body;
 
         if (!orderId) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Order ID is required");
         }
 
         await session.withTransaction(async () => {
-            // Find the order
+            // Find the order and wallet transaction
             const order = await Order.findById(orderId)
                 .populate('sellerId')
                 .session(session);
@@ -2995,72 +3026,81 @@ const markSellerAsPaid = async (req, res) => {
                 throw new Error("Order not found");
             }
 
-            // Check if seller is already paid
-            const existingPayout = await WalletTnx.findOne({
+            // Find the credit transaction for this order
+            const creditTransaction = await WalletTnx.findOne({
                 orderId: order._id,
                 tnxType: TNX_TYPE.CREDIT,
                 tnxStatus: PAYMENT_STATUS.COMPLETED
             }).session(session);
 
-            if (existingPayout) {
-                throw new Error("Seller is already paid for this order");
+            if (!creditTransaction) {
+                throw new Error("No credit transaction found for this order");
             }
 
-            // Calculate amounts
-            const productCost = order.totalAmount || 0;
-            const calculatedServiceCharge = serviceCharge || 0;
-            const calculatedTaxCharge = taxCharge || 0;
-            const netAmount = productCost - calculatedServiceCharge - calculatedTaxCharge;
+            // Check if withdrawal already processed
+            const existingWithdrawal = await WalletTnx.findOne({
+                orderId: order._id,
+                tnxType: TNX_TYPE.WITHDRAWL,
+                tnxStatus: PAYMENT_STATUS.COMPLETED
+            }).session(session);
 
-            // Validate amounts
-            if (netAmount < 0) {
-                throw new Error("Net amount cannot be negative");
+            if (existingWithdrawal) {
+                throw new Error("Withdrawal already processed for this order");
             }
 
-            if (payoutAmount && payoutAmount !== productCost) {
-                throw new Error("Payout amount must match product cost");
+            // Get withdrawal fee settings
+            const withdrawalFeeSetting = await FeeSetting.findOne({
+                name: "WITHDRAWAL_FEE",
+                isActive: true,
+                isDisable: false,
+                isDeleted: false
+            }).session(session);
+
+            const amountToWithdraw = creditTransaction.netAmount; // This is the amount seller should receive
+            let withdrawalFee = 0;
+            let withdrawalFeeType = '';
+
+            if (withdrawalFeeSetting) {
+                if (withdrawalFeeSetting.type === PRICING_TYPE.PERCENTAGE) {
+                    withdrawalFee = (amountToWithdraw * withdrawalFeeSetting.value) / 100;
+                    withdrawalFeeType = PRICING_TYPE.PERCENTAGE;
+                } else {
+                    withdrawalFee = withdrawalFeeSetting.value;
+                    withdrawalFeeType = PRICING_TYPE.FIXED;
+                }
             }
 
-            // Create wallet transaction
-            const sellerWalletTnx = new WalletTnx({
+            const totalDeduction = amountToWithdraw + withdrawalFee;
+
+            // Check if seller has enough balance
+            const seller = await User.findById(order.sellerId._id).session(session);
+            if (seller.walletBalance < totalDeduction) {
+                throw new Error(`Insufficient wallet balance. Required: ${totalDeduction}, Available: ${seller.walletBalance}`);
+            }
+
+            // Create withdrawal transaction
+            const withdrawalTnx = new WalletTnx({
                 orderId: order._id,
                 userId: order.sellerId._id,
-                amount: productCost,
-                netAmount: netAmount,
-                serviceCharge: calculatedServiceCharge,
-                taxCharge: calculatedTaxCharge,
-                tnxType: TNX_TYPE.CREDIT,
-                serviceType: calculatedServiceCharge > 0 ? 'MANUAL' : 'FIXED',
-                taxType: calculatedTaxCharge > 0 ? 'MANUAL' : 'FIXED',
+                amount: amountToWithdraw,
+                netAmount: amountToWithdraw - withdrawalFee,
+                withdrawfee: withdrawalFee,
+                withdrawfeeType: withdrawalFeeType,
+                tnxType: TNX_TYPE.WITHDRAWL,
                 tnxStatus: PAYMENT_STATUS.COMPLETED,
-                notes: notes || 'Manual payout by admin'
+                notes: notes || 'Manual withdrawal by admin'
             });
 
-            await sellerWalletTnx.save({ session });
+            await withdrawalTnx.save({ session });
 
-            // Update seller's wallet balance
+            // Deduct from seller's wallet balance
             await User.findByIdAndUpdate(
                 order.sellerId._id,
                 {
-                    $inc: { walletBalance: netAmount }
+                    $inc: { walletBalance: -totalDeduction }
                 },
                 { session }
             );
-
-            // Update order status to delivered if not already
-            if (order.status !== ORDER_STATUS.DELIVERED) {
-                order.status = ORDER_STATUS.DELIVERED;
-                await order.save({ session });
-
-                // Create status history
-                await OrderStatusHistory.create([{
-                    orderId: order._id,
-                    oldStatus: order.status,
-                    newStatus: ORDER_STATUS.DELIVERED,
-                    changedBy: req.user?.userId,
-                    note: 'Manual payout by admin'
-                }], { session });
-            }
 
             // Create or get chat room for system message
             const { room } = await findOrCreateOneOnOneRoom(order.userId, order.sellerId);
@@ -3074,14 +3114,16 @@ const markSellerAsPaid = async (req, res) => {
                     status: 'COMPLETED',
                     orderId: order._id,
                     productId: order.items[0].productId,
-                    title: 'Manual Payout Completed',
+                    title: 'Manual Withdrawal Completed',
                     meta: {
                         orderNumber: order._id.toString(),
-                        amount: `$${netAmount.toFixed(2)}`,
+                        amount: `$${amountToWithdraw.toFixed(2)}`,
+                        withdrawalFee: `$${withdrawalFee.toFixed(2)}`,
+                        netAmount: `$${(amountToWithdraw - withdrawalFee).toFixed(2)}`,
                         itemCount: order.items.length,
-                        paymentMethod: 'Manual Admin Payout',
+                        paymentMethod: 'Manual Admin Withdrawal',
                         timestamp: new Date().toISOString(),
-                        notes: notes || 'Payout processed by admin'
+                        notes: notes || 'Withdrawal processed by admin'
                     },
                     actions: [
                         {
@@ -3110,22 +3152,21 @@ const markSellerAsPaid = async (req, res) => {
             const io = req.app.get('io');
             await emitSystemMessage(io, systemMessage, room, order.userId, order.sellerId);
 
-            return apiSuccessRes(HTTP_STATUS.OK, res, "Seller marked as paid successfully", {
+            return apiSuccessRes(HTTP_STATUS.OK, res, "Seller withdrawal processed successfully", {
                 orderId: order._id,
                 sellerId: order.sellerId._id,
                 sellerName: order.sellerId.userName,
-                payoutAmount: productCost,
-                netAmount: netAmount,
-                serviceCharge: calculatedServiceCharge,
-                taxCharge: calculatedTaxCharge,
-                transactionId: sellerWalletTnx._id,
-                walletBalance: (await User.findById(order.sellerId._id).session(session)).walletBalance
+                withdrawalAmount: amountToWithdraw,
+                withdrawalFee: withdrawalFee,
+                netAmount: amountToWithdraw - withdrawalFee,
+                transactionId: withdrawalTnx._id,
+                remainingWalletBalance: seller.walletBalance - totalDeduction
             });
         });
 
     } catch (err) {
         console.error("markSellerAsPaid error:", err);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to mark seller as paid");
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to process seller withdrawal");
     } finally {
         session.endSession();
     }
@@ -3264,8 +3305,8 @@ router.get('/getAllWithdrawRequests', perApiLimiter(), upload.none(), getAllWith
 //////////////////////////////////////////////////////////////////////////////
 /////////////////////////////******ADMIN TRANSACTIONS******///////////////////////////////
 router.get('/admin/transactions', perApiLimiter(), upload.none(), getAllTransactionsForAdmin);
-
 router.post('/admin/markSellerPaid', perApiLimiter(), upload.none(), markSellerAsPaid);
+
 router.get('/admin/payoutStatus/:orderId', perApiLimiter(), upload.none(), getSellerPayoutStatus);
 
 

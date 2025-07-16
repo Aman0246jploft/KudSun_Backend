@@ -45,10 +45,12 @@ const sellerWalletTnxSchema = new Schema({
     },
 
     withdrawfee: {
-        type: String,
+        type: Number,
     },
     withdrawfeeType: {
         type: String,
+        default: ''
+
 
     },
     notes: {
