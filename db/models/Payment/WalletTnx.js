@@ -73,9 +73,9 @@ sellerWalletTnxSchema.pre('validate', function (next) {
         return next(new Error('orderId is required for credit transactions'));
     }
 
-    if (this.tnxType === TNX_TYPE.WITHDRAWL && !this.sellerWithdrawlId) {
-        return next(new Error('sellerWithdrawlId is required for withdrawal transactions'));
-    }
+    // if (this.tnxType === TNX_TYPE.WITHDRAWL && !this.sellerWithdrawlId) {
+    //     return next(new Error('sellerWithdrawlId is required for withdrawal transactions'));
+    // }
 
     next();
 });
