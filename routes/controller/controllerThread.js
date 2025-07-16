@@ -23,7 +23,8 @@ const addThread = async (req, res) => {
             min,
             max,
             tags,
-            isDraft
+            isDraft,
+            imageArray
         } = req.body;
         const draftMode = isDraft === 'true' || isDraft === true;
 
@@ -43,6 +44,16 @@ const addThread = async (req, res) => {
                 .filter(id => id);
         }
         let photoUrls = [];
+        // 1️⃣ URLs that came in req.body.imageArray
+        if (imageArray) {
+            const rawUrls = Array.isArray(imageArray) ? imageArray : [imageArray];
+            photoUrls.push(
+                ...rawUrls
+                    .map(u => (typeof u === 'string' ? u.trim() : ''))
+                    .filter(Boolean)                 // remove empty strings / null
+            );
+        }
+
         if (req.files && req.files.length > 0) {
             for (const file of req.files) {
                 const imageUrl = await uploadImageCloudinary(file, 'thread-photos');
@@ -50,6 +61,7 @@ const addThread = async (req, res) => {
             }
         }
 
+        photoUrls = [...new Set(photoUrls)];
 
         const budgetRange = {};
         if (budgetFlexible === 'true' || budgetFlexible === true) {
@@ -110,7 +122,8 @@ const updateThread = async (req, res) => {
             max,
             tags,
             isDraft,
-            removePhotos // <--- new field (array of photo URLs to remove)
+            imageArray,
+
         } = req.body;
 
         const draftMode = isDraft === 'true' || isDraft === true;
@@ -138,10 +151,17 @@ const updateThread = async (req, res) => {
         }
 
         // Remove photos as requested
-        let photoUrls = existing.photos || [];
-        if (removePhotos) {
-            const photosToRemove = Array.isArray(removePhotos) ? removePhotos : [removePhotos];
-            photoUrls = photoUrls.filter(url => !photosToRemove.includes(url));
+        let photoUrls = [];
+
+
+
+        if (imageArray) {
+            const bodyUrls = (Array.isArray(imageArray) ? imageArray : [imageArray])
+                .map(u => (typeof u === 'string' ? u.trim() : ''))
+                .filter(Boolean);
+            photoUrls = [...bodyUrls];
+        } else {
+            photoUrls = [...(existing.photos || [])];
         }
 
         // Upload new photos and append
@@ -1049,7 +1069,7 @@ const getThreadById = async (req, res) => {
                     isSold: 1,
                     saleType: 1,
                     totalBids: 1,
-                    photo:1,
+                    photo: 1,
                     productImages: 1,
                     seller: {
                         _id: 1,
@@ -1214,12 +1234,12 @@ const getThreadById = async (req, res) => {
                 $project: {
                     _id: 1,
                     title: 1,
-                    isClosed:1,
+                    isClosed: 1,
                     description: 1,
                     budgetRange: 1,
                     createdAt: 1,
                     budgetFlexible: 1,
-                    photos:1,
+                    photos: 1,
                     tags: 1,
 
                     user: {
