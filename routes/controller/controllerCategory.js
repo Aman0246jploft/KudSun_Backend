@@ -942,7 +942,7 @@ const addUserParameterAndValue = async (req, res) => {
 
 const acceptParameterValueByAdmin = async (req, res) => {
     try {
-        console.log()
+
         const { subCategoryId } = req.params;
         const { key, value } = req.body;  // form-data fields are strings by default
         const userId = req.user?.userId;

@@ -2881,7 +2881,9 @@ const getAllTransactionsForAdmin = async (req, res) => {
         size = parseInt(size);
 
         // Build filter object
-        const filter = {};
+        const filter = {  };
+        filter.paymentStatus = { $ne: PAYMENT_STATUS.PENDING };
+
 
         if (minAmount !== undefined || maxAmount !== undefined) {
             filter.amount = {};

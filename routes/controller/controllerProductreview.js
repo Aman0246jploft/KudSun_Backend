@@ -546,7 +546,7 @@ const getProductReviews = async (req, res) => {
         })
             .populate({
                 path: 'userId',
-                select: 'userName profileImage provinceId districtId averageRatting is_Verified_Seller',
+                select: 'userName profileImage isSold provinceId districtId averageRatting is_Verified_Seller',
                 populate: [
                     { path: 'provinceId', select: 'value' },
                     { path: 'districtId', select: 'value' }
@@ -644,20 +644,20 @@ const getProductReviews = async (req, res) => {
                     district: review.userId.districtId?.value
                 }
             },
-            otherUser: review.otheruserId ? {
-                _id: review.otheruserId._id,
-                userName: review.otheruserId.userName,
-                profileImage: review.otheruserId.profileImage,
-                isLive: review.otheruserId.isLive,
-                is_Id_verified: review.otheruserId.is_Id_verified,
-                is_Verified_Seller: review.otheruserId.is_Verified_Seller,
-                averageRating: review.otheruserId.averageRatting,
-                averageBuyerRating: review.otheruserId.averageBuyerRatting,
-                location: {
-                    province: review.otheruserId.provinceId?.value,
-                    district: review.otheruserId.districtId?.value
-                }
-            } : null
+            // otherUser: review.otheruserId ? {
+            //     _id: review.otheruserId._id,
+            //     userName: review.otheruserId.userName,
+            //     profileImage: review.otheruserId.profileImage,
+            //     isLive: review.otheruserId.isLive,
+            //     is_Id_verified: review.otheruserId.is_Id_verified,
+            //     is_Verified_Seller: review.otheruserId.is_Verified_Seller,
+            //     averageRating: review.otheruserId.averageRatting,
+            //     averageBuyerRating: review.otheruserId.averageBuyerRatting,
+            //     location: {
+            //         province: review.otheruserId.provinceId?.value,
+            //         district: review.otheruserId.districtId?.value
+            //     }
+            // } : null
         }));
 
 
@@ -674,6 +674,7 @@ const getProductReviews = async (req, res) => {
             category: product.categoryId?.name,
             subCategory: product.subCategoryId?.name,
             createdAt: product.createdAt,
+            isSold:product.isSold,
             seller: {
                 _id: product.userId._id,
                 userName: product.userId.userName,
