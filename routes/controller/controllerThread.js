@@ -681,7 +681,7 @@ const getThreads = async (req, res) => {
 
         const threads = await ThreadModel.find(filters)
             .populate('userId', 'userName profileImage isLive is_Id_verified is_Preferred_seller')
-            .populate('categoryId', 'name subCategoryId') // populate but remove later
+            .populate('categoryId', 'name subCategoryId image') // populate but remove later
             .sort(sortStage)
             .skip((page - 1) * limit)
             .limit(limit)
