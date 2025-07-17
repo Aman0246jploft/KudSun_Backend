@@ -155,15 +155,9 @@ const getReportsByUserId = async (req, res) => {
     }
 };
 
-
-
-
-
 router.post('/create', perApiLimiter(), upload.array("image"), create);
 router.post('/delete/:id', perApiLimiter(), upload.none(), softDelete);
 router.get('/getList', perApiLimiter(), getReports);
 router.get('/byUser/:userId', perApiLimiter(), getReportsByUserId);
-
-
 
 module.exports = router;

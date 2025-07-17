@@ -466,24 +466,25 @@ const getReviewersList = async (req, res) => {
             //     lastReviewDate: item.lastReviewDate,
             //     raterRoles: item.raterRoles // ['buyer', 'seller'] - shows what roles this user has reviewed as
             // },
-            reviews: item.reviews.map(review => ({
-                _id: review._id,
-                rating: review.rating,
-                ratingText: review.ratingText,
-                reviewText: review.reviewText,
-                reviewImages: review.reviewImages,
-                raterRole: review.raterRole,
-                createdAt: review.createdAt,
-                updatedAt: review.updatedAt,
-                product: {
-                    _id: review.product._id,
-                    title: review.product.title,
-                    description: review.product.description,
-                    price: review.product.fixedPrice,
-                    saleType: review.product.saleType,
-                    images: review.product.productImages
-                }
-            }))
+            reviews: item?.reviews&&item?.reviews[0]
+            // .map(review => ({
+            //     _id: review._id,
+            //     rating: review.rating,
+            //     ratingText: review.ratingText,
+            //     reviewText: review.reviewText,
+            //     reviewImages: review.reviewImages,
+            //     raterRole: review.raterRole,
+            //     createdAt: review.createdAt,
+            //     updatedAt: review.updatedAt,
+            //     product: {
+            //         _id: review.product._id,
+            //         title: review.product.title,
+            //         description: review.product.description,
+            //         price: review.product.fixedPrice,
+            //         saleType: review.product.saleType,
+            //         images: review.product.productImages
+            //     }
+            // }))
         }));
 
         return apiSuccessRes(HTTP_STATUS.OK, res, 'Reviewers list fetched successfully', {
@@ -502,7 +503,7 @@ const getReviewersList = async (req, res) => {
 const getProductReviews = async (req, res) => {
     try {
         const { productId } = req.params;
-        
+
         if (!productId) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Product ID is required');
         }
@@ -543,10 +544,10 @@ const getProductReviews = async (req, res) => {
             isDeleted: false,
             isDisable: false
         })
-        .populate('userId', 'userName profileImage provinceId districtId averageRatting is_Verified_Seller')
-        .populate('categoryId', 'name')
-        .populate('subCategoryId', 'name')
-        .lean();
+            .populate('userId', 'userName profileImage provinceId districtId averageRatting is_Verified_Seller')
+            .populate('categoryId', 'name')
+            .populate('subCategoryId', 'name')
+            .lean();
 
         if (!product) {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Product not found');
