@@ -2560,6 +2560,7 @@ const getProductsWithDraft = async (req, res) => {
             total,
             size: parseInt(limit),
             products: filteredProducts.map(product => ({
+                ...product,
                 _id: product._id,
                 title: product.title,
                 description: product.description,
