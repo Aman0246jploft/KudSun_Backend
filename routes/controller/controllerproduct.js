@@ -252,6 +252,20 @@ const addSellerProduct = async (req, res) => {
 
         // === Upload Images to Cloudinary ===
         let productImages = [];
+        let imageArray = req.body.imageArray;
+        if (imageArray) {
+            if (typeof imageArray === 'string') {
+                try {
+                    imageArray = JSON.parse(imageArray);
+                } catch (err) {
+                    return apiErrorRes(400, res, "Invalid imageArray format. Must be a JSON stringified array of URLs.");
+                }
+            }
+
+            const bodyUrls = (Array.isArray(imageArray) ? imageArray : [imageArray]);
+            productImages = bodyUrls.filter(url => typeof url === 'string' && url.trim() !== '');
+        }
+
         if (req.files && req.files.length > 0) {
             for (const file of req.files) {
                 const imageUrl = await uploadImageCloudinary(file, 'product-images');
@@ -329,7 +343,7 @@ const updateSellerProduct = async (req, res) => {
             auctionSettings,
             timeZone,
             removePhotos,
-            
+
             isDisable
         } = req.body;
 
@@ -489,11 +503,17 @@ const updateSellerProduct = async (req, res) => {
                 }
             }
 
-            if (!Array.isArray(imageArray)) {
-                return apiErrorRes(400, res, "imageArray must be an array of image URLs.");
+            const bodyUrls = Array.isArray(imageArray) ? imageArray : [imageArray];
+
+            // Validate all entries are strings
+            const cleanBodyUrls = bodyUrls.filter(url => typeof url === 'string' && url.trim() !== '');
+
+            if (!Array.isArray(cleanBodyUrls)) {
+                return apiErrorRes(400, res, "imageArray must be an array of valid image URLs.");
             }
 
-            const imagesToDelete = photoUrls.filter(url => !imageArray.includes(url));
+            // Delete any images that are not in bodyUrls
+            const imagesToDelete = photoUrls.filter(url => !cleanBodyUrls.includes(url));
             for (const url of imagesToDelete) {
                 try {
                     await deleteImageCloudinary(url);
@@ -502,8 +522,8 @@ const updateSellerProduct = async (req, res) => {
                 }
             }
 
-            // Update current photoUrls to retain only the ones present in imageArray
-            photoUrls = imageArray;
+            // Retain only the requested images
+            photoUrls = cleanBodyUrls;
         }
 
 
