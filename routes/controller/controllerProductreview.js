@@ -584,8 +584,7 @@ const getProductReviews = async (req, res) => {
             .sort(sortConditions)
             .lean();
 
-      
-
+    
         // Calculate review statistics
         const reviewStats = await ProductReview.aggregate([
             {
