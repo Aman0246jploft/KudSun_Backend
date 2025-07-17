@@ -9,6 +9,11 @@
             "date": 1752639862374,
             "name": "/home/jploft-php/Desktop/Setup/Kudsun/logs/2025-07-16.log",
             "hash": "a374d68a8d5fd4448a7c3baaa69e16f8420c3f1defe516133a953b898a2e7f5d"
+        },
+        {
+            "date": 1752725850227,
+            "name": "/home/jploft-php/Desktop/Setup/Kudsun/logs/2025-07-17.log",
+            "hash": "ec4f1196500104165a7a53b753c8aa314588c7e71551c361fb8ba75db5357dce"
         }
     ],
     "hashType": "sha256"

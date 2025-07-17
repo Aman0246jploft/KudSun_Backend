@@ -1123,7 +1123,7 @@ const fetchCombinedProducts = async (req, res) => {
 
             // Keep UI filters consistent
             ...(categoryId && { categoryId: toObjectId(categoryId) }),
-            ...(subCategoryIds && { subCategoryId: toObjectId(subCategoryIds) }),
+           ...(subCategoryIds && { subCategoryId: { $in: subCategoryIds } }),
             ...(condition && { condition })
         };
 

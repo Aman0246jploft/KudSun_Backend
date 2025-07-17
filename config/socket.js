@@ -120,6 +120,60 @@ async function setupSocket(server) {
                     }
                 }
 
+                // Handle product messages - validate and enrich product data
+                if (type === 'PRODUCT') {
+                    try {
+                        if (!systemMeta?.productId) {
+                            return socket.emit('error', { message: 'Product ID is required for product messages' });
+                        }
+
+                        // Fetch complete product data
+                        const SellProduct = require('../db/models/SellProduct');
+                        const product = await SellProduct.findById(systemMeta.productId)
+                            .populate('categoryId', 'name')
+                            .populate('subCategoryId', 'name')
+                            .lean();
+
+                        if (!product) {
+                            return socket.emit('error', { message: 'Product not found' });
+                        }
+
+                        // Check if product is available for purchase
+                        if (product.isSold && product.saleType === 'fixed') {
+                            return socket.emit('error', { message: 'This product is already sold' });
+                        }
+
+                        // Enrich systemMeta with complete product data
+                        systemMeta = {
+                            ...systemMeta,
+                            productId: product._id,
+                            productName: product.title,
+                            productImage: product.productImages?.[0] || null,
+                            price: product.fixedPrice || product.auctionSettings?.startingBid || 0,
+                            saleType: product.saleType,
+                            condition: product.condition,
+                            category: product.categoryId?.name,
+                            subCategory: product.subCategoryId?.name,
+                            description: product.description,
+                            isSold: product.isSold,
+                            isActive: product.isActive,
+                            // Auction specific data
+                            ...(product.saleType === 'auction' && {
+                                currentBid: product.auctionSettings?.currentBid,
+                                startingBid: product.auctionSettings?.startingBid,
+                                endTime: product.auctionSettings?.endTime,
+                                bidCount: product.auctionSettings?.bidCount || 0
+                            })
+                        };
+
+                        // Update content with product info
+                        content = `Product: ${product.title}`;
+                    } catch (error) {
+                        console.error('Product message error:', error);
+                        return socket.emit('error', { message: 'Failed to process product message' });
+                    }
+                }
+
                 // Create message
                 let newMessage = new ChatMessage({
                     chatRoom: roomId,

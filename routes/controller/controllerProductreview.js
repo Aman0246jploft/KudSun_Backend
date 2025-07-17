@@ -118,7 +118,195 @@ const createOrUpdateReview = async (req, res) => {
     }
 };
 
+const getUserReviews = async (req, res) => {
+    try {
+        const { userId } = req.query;
+        const currentUserId = req.user.userId;
+
+        // If no userId provided, use current user's ID
+        const targetUserId = userId || currentUserId;
+
+        // Parse pagination params
+        const pageNo = parseInt(req.query.pageNo) || 1;
+        const size = parseInt(req.query.size) || 10;
+        const skip = (pageNo - 1) * size;
+
+        // Count total reviews written by this user
+        const totalReviews = await ProductReview.countDocuments({
+            userId: targetUserId,
+            isDeleted: false,
+            isDisable: false
+        });
+
+        // Fetch paginated reviews written by this user
+        const reviews = await ProductReview.find({
+            userId: targetUserId,
+            isDeleted: false,
+            isDisable: false
+        })
+            .skip(skip)
+            .limit(size)
+            .populate({
+                path: 'productId',
+                select: '_id title description productImages fixedPrice saleType',
+                match: { isDeleted: false, isDisable: false }
+            })
+            .populate({
+                path: 'userId',
+                select: 'userName profileImage provinceId districtId ',
+                populate: [
+                    { path: 'provinceId', select: 'value' },
+                    { path: 'districtId', select: 'value' }
+                ]
+            })
+            .sort({ createdAt: -1 })
+            .lean();
+
+        // Filter out reviews where product is deleted/disabled
+        const filteredReviews = reviews.filter(review => review.productId !== null);
+
+        // Format response
+        const formattedReviews = filteredReviews.map(review => ({
+            _id: review._id,
+            rating: review.rating,
+            ratingText: review.ratingText,
+            reviewText: review.reviewText,
+            reviewImages: review.reviewImages,
+            raterRole: review.raterRole, // 'buyer' or 'seller'
+            product: {
+                _id: review.productId._id,
+                title: review.productId.title,
+                description: review.productId.description,
+                price: review.productId.fixedPrice,
+                saleType: review.productId.saleType,
+                images: review.productId.productImages
+            },
+            reviewer: {
+                _id: review.userId._id,
+                name: review.userId.userName,
+                image: review.userId.profileImage,
+                location: {
+                    province: review.userId.provinceId?.value,
+                    district: review.userId.districtId?.value
+                }
+            },
+            createdAt: review.createdAt,
+            updatedAt: review.updatedAt
+        }));
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, 'User reviews fetched successfully', {
+            pageNo,
+            size,
+            total: totalReviews,
+            reviews: formattedReviews
+        });
+
+    } catch (err) {
+        console.error('Get User Reviews Error:', err);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Something went wrong');
+    }
+};
+
+const getReviewsAboutUser = async (req, res) => {
+    try {
+        const { userId } = req.query;
+        
+        if (!userId) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'userId query parameter is required');
+        }
+
+        // Parse pagination params
+        const pageNo = parseInt(req.query.pageNo) || 1;
+        const size = parseInt(req.query.size) || 10;
+        const skip = (pageNo - 1) * size;
+
+        // First, find all products by this user
+        const userProducts = await SellProduct.find({
+            userId: userId,
+            isDeleted: false,
+            isDisable: false
+        }).select('_id').lean();
+
+        const productIds = userProducts.map(product => product._id);
+
+        // Count total reviews about this user's products
+        const totalReviews = await ProductReview.countDocuments({
+            productId: { $in: productIds },
+            isDeleted: false,
+            isDisable: false
+        });
+
+        // Fetch paginated reviews about this user's products
+        const reviews = await ProductReview.find({
+            productId: { $in: productIds },
+            isDeleted: false,
+            isDisable: false
+        })
+            .skip(skip)
+            .limit(size)
+            .populate({
+                path: 'productId',
+                select: '_id title description productImages fixedPrice saleType',
+                match: { isDeleted: false, isDisable: false }
+            })
+            .populate({
+                path: 'userId',
+                select: 'userName profileImage provinceId districtId  isLive is_Id_verified is_Verified_Seller averageRatting',
+                populate: [
+                    { path: 'provinceId', select: 'value' },
+                    { path: 'districtId', select: 'value' }
+                ]
+            })
+            .sort({ createdAt: -1 })
+            .lean();
+
+        // Filter out reviews where product is deleted/disabled
+        const filteredReviews = reviews.filter(review => review.productId !== null);
+
+        // Format response
+        const formattedReviews = filteredReviews.map(review => ({
+            _id: review._id,
+            rating: review.rating,
+            ratingText: review.ratingText,
+            reviewText: review.reviewText,
+            reviewImages: review.reviewImages,
+            raterRole: review.raterRole, // 'buyer' or 'seller'
+            product: {
+                _id: review.productId._id,
+                title: review.productId.title,
+                description: review.productId.description,
+                price: review.productId.fixedPrice,
+                saleType: review.productId.saleType,
+                images: review.productId.productImages
+            },
+            reviewer: {
+                _id: review.userId._id,
+                name: review.userId.userName,
+                image: review.userId.profileImage,
+                location: {
+                    province: review.userId.provinceId?.value,
+                    district: review.userId.districtId?.value
+                }
+            },
+            createdAt: review.createdAt,
+            updatedAt: review.updatedAt
+        }));
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, 'Reviews about user fetched successfully', {
+            pageNo,
+            size,
+            total: totalReviews,
+            reviews: formattedReviews
+        });
+
+    } catch (err) {
+        console.error('Get Reviews About User Error:', err);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Something went wrong');
+    }
+};
 
 router.post('/review', perApiLimiter(), upload.array('reviewImages', 3), validateRequest(createReviewValidation), createOrUpdateReview);
+router.get('/user-reviews', perApiLimiter(), getUserReviews);
+router.get('/reviews-about-user', perApiLimiter(), getReviewsAboutUser);
 
 module.exports = router;
