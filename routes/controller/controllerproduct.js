@@ -329,6 +329,7 @@ const updateSellerProduct = async (req, res) => {
             auctionSettings,
             timeZone,
             removePhotos,
+            
             isDisable
         } = req.body;
 
@@ -461,21 +462,56 @@ const updateSellerProduct = async (req, res) => {
         // For draft update, allow partial update, no strict validations
         let photoUrls = existingProduct.productImages || [];
         // Remove photos as requested
-        if (removePhotos) {
-            const photosToRemove = Array.isArray(removePhotos) ? removePhotos : [removePhotos];
-            // Delete these images from Cloudinary
-            for (const url of photosToRemove) {
-                try {
+        // if (removePhotos) {
+        //     const photosToRemove = Array.isArray(removePhotos) ? removePhotos : [removePhotos];
+        //     // Delete these images from Cloudinary
+        //     for (const url of photosToRemove) {
+        //         try {
 
-                    await deleteImageCloudinary(url);
+        //             await deleteImageCloudinary(url);
+        //         } catch (err) {
+        //             console.error("Failed to delete old image:", url, err);
+        //             // Continue anyway
+        //         }
+        //     }
+        //     // Filter out removed photos from productImages array
+        //     photoUrls = photoUrls.filter(url => !photosToRemove.includes(url));
+        // }
+
+
+        let imageArray = req.body.imageArray;
+        if (imageArray) {
+            if (typeof imageArray === 'string') {
+                try {
+                    imageArray = JSON.parse(imageArray);
                 } catch (err) {
-                    console.error("Failed to delete old image:", url, err);
-                    // Continue anyway
+                    return apiErrorRes(400, res, "Invalid imageArray format, must be JSON-parsable array.");
                 }
             }
-            // Filter out removed photos from productImages array
-            photoUrls = photoUrls.filter(url => !photosToRemove.includes(url));
+
+            if (!Array.isArray(imageArray)) {
+                return apiErrorRes(400, res, "imageArray must be an array of image URLs.");
+            }
+
+            const imagesToDelete = photoUrls.filter(url => !imageArray.includes(url));
+            for (const url of imagesToDelete) {
+                try {
+                    await deleteImageCloudinary(url);
+                } catch (err) {
+                    console.error("Failed to delete image:", url, err);
+                }
+            }
+
+            // Update current photoUrls to retain only the ones present in imageArray
+            photoUrls = imageArray;
         }
+
+
+
+
+
+
+
         if (req.files && req.files.length > 0) {
             for (const file of req.files) {
                 const imageUrl = await uploadImageCloudinary(file, 'product-images');
@@ -1123,7 +1159,7 @@ const fetchCombinedProducts = async (req, res) => {
 
             // Keep UI filters consistent
             ...(categoryId && { categoryId: toObjectId(categoryId) }),
-           ...(subCategoryIds && { subCategoryId: { $in: subCategoryIds } }),
+            ...(subCategoryIds && { subCategoryId: { $in: subCategoryIds } }),
             ...(condition && { condition })
         };
 
@@ -1438,7 +1474,7 @@ const fetchCombinedProducts = async (req, res) => {
 
 
         let subCategoryGroups = [];
-        if (categoryId ) {
+        if (categoryId) {
             subCategoryGroups = await getProductsPerSubCategory({
                 categoryId,
                 sizePerSub: 10,      // hard cap – tweak or make another query param
