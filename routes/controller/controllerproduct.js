@@ -1,4 +1,3 @@
-
 const express = require('express');
 const multer = require('multer');
 const upload = multer();
@@ -73,7 +72,8 @@ const addSellerProduct = async (req, res) => {
             originPrice,
             deliveryType,
             shippingCharge,
-            isDraft
+            isDraft,
+            draftId // Add this parameter to identify which draft to delete
         } = req.body;
 
 
@@ -293,6 +293,7 @@ const addSellerProduct = async (req, res) => {
             deliveryType,
             shippingCharge: deliveryType === DeliveryType.CHARGE_SHIPPING ? shippingCharge : undefined
         };
+        
         let savedProduct;
         if (isDraft === 'true' || isDraft === true) {
             // Save to draft collection
@@ -302,6 +303,25 @@ const addSellerProduct = async (req, res) => {
             // Save to main collection
             const product = new SellProduct(productData);
             savedProduct = await product.save();
+            
+            // If this is publishing a draft (draftId provided), delete the draft
+            if (draftId) {
+                try {
+                    const deletedDraft = await SellProductDraft.findOneAndDelete({
+                        _id: draftId,
+                        userId: req.user?.userId // Ensure user owns the draft
+                    });
+                    
+                    if (deletedDraft) {
+                        console.log(`Draft product ${draftId} deleted after publishing`);
+                    } else {
+                        console.warn(`Draft product ${draftId} not found or user doesn't own it`);
+                    }
+                } catch (draftDeleteError) {
+                    console.error("Error deleting draft after publishing:", draftDeleteError);
+                    // Don't fail the main operation if draft deletion fails
+                }
+            }
         }
 
         return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, savedProduct);
@@ -1086,7 +1106,7 @@ const getProductsPerSubCategory = async ({
             }
         },
 
-        // LEFT JOIN SellProduct ➜ 'products' (slice to 10)
+        // LEFT JOIN SellProduct ➜ 'products' (slice to 10)
         {
             $lookup: {
                 from: 'SellProduct',

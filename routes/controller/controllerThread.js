@@ -24,7 +24,8 @@ const addThread = async (req, res) => {
             max,
             tags,
             isDraft,
-            imageArray
+            imageArray,
+            draftId
         } = req.body;
         const draftMode = isDraft === 'true' || isDraft === true;
 
@@ -97,6 +98,14 @@ const addThread = async (req, res) => {
         } else {
             const thread = new Thread(threadData);
             saved = await thread.save();
+            if (draftId) {
+                try {
+                    await ThreadDraft.findByIdAndDelete(draftId);
+                } catch (err) {
+                    console.warn("⚠️ Failed to delete draft with ID:", draftId, err);
+                    // Do not block main operation on this
+                }
+            }
         }
         return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, saved);
     } catch (error) {
