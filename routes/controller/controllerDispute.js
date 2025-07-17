@@ -69,7 +69,6 @@ const createDispute = async (req, res) => {
             { $set: { disputeId: saved._id } },
             { session }
         );
-
         /* 6) history --------------------------------------------------------- */
         await logHistory({
             disputeId: saved._id,
