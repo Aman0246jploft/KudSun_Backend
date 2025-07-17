@@ -16,10 +16,10 @@ const { default: mongoose } = require('mongoose');
 
 
 const toObjectId = id => new mongoose.Types.ObjectId(id);
-  
+
 
 async function logHistory({ disputeId, event, title, note, actor }, session = null) {
-    return DisputeHistory.create([{disputeId, event, title, note, actor }], { session });
+    return DisputeHistory.create([{ disputeId, event, title, note, actor }], { session });
 }
 
 
@@ -61,7 +61,7 @@ const createDispute = async (req, res) => {
             description,
             evidence
         }], { session });
-        const saved = dispute[0];
+        let saved = dispute && Array.isArray(dispute) && dispute[0];
 
         /* 5) reference dispute on order -------------------------------------- */
         await Order.updateOne(
@@ -241,19 +241,19 @@ const adminListAll = async (req, res) => {
 const disputeByOrderId = async (req, res) => {
     try {
         const { orderId } = req.params;
-        
+
         if (!orderId) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Order ID is required');
         }
 
         // Find dispute by order ID
-        const dispute = await Dispute.findOne({ 
-            orderId: orderId, 
-            isDeleted: false 
+        const dispute = await Dispute.findOne({
+            orderId: orderId,
+            isDeleted: false
         })
-        .populate({path:"orderId"})
-        .populate('raisedBy', 'userName profileImage isLive is_Id_verified is_Verified_Seller averageRatting')
-        .populate('sellerId', 'userName profileImage isLive is_Id_verified is_Verified_Seller averageRatting').lean()
+            .populate({ path: "orderId" })
+            .populate('raisedBy', 'userName profileImage isLive is_Id_verified is_Verified_Seller averageRatting')
+            .populate('sellerId', 'userName profileImage isLive is_Id_verified is_Verified_Seller averageRatting').lean()
 
         if (!dispute) {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'No dispute found for this order');
