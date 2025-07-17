@@ -18,3 +18,5 @@ yarn-error.log
 # OS
 .DS_Store
 utils/firebase_cred.json
+
+utils/firebase_cred.json
