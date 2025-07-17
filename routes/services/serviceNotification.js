@@ -5,7 +5,6 @@ const { resultDb, momentValueFunc, objectId } = require('../../utils/globalFunct
 const { addJobToQueue, createQueue, processQueue } = require('./serviceBull');
 
 const notificationQueue = createQueue('notificationQueue');
-processQueue(notificationQueue, notificationProcessor);
 
 
 
@@ -397,6 +396,7 @@ const getUserNotification = async (payload) => {
 }
 
 
+processQueue(notificationQueue, notificationProcessor);
 
 module.exports = {
     saveNotification,

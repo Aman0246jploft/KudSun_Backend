@@ -5,10 +5,11 @@ const router = express.Router();
 const moment = require("moment")
 const { UserAddress, Transaction, Order, SellProduct, Bid, FeeSetting, User, Shipping, OrderStatusHistory, ProductReview, ChatRoom, ChatMessage, WalletTnx, SellerWithdrawl, SellerBank, PlatformRevenue, Dispute } = require('../../db');
 const { findOrCreateOneOnOneRoom } = require('../services/serviceChat');
+const { saveNotification } = require('../services/serviceNotification');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const HTTP_STATUS = require('../../utils/statusCode');
 const { toObjectId, apiSuccessRes, apiErrorRes, parseItems } = require('../../utils/globalFunction');
-const { SALE_TYPE, DEFAULT_AMOUNT, PAYMENT_METHOD, ORDER_STATUS, PAYMENT_STATUS, CHARGE_TYPE, PRICING_TYPE, SHIPPING_STATUS, TNX_TYPE } = require('../../utils/Role');
+const { SALE_TYPE, DEFAULT_AMOUNT, PAYMENT_METHOD, ORDER_STATUS, PAYMENT_STATUS, CHARGE_TYPE, PRICING_TYPE, SHIPPING_STATUS, TNX_TYPE, NOTIFICATION_TYPES } = require('../../utils/Role');
 const { default: mongoose } = require('mongoose');
 const Joi = require('joi');
 
@@ -291,6 +292,26 @@ const createOrder = async (req, res) => {
         await emitSystemMessage(io, systemMessage, room, userId, sellerId);
 
         await trackOrderRevenue(order, feeMap, session);
+
+        // Send notifications
+        const notifications = [
+            {
+                recipientId: sellerId,
+                userId: userId,
+                orderId: order._id,
+                productId: orderItems[0].productId,
+                type: NOTIFICATION_TYPES.ORDER,
+                title: "New Order Received!",
+                message: `You have received a new order for ${orderItems.length} item(s). Order amount: $${order.grandTotal.toFixed(2)}`,
+                meta: {
+                    orderNumber: order._id.toString(),
+                    itemCount: orderItems.length,
+                    totalAmount: order.grandTotal
+                },
+                redirectUrl: `/order/${order._id}`
+            }
+        ];
+        await saveNotification(notifications);
 
         return apiSuccessRes(HTTP_STATUS.CREATED, res, "Order placed successfully", order);
     } catch (err) {
@@ -649,6 +670,66 @@ const paymentCallback = async (req, res) => {
 
         const io = req.app.get('io');
         await emitSystemMessage(io, systemMessage, room, order.userId, order.sellerId);
+
+        // Send notifications for payment status
+        const paymentNotifications = [];
+        
+        if (paymentStatus === PAYMENT_STATUS.COMPLETED) {
+            // Notify buyer
+            paymentNotifications.push({
+                recipientId: order.userId,
+                userId: order.sellerId,
+                orderId: order._id,
+                productId: order.items[0].productId,
+                type: NOTIFICATION_TYPES.ORDER,
+                title: "Payment Successful!",
+                message: `Your payment of $${order.grandTotal.toFixed(2)} has been processed successfully. Your order is now being prepared.`,
+                meta: {
+                    orderNumber: order._id.toString(),
+                    amount: order.grandTotal,
+                    paymentMethod: order.paymentMethod
+                },
+                redirectUrl: `/order/${order._id}`
+            });
+            
+            // Notify seller
+            paymentNotifications.push({
+                recipientId: order.sellerId,
+                userId: order.userId,
+                orderId: order._id,
+                productId: order.items[0].productId,
+                type: NOTIFICATION_TYPES.ORDER,
+                title: "Payment Received!",
+                message: `Payment of $${order.grandTotal.toFixed(2)} has been received for your order. Please prepare the items for shipment.`,
+                meta: {
+                    orderNumber: order._id.toString(),
+                    amount: order.grandTotal,
+                    itemCount: order.items.length
+                },
+                redirectUrl: `/order/${order._id}`
+            });
+        } else if (paymentStatus === PAYMENT_STATUS.FAILED) {
+            // Notify buyer about failed payment
+            paymentNotifications.push({
+                recipientId: order.userId,
+                userId: order.sellerId,
+                orderId: order._id,
+                productId: order.items[0].productId,
+                type: NOTIFICATION_TYPES.ORDER,
+                title: "Payment Failed",
+                message: `Your payment of $${order.grandTotal.toFixed(2)} could not be processed. Please try again or use a different payment method.`,
+                meta: {
+                    orderNumber: order._id.toString(),
+                    amount: order.grandTotal,
+                    paymentMethod: order.paymentMethod
+                },
+                redirectUrl: `/payment/retry/${order._id}`
+            });
+        }
+        
+        if (paymentNotifications.length > 0) {
+            await saveNotification(paymentNotifications);
+        }
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Payment status updated", {
             orderId: order._id,
@@ -1771,6 +1852,54 @@ const updateOrderStatusBySeller = async (req, res) => {
             const io = req.app.get('io');
             await emitSystemMessage(io, systemMessage, room, order.userId, sellerId);
 
+            // Send notification to buyer about status change
+            let notificationTitle = '';
+            let notificationMessage = '';
+            
+            switch (newStatus) {
+                case ORDER_STATUS.CONFIRMED:
+                    notificationTitle = "Order Confirmed!";
+                    notificationMessage = `Your order has been confirmed by the seller and is being prepared for shipment.`;
+                    break;
+                case ORDER_STATUS.SHIPPED:
+                    notificationTitle = "Order Shipped!";
+                    notificationMessage = `Your order has been shipped and is on its way to you.`;
+                    if (req.body.trackingNumber) {
+                        notificationMessage += ` Tracking number: ${req.body.trackingNumber}`;
+                    }
+                    break;
+                case ORDER_STATUS.DELIVERED:
+                    notificationTitle = "Order Delivered!";
+                    notificationMessage = `Your order has been delivered! Please confirm receipt when you receive it.`;
+                    break;
+                case ORDER_STATUS.CANCELLED:
+                    notificationTitle = "Order Cancelled";
+                    notificationMessage = `Your order has been cancelled by the seller. You will receive a full refund if payment was already processed.`;
+                    break;
+                default:
+                    notificationTitle = "Order Status Updated";
+                    notificationMessage = `Your order status has been updated to ${newStatus}.`;
+            }
+
+            const statusNotifications = [{
+                recipientId: order.userId,
+                userId: sellerId,
+                orderId: order._id,
+                productId: order.items[0].productId,
+                type: NOTIFICATION_TYPES.ORDER,
+                title: notificationTitle,
+                message: notificationMessage,
+                meta: {
+                    orderNumber: order._id.toString(),
+                    oldStatus: currentStatus,
+                    newStatus: newStatus,
+                    trackingNumber: req.body.trackingNumber || null
+                },
+                redirectUrl: `/order/${order._id}`
+            }];
+            
+            await saveNotification(statusNotifications);
+
             return apiSuccessRes(HTTP_STATUS.OK, res, "Order status updated successfully", {
                 orderId: order._id,
                 status: order.status,
@@ -2196,6 +2325,42 @@ const updateOrderStatusByBuyer = async (req, res) => {
             const io = req.app.get('io');
             await emitSystemMessage(io, systemMessage, room, order.sellerId, buyerId);
 
+            // Send notification to seller about buyer action
+            let notificationTitle = '';
+            let notificationMessage = '';
+            
+            switch (newStatus) {
+                case ORDER_STATUS.CONFIRM_RECEIPT:
+                    notificationTitle = "Order Confirmed by Buyer!";
+                    notificationMessage = `The buyer has confirmed receipt of the order. Transaction completed successfully!`;
+                    break;
+                case ORDER_STATUS.RETURNED:
+                    notificationTitle = "Return Requested";
+                    notificationMessage = `The buyer has requested a return for this order. Please review the return request.`;
+                    break;
+                default:
+                    notificationTitle = "Order Status Updated by Buyer";
+                    notificationMessage = `The buyer has updated the order status to ${newStatus}.`;
+            }
+
+            const buyerActionNotifications = [{
+                recipientId: order.sellerId,
+                userId: buyerId,
+                orderId: order._id,
+                productId: order.items[0].productId,
+                type: NOTIFICATION_TYPES.ORDER,
+                title: notificationTitle,
+                message: notificationMessage,
+                meta: {
+                    orderNumber: order._id.toString(),
+                    newStatus: newStatus,
+                    actionBy: 'buyer'
+                },
+                redirectUrl: `/order/${order._id}`
+            }];
+            
+            await saveNotification(buyerActionNotifications);
+
             // Prepare success message
             let successMessage = "Order status updated successfully";
             if (newStatus === ORDER_STATUS.CONFIRM_RECEIPT) {
@@ -2598,6 +2763,24 @@ const addrequest = async (req, res) => {
 
             await trackWithdrawalRevenue(newRequest, withdrawfee, session);
 
+            // Send notification about withdrawal request
+            const withdrawalRequestNotifications = [{
+                recipientId: userId,
+                userId: userId,
+                type: NOTIFICATION_TYPES.SYSTEM,
+                title: "Withdrawal Request Submitted",
+                message: `Your withdrawal request for $${amount} has been submitted successfully and is pending approval.`,
+                meta: {
+                    withdrawalId: newRequest._id,
+                    amount: amount,
+                    withdrawalFee: withdrawfee,
+                    status: newRequest.status
+                },
+                redirectUrl: `/wallet/withdrawals`
+            }];
+            
+            await saveNotification(withdrawalRequestNotifications);
+
             return apiSuccessRes(
                 HTTP_STATUS.CREATED,
                 res,
@@ -2685,6 +2868,35 @@ const changeStatus = async (req, res) => {
             );
 
             await updateWithdrawalRevenue(withdrawRequest, status, session);
+            
+            // Send notification about withdrawal status change
+            let notificationTitle = '';
+            let notificationMessage = '';
+            
+            if (status === 'Approved') {
+                notificationTitle = "Withdrawal Request Approved!";
+                notificationMessage = `Your withdrawal request for $${withdrawRequest.amount} has been approved and processed.`;
+            } else if (status === 'Rejected') {
+                notificationTitle = "Withdrawal Request Rejected";
+                notificationMessage = `Your withdrawal request for $${withdrawRequest.amount} has been rejected. The amount has been refunded to your wallet.`;
+            }
+            
+            const withdrawalStatusNotifications = [{
+                recipientId: withdrawRequest.userId,
+                userId: withdrawRequest.userId,
+                type: NOTIFICATION_TYPES.SYSTEM,
+                title: notificationTitle,
+                message: notificationMessage,
+                meta: {
+                    withdrawalId: withdrawRequest._id,
+                    amount: withdrawRequest.amount,
+                    status: status,
+                    processedBy: 'admin'
+                },
+                redirectUrl: `/wallet/withdrawals`
+            }];
+            
+            await saveNotification(withdrawalStatusNotifications);
         });
 
         return apiSuccessRes(HTTP_STATUS.OK, res, `Withdraw request ${status} successfully`);
@@ -3171,6 +3383,28 @@ const markSellerAsPaid = async (req, res) => {
             // Emit socket events
             const io = req.app.get('io');
             await emitSystemMessage(io, systemMessage, room, order.userId, order.sellerId);
+
+            // Send notification to seller about manual payout
+            const payoutNotifications = [{
+                recipientId: order.sellerId._id,
+                userId: order.userId,
+                orderId: order._id,
+                productId: order.items[0].productId,
+                type: NOTIFICATION_TYPES.ORDER,
+                title: "Payment Processed!",
+                message: `Your earnings of $${(amountToWithdraw - withdrawalFee).toFixed(2)} for order ${order._id.toString().slice(-6)} have been processed and withdrawn from your wallet.`,
+                meta: {
+                    orderNumber: order._id.toString(),
+                    withdrawalAmount: amountToWithdraw,
+                    withdrawalFee: withdrawalFee,
+                    netAmount: amountToWithdraw - withdrawalFee,
+                    transactionId: withdrawalTnx._id,
+                    processedBy: 'admin'
+                },
+                redirectUrl: `/wallet/transactions`
+            }];
+            
+            await saveNotification(payoutNotifications);
 
             return apiSuccessRes(HTTP_STATUS.OK, res, "Seller withdrawal processed successfully", {
                 orderId: order._id,

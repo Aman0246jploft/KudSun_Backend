@@ -128,7 +128,7 @@ async function setupSocket(server) {
                         }
 
                         // Fetch complete product data
-                        const SellProduct = require('../db/models/SellProduct');
+                        const SellProduct = require('../db/models/SellProducts');
                         const product = await SellProduct.findById(systemMeta.productId)
                             .populate('categoryId', 'name')
                             .populate('subCategoryId', 'name')

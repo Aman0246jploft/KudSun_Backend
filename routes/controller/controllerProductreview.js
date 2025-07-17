@@ -466,7 +466,7 @@ const getReviewersList = async (req, res) => {
             //     lastReviewDate: item.lastReviewDate,
             //     raterRoles: item.raterRoles // ['buyer', 'seller'] - shows what roles this user has reviewed as
             // },
-            reviews: item?.reviews&&item?.reviews[0]
+            reviews: item?.reviews && item?.reviews[0]
             // .map(review => ({
             //     _id: review._id,
             //     rating: review.rating,
@@ -544,10 +544,18 @@ const getProductReviews = async (req, res) => {
             isDeleted: false,
             isDisable: false
         })
-            .populate('userId', 'userName profileImage provinceId districtId averageRatting is_Verified_Seller')
+            .populate({
+                path: 'userId',
+                select: 'userName profileImage provinceId districtId averageRatting is_Verified_Seller',
+                populate: [
+                    { path: 'provinceId', select: 'value' },
+                    { path: 'districtId', select: 'value' }
+                ]
+            })
             .populate('categoryId', 'name')
             .populate('subCategoryId', 'name')
             .lean();
+
 
         if (!product) {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Product not found');
@@ -575,6 +583,8 @@ const getProductReviews = async (req, res) => {
             })
             .sort(sortConditions)
             .lean();
+
+      
 
         // Calculate review statistics
         const reviewStats = await ProductReview.aggregate([
@@ -650,6 +660,7 @@ const getProductReviews = async (req, res) => {
                 }
             } : null
         }));
+
 
         // Format product details
         const productDetails = {
