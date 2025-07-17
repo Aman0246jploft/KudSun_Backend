@@ -5,62 +5,75 @@ const { resultDb, momentValueFunc, objectId } = require('../../utils/globalFunct
 const { addJobToQueue, createQueue, processQueue } = require('./serviceBull');
 
 const notificationQueue = createQueue('notificationQueue');
+processQueue(notificationQueue, notificationProcessor);
+
+
+
+
+
 const saveNotification = async (payload) => {
     try {
         if (!Array.isArray(payload) || payload.length === 0) {
             return resultDb(SERVER_ERROR_CODE, "Payload must be a non-empty array");
         }
-        payload.forEach(userNotification => {
-            addJobToQueue(notificationQueue, userNotification)
-        });
-        return resultDb(SUCCESS, { message: "Notifications added to the queue for saving one by one" });
+
+        for (const notification of payload) {
+            await addJobToQueue(notificationQueue, notification);
+        }
+
+        return resultDb(SUCCESS, { message: "Notifications added to the queue for processing" });
     } catch (error) {
         console.error("Error saving notifications:", error);
-        if (error.code) {
-            return resultDb(error.code, DATA_NULL);
-        }
-        return resultDb(SERVER_ERROR_CODE, DATA_NULL);
+        return resultDb(error.code || SERVER_ERROR_CODE, DATA_NULL);
     }
 };
 
 const notificationProcessor = async (job) => {
     try {
-        const {
-            recipientId,
-            type,
-            userId,
-            chatId,
-            orderId,
-            title,
-            message,
-            meta,
-            imageUrl
-        } = job.data;
         const userNotification = job.data;
-        if (userNotification && userNotification.userId && userNotification.title && userNotification.message) {
-            let userInfo = await User.findById(userId).select('fcmToken')
-            if (userInfo.fcmToken) {
-                await sendFirebaseNotification({ ...userNotification, token: userInfo.fcmToken, title: userNotification.title, body: userNotification.message, imageUrl: imageUrl || "" })
-            }
-            await Notification.create({
-                recipientId,
-                type,
-                userId,
-                chatId,
-                orderId,
-                title,
-                message,
-                meta
-            });
-            // console.log("savedNotification", savedNotification, userNotification);
-        } else {
+
+        // Validate required fields
+        const { userId, title, message } = userNotification;
+        if (!userId || !title || !message) {
             console.error("Invalid notification format in queue", userNotification);
+            return;
         }
+        // Send Firebase notification if token exists
+        const userInfo = await User.findById(userId).select('fcmToken');
+        if (userInfo?.fcmToken) {
+            await sendFirebaseNotification({
+                token: userInfo.fcmToken,
+                title,
+                body: message,
+                imageUrl: userNotification.imageUrl || '',
+                ...userNotification // Pass the rest of the meta if needed
+            });
+        }
+
+        // Save notification in DB
+        await Notification.create({
+            recipientId: userNotification.recipientId,
+            type: userNotification.type,
+            userId: userNotification.userId,
+            chatId: userNotification.chatId,
+            orderId: userNotification.orderId,
+            productId: userNotification.productId,
+            title: userNotification.title,
+            message: userNotification.message,
+            meta: userNotification.meta || {},
+            activityType: userNotification.activityType || null,
+            redirectUrl: userNotification.redirectUrl || null
+        });
+
     } catch (error) {
         console.error("Error processing notification job:", error);
-        throw error;
+        throw error; // Let Bull handle retries if configured
     }
 };
+
+
+
+
 
 const getAllNotificationByUserId = async (userId) => {
     try {
@@ -383,10 +396,12 @@ const getUserNotification = async (payload) => {
     }
 }
 
-processQueue(notificationQueue, notificationProcessor);
+
 
 module.exports = {
     saveNotification,
+
+
     getAllNotificationByUserId,
     getNotificationByUserIdListed,
     getNotificationList,

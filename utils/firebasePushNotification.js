@@ -1,23 +1,44 @@
 const admin = require("./createFirebaseUser");
-async function sendFirebaseNotification(data) {
-    let { token, title, body, imageUrl } = data
+
+async function sendFirebaseNotification({ token, title, body, imageUrl, ...customData }) {
     try {
+        if (!token || !title || !body) {
+            console.warn("Missing required fields for notification.");
+            return;
+        }
         const message = {
-            token: token,
+            token,
             notification: {
-                title: title,
-                body: body,
-                image: imageUrl || undefined,
+                title,
+                body,
+                ...(imageUrl && { image: imageUrl }),
+            },
+            android: {
+                priority: "high"
+            },
+            apns: {
+                payload: {
+                    aps: {
+                        sound: "default"
+                    }
+                }
+            },
+            data: {
+                // Convert everything to strings because FCM `data` must be string values
+                ...Object.entries(customData).reduce((acc, [key, val]) => {
+                    acc[key] = typeof val === 'object' ? JSON.stringify(val) : String(val ?? '');
+                    return acc;
+                }, {})
             }
         };
 
-        await admin.messaging().send(message);
+        const response = await admin.messaging().send(message);
+        console.log("Notification sent:", response);
     } catch (error) {
-        console.error('Error sending notification:', error.message);
-        // Handle the error appropriately, such as logging or retry logic
+        console.error("Error sending Firebase notification:", error.message);
     }
 }
 
 module.exports = {
     sendFirebaseNotification
-}
+};

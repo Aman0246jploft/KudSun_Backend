@@ -4,10 +4,11 @@ const { Schema } = mongoose;
 
 const NotificationSchema = new Schema({
     // The recipient user of this notification
+    //senderId
     recipientId: {
         type: Schema.Types.ObjectId,
         ref: 'User',
-        required: true,
+
         index: true
     },
 
@@ -20,6 +21,7 @@ const NotificationSchema = new Schema({
     },
 
     // Related fields based on notification type
+    //reciverId
     userId: {  // For type === 'user' or sender of any notification
         type: Schema.Types.ObjectId,
         ref: 'User',
@@ -30,7 +32,7 @@ const NotificationSchema = new Schema({
         type: Schema.Types.ObjectId,
         ref: 'ChatRoom',
     },
-    
+
     orderId: { // For type === 'order'
         type: Schema.Types.ObjectId,
         ref: 'Order',
@@ -86,7 +88,24 @@ const NotificationSchema = new Schema({
         default: Date.now,
     }
 }, {
-    timestamps: true
+    timestamps: true,
+    toJSON: {
+        transform(doc, ret) {
+            // Ensure all missing fields are set to null explicitly
+            const fields = [
+                'userId', 'chatId', 'orderId', 'productId',
+                'activityType', 'redirectUrl', 'meta'
+            ];
+
+            for (const field of fields) {
+                if (ret[field] === undefined) {
+                    ret[field] = null;
+                }
+            }
+
+            return ret;
+        }
+    }
 });
 
 // Pre-save hook to update updatedAt

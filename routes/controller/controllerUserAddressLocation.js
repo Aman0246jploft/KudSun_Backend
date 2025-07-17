@@ -11,7 +11,6 @@ const perApiLimiter = require('../../middlewares/rateLimiter');
 const HTTP_STATUS = require('../../utils/statusCode');
 const { toObjectId, apiSuccessRes, apiErrorRes } = require('../../utils/globalFunction');
 
-
 const createAddress = async (req, res) => {
     try {
         const userId = req?.user?.userId;
