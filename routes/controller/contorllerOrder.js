@@ -270,7 +270,7 @@ const createOrder = async (req, res) => {
             }
         });
 
-        console.log(12345, "systemMessage", systemMessage)
+
 
 
         await systemMessage.save({ session });
@@ -861,7 +861,7 @@ const previewOrder = async (req, res) => {
 
         let totalAmount = 0;
         const previewItems = [];
-        console.log("itemsitems", items)
+
 
         for (const item of items) {
             const product = await SellProduct.findOne({ _id: toObjectId(item.productId), isDeleted: false, isDisable: false }).populate([{
@@ -1273,11 +1273,11 @@ const cancelOrderAndRelistProducts = async (req, res) => {
                 { session }
             );
 
-            console.log("Product relist result:", {
-                totalProducts: validProductIds.length,
-                matchedCount: productUpdateResult.matchedCount,
-                modifiedCount: productUpdateResult.modifiedCount
-            });
+            // console.log("Product relist result:", {
+            //     totalProducts: validProductIds.length,
+            //     matchedCount: productUpdateResult.matchedCount,
+            //     modifiedCount: productUpdateResult.modifiedCount
+            // });
 
             // Step 6: Update order status to CANCELLED (if not already cancelled)
             let orderUpdateResult = null;
@@ -1329,11 +1329,11 @@ const cancelOrderAndRelistProducts = async (req, res) => {
             // Handle write conflicts with retry logic
             if (err.errorLabels && err.errorLabels.includes('TransientTransactionError')) {
                 attempt++;
-                console.log(`Write conflict detected. Retry attempt ${attempt}/${maxRetries}`, {
-                    orderId: req.body.orderId,
-                    sellerId: req.user?.userId,
-                    errorCode: err.code
-                });
+                // console.log(`Write conflict detected. Retry attempt ${attempt}/${maxRetries}`, {
+                //     orderId: req.body.orderId,
+                //     sellerId: req.user?.userId,
+                //     errorCode: err.code
+                // });
 
                 if (attempt < maxRetries) {
                     // Exponential backoff
@@ -2584,7 +2584,7 @@ const addrequest = async (req, res) => {
                 }
             }
             const totalDeduction = Number(amount) + Number(withdrawfee);
-            console.log("totalDeductiontotalDeduction", amount, withdrawfee, totalDeduction)
+            // console.log("totalDeductiontotalDeduction", amount, withdrawfee, totalDeduction)
 
             if (totalDeduction > user.walletBalance) {
                 throw new Error("Insufficient wallet balance including withdrawal fee");

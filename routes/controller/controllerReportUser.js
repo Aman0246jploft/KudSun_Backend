@@ -62,7 +62,7 @@ const softDelete = async (req, res) => {
         if (Array.isArray(report.image) && report.image.length > 0) {
             for (const imageUrl of report.image) {
                 try {
-                    console.log('Deleting image:', imageUrl);
+                    // console.log('Deleting image:', imageUrl);
                     await deleteImageCloudinary(imageUrl);
                 } catch (imgErr) {
                     console.error('Failed to delete image from Cloudinary:', imageUrl, imgErr);

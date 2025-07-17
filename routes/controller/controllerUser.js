@@ -31,7 +31,7 @@ const uploadfile = async (req, res) => {
             if (!validImageTypes.includes(req.file.mimetype)) {
             } else {
                 const imageResult = await uploadImageCloudinary(req.file, 'profile-images');
-                console.log("imageResult", imageResult)
+                // console.log("imageResult", imageResult)
                 if (!imageResult) {
                     return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Image upload failed");
                 }
@@ -416,7 +416,7 @@ const loginStepTwoPassword = async (req, res) => {
             user.loginOtpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 mins
             await user.save();
 
-            console.log(`OTP for ${user.phoneNumber}: ${otp}`);
+            // console.log(`OTP for ${user.phoneNumber}: ${otp}`);
 
             return apiSuccessRes(HTTP_STATUS.OK, res, "OTP sent");
         }
@@ -548,7 +548,7 @@ const resendLoginOtp = async (req, res) => {
         user.loginOtpExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
         await user.save();
 
-        console.log(`Resent OTP to ${user.phoneNumber}: ${newOtp}`);
+        // console.log(`Resent OTP to ${user.phoneNumber}: ${newOtp}`);
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "OTP resent successfully");
 
@@ -1097,7 +1097,7 @@ const resendResetOtp = async (req, res) => {
 const requestResetOtpByEmail = async (req, res) => {
     try {
         const { email } = req.body;
-        console.log(`[RESET OTP] Request received for email: ${email}`);
+        // console.log(`[RESET OTP] Request received for email: ${email}`);
 
         if (!email) {
             console.warn(`[RESET OTP] Missing email`);
@@ -1114,10 +1114,10 @@ const requestResetOtpByEmail = async (req, res) => {
         const redisValue = JSON.stringify({ otp, email });
 
         await setKeyWithTime(`reset:${email}`, redisValue, 5 * 60);
-        console.log(`[RESET OTP] OTP set in Redis for ${email}: ${otp}`);
+        // console.log(`[RESET OTP] OTP set in Redis for ${email}: ${otp}`);
 
         // TODO: Send OTP via email (e.g., sendEmailOtp(email, otp))
-        console.log(`[RESET OTP] OTP (to be sent): ${otp}`);
+        // console.log(`[RESET OTP] OTP (to be sent): ${otp}`);
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "OTP sent for password reset");
     } catch (error) {
@@ -1129,10 +1129,10 @@ const requestResetOtpByEmail = async (req, res) => {
 const verifyResetOtpByEmail = async (req, res) => {
     try {
         const { email, otp } = req.body;
-        console.log(`[VERIFY OTP] Request received for email: ${email}, OTP: ${otp}`);
+        // console.log(`[VERIFY OTP] Request received for email: ${email}, OTP: ${otp}`);
 
         if (!email || !otp) {
-            console.warn(`[VERIFY OTP] Missing email or OTP`);
+            // console.warn(`[VERIFY OTP] Missing email or OTP`);
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Email and OTP are required");
         }
 
@@ -1150,7 +1150,7 @@ const verifyResetOtpByEmail = async (req, res) => {
 
         await setKeyWithTime(`reset-verified:${email}`, 'true', 10 * 60);
         await removeKey(`reset:${email}`);
-        console.log(`[VERIFY OTP] OTP verified successfully for email: ${email}`);
+        // console.log(`[VERIFY OTP] OTP verified successfully for email: ${email}`);
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "OTP verified successfully");
     } catch (error) {
@@ -1162,10 +1162,10 @@ const verifyResetOtpByEmail = async (req, res) => {
 const resetPasswordByEmail = async (req, res) => {
     try {
         const { email, newPassword, confirmPassword } = req.body;
-        console.log(`[RESET PASSWORD] Request received for email: ${email}`);
+        // console.log(`[RESET PASSWORD] Request received for email: ${email}`);
 
         const isVerified = await getKey(`reset-verified:${email}`);
-        console.log(`[RESET PASSWORD] Redis verification status for ${email}:`, isVerified);
+        // console.log(`[RESET PASSWORD] Redis verification status for ${email}:`, isVerified);
 
         if (isVerified.statusCode !== CONSTANTS.SUCCESS) {
             console.warn(`[RESET PASSWORD] OTP not verified or expired for ${email}`);
@@ -1187,7 +1187,7 @@ const resetPasswordByEmail = async (req, res) => {
         await user.save();
         await removeKey(`reset-verified:${email}`);
 
-        console.log(`[RESET PASSWORD] Password reset successful for email: ${email}`);
+        // console.log(`[RESET PASSWORD] Password reset successful for email: ${email}`);
         return apiSuccessRes(HTTP_STATUS.OK, res, "Password has been reset successfully");
     } catch (error) {
         console.error(`[RESET PASSWORD] Error:`, error);
@@ -1198,7 +1198,7 @@ const resetPasswordByEmail = async (req, res) => {
 const resendResetOtpByEmail = async (req, res) => {
     try {
         const { email } = req.body;
-        console.log(`[RESEND OTP] Request received for email: ${email}`);
+        // console.log(`[RESEND OTP] Request received for email: ${email}`);
 
         if (!email) {
             console.warn(`[RESEND OTP] Missing email`);
@@ -1215,10 +1215,10 @@ const resendResetOtpByEmail = async (req, res) => {
         const redisValue = JSON.stringify({ otp, email });
 
         await setKeyWithTime(`reset:${email}`, redisValue, 5 * 60);
-        console.log(`[RESEND OTP] New OTP set for ${email}: ${otp}`);
+        // console.log(`[RESEND OTP] New OTP set for ${email}: ${otp}`);
 
         // TODO: Send OTP via email (e.g., sendEmailOtp(email, otp))
-        console.log(`[RESEND OTP] OTP (to be sent): ${otp}`);
+        // console.log(`[RESEND OTP] OTP (to be sent): ${otp}`);
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "OTP resent successfully");
     } catch (error) {
@@ -1407,7 +1407,7 @@ const getProfile = async (req, res) => {
             );
         }
 
-        console.log("user", user)
+
 
         const [myThreadCount, productListed, boughtCount, sellCount, ThreadDraftCount, ProductDraftCount, ThreadLikes, productLike] = await Promise.all([
 
@@ -1583,7 +1583,7 @@ const requestPhoneNumberUpdateOtp = async (req, res) => {
         const otp = process.env.NODE_ENV !== 'production' ? '123456' : generateOTP();
 
         await setKeyWithTime(`verify-update:${userId}:${phoneNumber}`, otp, 5);
-        console.log(`verify-update:${userId}:${phoneNumber}`, otp)
+
         return apiSuccessRes(HTTP_STATUS.OK, res, "OTP sent successfully");
     } catch (error) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to send OTP", error.message);
@@ -1601,7 +1601,7 @@ const verifyPhoneNumberUpdateOtp = async (req, res) => {
 
         const redisKey = `verify-update:${userId}:${phoneNumber}`;
         const savedOtp = await getKey(redisKey);
-        console.log("redisKeysss", redisKey, savedOtp)
+
 
 
         if (!savedOtp?.data) {
@@ -2289,7 +2289,7 @@ const updatePassword = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, 'User not found');
         }
 
-        console.log("111111", user, user?.password)
+
 
         // ✅ Continue with password verification
         const isMatch = await verifyPassword(

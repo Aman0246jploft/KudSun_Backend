@@ -384,7 +384,7 @@ const addParameterValue = async (req, res) => {
         const { categoryId, subCategoryId, parameterKey, value } = req.body;
 
         const category = await getDocumentById(Category, categoryId);
-        console.log("category111", category)
+
         if (category.statusCode !== CONSTANTS.SUCCESS) {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Category not found');
         }

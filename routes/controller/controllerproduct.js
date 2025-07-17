@@ -471,13 +471,13 @@ const updateSellerProduct = async (req, res) => {
                     return apiErrorRes(400, res, "Auction settings must include either (endDate & endTime) or duration.");
                 }
 
-                console.log('🔍 Update Timezone Debug:', {
-                    timezone: timeZone,
-                    auctionSettingsTimeZone: auctionSettings.timeZone,
-                    finalTimezone: auctionTimezone,
-                    endDate: endDate,
-                    endTime: endTime
-                });
+                // console.log('🔍 Update Timezone Debug:', {
+                //     timezone: timeZone,
+                //     auctionSettingsTimeZone: auctionSettings.timeZone,
+                //     finalTimezone: auctionTimezone,
+                //     endDate: endDate,
+                //     endTime: endTime
+                // });
 
 
                 // auctionSettings.biddingEndsAt = biddingEndsAtDateTime.toJSDate();
