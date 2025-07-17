@@ -1116,7 +1116,6 @@ router.get('/listCategoriesForAdmin', hasPermission([roleId.SUPER_ADMIN]), perAp
 // router.post('/approveParameterValueByAdmin', hasPermission([roleId.SUPER_ADMIN]), perApiLimiter(), approveParameterValueByAdmin);
 
 //for user update
-
 router.post('/deleteParameterValue', perApiLimiter(), upload.none(), deleteParameterValue);
 router.get('/list', perApiLimiter(), listCategories);
 
