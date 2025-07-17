@@ -53,6 +53,7 @@ const createOrUpdateReview = async (req, res) => {
         let review = await ProductReview.findOne({ userId, productId, raterRole });
         let oldRating = 0;
         let isNewReview = false;
+        const otheruserId = (raterRole === 'buyer') ? order.sellerId : order.userId;
 
         if (review) {
             // Update existing review
@@ -68,6 +69,7 @@ const createOrUpdateReview = async (req, res) => {
             // Create new review
             review = await ProductReview.create({
                 userId,
+                otheruserId,
                 productId,
                 raterRole,
                 rating,
@@ -209,11 +211,7 @@ const getUserReviews = async (req, res) => {
 
 const getReviewsAboutUser = async (req, res) => {
     try {
-        const { userId } = req.query;
-        
-        if (!userId) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'userId query parameter is required');
-        }
+        const userId = req.query.userId || req.user.userId
 
         // Parse pagination params
         const pageNo = parseInt(req.query.pageNo) || 1;
@@ -305,8 +303,414 @@ const getReviewsAboutUser = async (req, res) => {
     }
 };
 
+const getReviewersList = async (req, res) => {
+    try {
+        const userId = req.query.userId || req.user.userId;
+
+        // Parse pagination params
+        const pageNo = parseInt(req.query.pageNo) || 1;
+        const size = parseInt(req.query.size) || 10;
+        const skip = (pageNo - 1) * size;
+
+        // First, find all products by this user
+        const userProducts = await SellProduct.find({
+            userId: userId,
+            isDeleted: false,
+            isDisable: false
+        }).select('_id').lean();
+
+        const productIds = userProducts.map(product => product._id);
+
+        // Get unique reviewers who have reviewed this user's products with their reviews
+        const reviewersAggregation = await ProductReview.aggregate([
+            {
+                $match: {
+                    productId: { $in: productIds },
+                    isDeleted: false,
+                    isDisable: false
+                }
+            },
+            {
+                $lookup: {
+                    from: 'SellProduct',
+                    localField: 'productId',
+                    foreignField: '_id',
+                    as: 'productDetails'
+                }
+            },
+            {
+                $unwind: '$productDetails'
+            },
+            {
+                $group: {
+                    _id: '$userId',
+                    totalReviews: { $sum: 1 },
+                    averageRating: { $avg: '$rating' },
+                    lastReviewDate: { $max: '$createdAt' },
+                    raterRoles: { $addToSet: '$raterRole' },
+                    reviews: {
+                        $push: {
+                            _id: '$_id',
+                            rating: '$rating',
+                            ratingText: '$ratingText',
+                            reviewText: '$reviewText',
+                            reviewImages: '$reviewImages',
+                            raterRole: '$raterRole',
+                            createdAt: '$createdAt',
+                            updatedAt: '$updatedAt',
+                            product: {
+                                _id: '$productDetails._id',
+                                title: '$productDetails.title',
+                                description: '$productDetails.description',
+                                fixedPrice: '$productDetails.fixedPrice',
+                                saleType: '$productDetails.saleType',
+                                productImages: '$productDetails.productImages'
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                $lookup: {
+                    from: 'User',
+                    localField: '_id',
+                    foreignField: '_id',
+                    as: 'userDetails'
+                }
+            },
+            {
+                $unwind: '$userDetails'
+            },
+            {
+                $lookup: {
+                    from: 'Location',
+                    localField: 'userDetails.provinceId',
+                    foreignField: '_id',
+                    as: 'province'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'Location',
+                    localField: 'userDetails.districtId',
+                    foreignField: '_id',
+                    as: 'district'
+                }
+            },
+            {
+                $project: {
+                    _id: 1,
+                    totalReviews: 1,
+                    averageRating: { $round: ['$averageRating', 1] },
+                    lastReviewDate: 1,
+                    raterRoles: 1,
+                    reviews: {
+                        $sortArray: {
+                            input: '$reviews',
+                            sortBy: { createdAt: -1 }
+                        }
+                    },
+                    reviewer: {
+                        _id: '$userDetails._id',
+                        userName: '$userDetails.userName',
+                        profileImage: '$userDetails.profileImage',
+                        isLive: '$userDetails.isLive',
+                        is_Id_verified: '$userDetails.is_Id_verified',
+                        is_Verified_Seller: '$userDetails.is_Verified_Seller',
+                        averageRatting: '$userDetails.averageRatting',
+                        location: {
+                            province: { $arrayElemAt: ['$province.value', 0] },
+                            district: { $arrayElemAt: ['$district.value', 0] }
+                        }
+                    }
+                }
+            },
+            {
+                $sort: { lastReviewDate: -1 }
+            },
+            {
+                $skip: skip
+            },
+            {
+                $limit: size
+            }
+        ]);
+
+        // Count total unique reviewers
+        const totalReviewersCount = await ProductReview.aggregate([
+            {
+                $match: {
+                    productId: { $in: productIds },
+                    isDeleted: false,
+                    isDisable: false
+                }
+            },
+            {
+                $group: {
+                    _id: '$userId'
+                }
+            },
+            {
+                $count: 'total'
+            }
+        ]);
+
+        const totalReviewers = totalReviewersCount.length > 0 ? totalReviewersCount[0].total : 0;
+
+        // Format response
+        const formattedReviewers = reviewersAggregation.map(item => ({
+            reviewer: item.reviewer,
+            // reviewStats: {
+            //     totalReviews: item.totalReviews,
+            //     averageRating: item.averageRating,
+            //     lastReviewDate: item.lastReviewDate,
+            //     raterRoles: item.raterRoles // ['buyer', 'seller'] - shows what roles this user has reviewed as
+            // },
+            reviews: item.reviews.map(review => ({
+                _id: review._id,
+                rating: review.rating,
+                ratingText: review.ratingText,
+                reviewText: review.reviewText,
+                reviewImages: review.reviewImages,
+                raterRole: review.raterRole,
+                createdAt: review.createdAt,
+                updatedAt: review.updatedAt,
+                product: {
+                    _id: review.product._id,
+                    title: review.product.title,
+                    description: review.product.description,
+                    price: review.product.fixedPrice,
+                    saleType: review.product.saleType,
+                    images: review.product.productImages
+                }
+            }))
+        }));
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, 'Reviewers list fetched successfully', {
+            pageNo,
+            size,
+            total: totalReviewers,
+            reviewers: formattedReviewers
+        });
+
+    } catch (err) {
+        console.error('Get Reviewers List Error:', err);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Something went wrong');
+    }
+};
+
+const getProductReviews = async (req, res) => {
+    try {
+        const { productId } = req.params;
+        
+        if (!productId) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Product ID is required');
+        }
+
+        // Parse pagination params
+        const pageNo = parseInt(req.query.pageNo) || 1;
+        const size = parseInt(req.query.size) || 10;
+        const skip = (pageNo - 1) * size;
+
+        // Parse filter params
+        const { raterRole, rating, sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
+
+        // Build match conditions
+        const matchConditions = {
+            productId: toObjectId(productId),
+            isDeleted: false,
+            isDisable: false
+        };
+
+        if (raterRole) {
+            matchConditions.raterRole = raterRole; // 'buyer' or 'seller'
+        }
+
+        if (rating) {
+            matchConditions.rating = parseInt(rating);
+        }
+
+        // Build sort conditions
+        const sortConditions = {};
+        sortConditions[sortBy] = sortOrder === 'asc' ? 1 : -1;
+
+        // Count total reviews for this product
+        const totalReviews = await ProductReview.countDocuments(matchConditions);
+
+        // Get product details first
+        const product = await SellProduct.findOne({
+            _id: productId,
+            isDeleted: false,
+            isDisable: false
+        })
+        .populate('userId', 'userName profileImage provinceId districtId averageRatting is_Verified_Seller')
+        .populate('categoryId', 'name')
+        .populate('subCategoryId', 'name')
+        .lean();
+
+        if (!product) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Product not found');
+        }
+
+        // Fetch paginated reviews for this product
+        const reviews = await ProductReview.find(matchConditions)
+            .skip(skip)
+            .limit(size)
+            .populate({
+                path: 'userId',
+                select: 'userName profileImage provinceId districtId isLive is_Id_verified is_Verified_Seller averageRatting averageBuyerRatting totalRatingCount totalBuyerRatingCount',
+                populate: [
+                    { path: 'provinceId', select: 'value' },
+                    { path: 'districtId', select: 'value' }
+                ]
+            })
+            .populate({
+                path: 'otheruserId',
+                select: 'userName profileImage provinceId districtId isLive is_Id_verified is_Verified_Seller averageRatting averageBuyerRatting',
+                populate: [
+                    { path: 'provinceId', select: 'value' },
+                    { path: 'districtId', select: 'value' }
+                ]
+            })
+            .sort(sortConditions)
+            .lean();
+
+        // Calculate review statistics
+        const reviewStats = await ProductReview.aggregate([
+            {
+                $match: {
+                    productId: toObjectId(productId),
+                    isDeleted: false,
+                    isDisable: false
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalReviews: { $sum: 1 },
+                    averageRating: { $avg: '$rating' },
+                    buyerReviews: {
+                        $sum: { $cond: [{ $eq: ['$raterRole', 'buyer'] }, 1, 0] }
+                    },
+                    sellerReviews: {
+                        $sum: { $cond: [{ $eq: ['$raterRole', 'seller'] }, 1, 0] }
+                    },
+                    ratingDistribution: {
+                        $push: '$rating'
+                    }
+                }
+            }
+        ]);
+
+        // Calculate rating distribution
+        let ratingDistribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+        if (reviewStats.length > 0 && reviewStats[0].ratingDistribution) {
+            reviewStats[0].ratingDistribution.forEach(rating => {
+                ratingDistribution[rating] = (ratingDistribution[rating] || 0) + 1;
+            });
+        }
+
+        // Format response
+        const formattedReviews = reviews.map(review => ({
+            _id: review._id,
+            rating: review.rating,
+            ratingText: review.ratingText,
+            reviewText: review.reviewText,
+            reviewImages: review.reviewImages || [],
+            raterRole: review.raterRole, // 'buyer' or 'seller'
+            createdAt: review.createdAt,
+            updatedAt: review.updatedAt,
+            reviewer: {
+                _id: review.userId._id,
+                userName: review.userId.userName,
+                profileImage: review.userId.profileImage,
+                isLive: review.userId.isLive,
+                is_Id_verified: review.userId.is_Id_verified,
+                is_Verified_Seller: review.userId.is_Verified_Seller,
+                averageRating: review.raterRole === 'seller' ? review.userId.averageRatting : review.userId.averageBuyerRatting,
+                totalRatings: review.raterRole === 'seller' ? review.userId.totalRatingCount : review.userId.totalBuyerRatingCount,
+                location: {
+                    province: review.userId.provinceId?.value,
+                    district: review.userId.districtId?.value
+                }
+            },
+            otherUser: review.otheruserId ? {
+                _id: review.otheruserId._id,
+                userName: review.otheruserId.userName,
+                profileImage: review.otheruserId.profileImage,
+                isLive: review.otheruserId.isLive,
+                is_Id_verified: review.otheruserId.is_Id_verified,
+                is_Verified_Seller: review.otheruserId.is_Verified_Seller,
+                averageRating: review.otheruserId.averageRatting,
+                averageBuyerRating: review.otheruserId.averageBuyerRatting,
+                location: {
+                    province: review.otheruserId.provinceId?.value,
+                    district: review.otheruserId.districtId?.value
+                }
+            } : null
+        }));
+
+        // Format product details
+        const productDetails = {
+            _id: product._id,
+            title: product.title,
+            description: product.description,
+            productImages: product.productImages || [],
+            fixedPrice: product.fixedPrice,
+            auctionStartPrice: product.auctionStartPrice,
+            saleType: product.saleType,
+            condition: product.condition,
+            category: product.categoryId?.name,
+            subCategory: product.subCategoryId?.name,
+            createdAt: product.createdAt,
+            seller: {
+                _id: product.userId._id,
+                userName: product.userId.userName,
+                profileImage: product.userId.profileImage,
+                averageRating: product.userId.averageRatting,
+                is_Verified_Seller: product.userId.is_Verified_Seller,
+                location: {
+                    province: product.userId.provinceId?.value,
+                    district: product.userId.districtId?.value
+                }
+            }
+        };
+
+        const stats = reviewStats.length > 0 ? reviewStats[0] : {
+            totalReviews: 0,
+            averageRating: 0,
+            buyerReviews: 0,
+            sellerReviews: 0
+        };
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, 'Product reviews fetched successfully', {
+            product: productDetails,
+            // reviewStats: {
+            //     totalReviews: stats.totalReviews,
+            //     averageRating: Math.round(stats.averageRating * 10) / 10 || 0,
+            //     buyerReviews: stats.buyerReviews,
+            //     sellerReviews: stats.sellerReviews,
+            //     ratingDistribution
+            // },
+            // pagination: {
+            //     pageNo,
+            //     size,
+            //     total: totalReviews,
+            //     totalPages: Math.ceil(totalReviews / size)
+            // },
+            reviews: formattedReviews
+        });
+
+    } catch (err) {
+        console.error('Get Product Reviews Error:', err);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Something went wrong');
+    }
+};
+
 router.post('/review', perApiLimiter(), upload.array('reviewImages', 3), validateRequest(createReviewValidation), createOrUpdateReview);
 router.get('/user-reviews', perApiLimiter(), getUserReviews);
-router.get('/reviews-about-user', perApiLimiter(), getReviewsAboutUser);
+// router.get('/reviews-about-user', perApiLimiter(), getReviewsAboutUser);
+router.get('/reviewers-list', perApiLimiter(), getReviewersList);
+router.get('/:productId/reviews', perApiLimiter(), getProductReviews);
 
 module.exports = router;
