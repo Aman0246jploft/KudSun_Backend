@@ -293,7 +293,7 @@ const addSellerProduct = async (req, res) => {
             deliveryType,
             shippingCharge: deliveryType === DeliveryType.CHARGE_SHIPPING ? shippingCharge : undefined
         };
-        
+
         let savedProduct;
         if (isDraft === 'true' || isDraft === true) {
             // Save to draft collection
@@ -303,7 +303,7 @@ const addSellerProduct = async (req, res) => {
             // Save to main collection
             const product = new SellProduct(productData);
             savedProduct = await product.save();
-            
+
             // If this is publishing a draft (draftId provided), delete the draft
             if (draftId) {
                 try {
@@ -311,7 +311,7 @@ const addSellerProduct = async (req, res) => {
                         _id: draftId,
                         userId: req.user?.userId // Ensure user owns the draft
                     });
-                    
+
                     if (deletedDraft) {
                         console.log(`Draft product ${draftId} deleted after publishing`);
                     } else {
@@ -2550,6 +2550,22 @@ const getProductsWithDraft = async (req, res) => {
 
         // Filter out products where seller doesn't match criteria
         const filteredProducts = products.filter(product => product.userId !== null);
+        const categoryIds = filteredProducts
+            .map(p => p.categoryId?._id?.toString() || p.categoryId?.toString())
+            .filter(Boolean);
+        const categories = await Category.find({ _id: { $in: categoryIds } })
+            .select("subCategories.name subCategories._id")
+            .lean();
+        for (const product of filteredProducts) {
+            const categoryId = product.categoryId?._id?.toString() || product.categoryId?.toString();
+            const subCategoryId = product.subCategoryId?._id?.toString() || product.subCategoryId?.toString();
+
+            const category = categories.find(cat => cat?._id.toString() === categoryId);
+            const subCat = category?.subCategories?.find(sub => sub?._id.toString() === subCategoryId);
+
+            product.subCategoryName = subCat?.name || null;
+        }
+
 
         // Get total count for pagination
         const total = await Model.countDocuments(filter);
