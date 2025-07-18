@@ -43,8 +43,6 @@ const createDispute = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Order not found for this buyer');
         }
 
-
-
         const deliveredHistory = await OrderStatusHistory.findOne({
             orderId: order._id,
             newStatus: ORDER_STATUS.DELIVERED
@@ -57,11 +55,11 @@ const createDispute = async (req, res) => {
 
         const deliveredAt = deliveredHistory.changedAt;
         const now = new Date();
-        const THREE_DAYS_IN_MS = 3 * 24 * 60 * 60 * 1000;
+        const THREE_DAYS_IN_MS = process.env.DAY * 24 * 60 * 60 * 1000;
 
         if ((now - deliveredAt) > THREE_DAYS_IN_MS) {
             await session.abortTransaction();
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Dispute can only be raised within 3 days of delivery');
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `Dispute can only be raised within ${process.env.DAY} days of delivery`);
         }
 
 

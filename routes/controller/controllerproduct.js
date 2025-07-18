@@ -1666,22 +1666,37 @@ const createHistory = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Search query is required");
     }
 
-    const existing = await SearchHistory.findOne({ searchQuery, userId });
+    let history = await SearchHistory.findOne({ searchQuery, userId });
 
-    if (existing) {
-        if (existing.isDeleted || existing.isDisable) {
-            existing.isDeleted = false;
-            existing.isDisable = false;
-            await existing.save();
+    if (history) {
+        if (history.isDeleted || history.isDisable) {
+            history.isDeleted = false;
+            history.isDisable = false;
+            await history.save();
         }
-        return apiSuccessRes(HTTP_STATUS.CREATED, res, 'History updated');
+
+        // Fetch all active history entries
+        const allHistories = await SearchHistory.find({
+            userId,
+            isDeleted: false,
+            isDisable: false,
+        }).sort({ _id: -1 });
+
+        return apiSuccessRes(HTTP_STATUS.CREATED, res, 'History updated', allHistories);
     }
 
     // Create new search history
     await SearchHistory.create({ userId, searchQuery });
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, 'History saved');
-}
+    // Fetch all active history entries
+    const allHistories = await SearchHistory.find({
+        userId,
+        isDeleted: false,
+        isDisable: false,
+    }).sort({ _id: -1 });
+
+    return apiSuccessRes(HTTP_STATUS.OK, res, 'History saved', allHistories);
+};
 
 
 

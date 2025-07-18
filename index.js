@@ -9,6 +9,10 @@ const jwtVerification = require('./middlewares/jwtVerification');
 const requestLogger = require('./middlewares/requestLogger');
 const { setupSocket } = require('./config/socket');
 const path = require('path');
+
+// Import cron jobs
+require('./jobs/Scheduled/crons/orderStatusUpdateCron');
+
 const server = http.createServer(app); // Add this
 setupSocket(server)
 app.use(cors());
