@@ -794,9 +794,10 @@ const getBoughtProducts = async (req, res) => {
                         ALLOWED_BUYER_NEXT_STATUSES[order.status] || '';
 
                 }
+
                 if (order.status == ORDER_STATUS.DISPUTE) {
                     order.labalStatuses = 'Disputed';
-                    order.allowedNextStatuses = "Response";
+                    order.allowedNextStatuses = "";
 
                 }
                 // No payment due and not reviewed yet ⇒ show normal progression
@@ -1096,8 +1097,18 @@ const getSoldProducts = async (req, res) => {
             }
 
             if (order.status == ORDER_STATUS.DISPUTE) {
-                labalStatuses = "Disputed"
-                allowedNextStatuses = "Response"
+
+                let disputeData = await Dispute.findOne({ orderId: order?._id })
+                if (disputeData?.sellerResponse?.responseType) {
+                    labalStatuses = "Disputed"
+                    allowedNextStatuses = ""
+                } else {
+                    labalStatuses = "Disputed"
+                    allowedNextStatuses = "Response"
+                }
+
+
+
             }
 
             if (order.status == ORDER_STATUS.COMPLETED) {
