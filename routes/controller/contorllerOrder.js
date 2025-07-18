@@ -2491,12 +2491,16 @@ const confirmreciptReview = async (req, res) => {
                 },
                 {
                     path: 'addressId',
-                    populate:(
+                    populate: (
                         [
-                           { path:"provinceId",
-                            select:"value"},
-                              { path:"districtId",
-                            select:"value"},
+                            {
+                                path: "provinceId",
+                                select: "value"
+                            },
+                            {
+                                path: "districtId",
+                                select: "value"
+                            },
 
                         ]
                     ),
@@ -2522,10 +2526,21 @@ const confirmreciptReview = async (req, res) => {
                 } : null;
             })
         );
+
+
+        const OrderHistory = await OrderStatusHistory.find({
+            orderId: order._id,
+            $or: [
+                { oldStatus: { $in: ['shipped', 'delivered'] } },
+                { newStatus: { $in: ['shipped', 'delivered'] } }
+            ]
+        });
+
         let obj = {
             order,
             shipping,
-            reviews
+            reviews,
+            OrderHistory
         }
 
 
