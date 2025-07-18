@@ -33,9 +33,9 @@ const ORDER_STATUS = {
     FAILED: 'failed',
     COMPLETED: 'completed',
     CONFIRM_RECEIPT: 'confirm_receipt',
-    
+
     REVIEW: 'REVIEW',
-    DISPUTE:'Dispute'
+    DISPUTE: 'Dispute'
 };
 
 const PAYMENT_STATUS = {
@@ -98,8 +98,8 @@ const NOTIFICATION_TYPES = {
     USER: 'user',
     CHAT: 'chat',
     ORDER: 'order',
-    SYSTEM: 'system',
     DEAL_CHAT: 'deal_chat',
+    SYSTEM: 'system',
     ACTIVITY: 'activity',
     ALERT: 'alert'
 };

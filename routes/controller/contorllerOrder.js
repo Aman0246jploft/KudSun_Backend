@@ -517,7 +517,7 @@ const paymentCallback = async (req, res) => {
 
         // Send notifications for payment status
         const paymentNotifications = [];
-        
+
         if (paymentStatus === PAYMENT_STATUS.COMPLETED) {
             // Notify buyer
             paymentNotifications.push({
@@ -535,7 +535,7 @@ const paymentCallback = async (req, res) => {
                 },
                 redirectUrl: `/order/${order._id}`
             });
-            
+
             // Notify seller
             paymentNotifications.push({
                 recipientId: order.sellerId,
@@ -570,7 +570,7 @@ const paymentCallback = async (req, res) => {
                 redirectUrl: `/payment/retry/${order._id}`
             });
         }
-        
+
         if (paymentNotifications.length > 0) {
             await saveNotification(paymentNotifications);
         }
@@ -747,22 +747,9 @@ const getBoughtProducts = async (req, res) => {
 
         const orderIds = orders.map(o => o._id);
 
-        const disputes = await Dispute.find({
-            orderId: { $in: orderIds },
-            raisedBy: userId,
-            isDeleted: false,
-            isDisable: false
-        })
-            .select(
-                "disputeId disputeType status orderId createdAt evidence sellerResponse adminReview"
-            )
-            .lean();
-        const disputesByOrder = {};
-        for (const d of disputes) disputesByOrder[d.orderId?.toString()] = d;
-
 
         for (const order of orders) {
-            order.dispute = disputesByOrder[order._id.toString()] || null;
+
 
             for (const item of order.items || []) {
                 const productId = item.productId?._id;
@@ -779,6 +766,7 @@ const getBoughtProducts = async (req, res) => {
                     order.isReviewed = !!reviewExists;
                 }
             }
+
             /** -------- 2. Work out the next step (or none) -------- */
             if (order.paymentStatus === PAYMENT_STATUS.PENDING) {
                 // Still waiting for payment ⇒ always show "Pay now"
@@ -791,19 +779,24 @@ const getBoughtProducts = async (req, res) => {
                     order.labalStatuses = 'Shipped';
 
                     order.allowedNextStatuses =
-                        ALLOWED_BUYER_NEXT_STATUSES[order.status] || '';
+                        'Confirm Receipt';
 
                 } else if (order.status == ORDER_STATUS.DELIVERED) {
                     order.labalStatuses = 'Shipped';
 
                     order.allowedNextStatuses =
-                        ALLOWED_BUYER_NEXT_STATUSES[order.status] || '';
+                        "Confirm Receipt";
 
                 } else if (ORDER_STATUS.CONFIRM_RECEIPT) {
-                    order.labalStatuses = 'Shipped';
+                    order.labalStatuses = 'Unreviewed';
 
                     order.allowedNextStatuses =
                         ALLOWED_BUYER_NEXT_STATUSES[order.status] || '';
+
+                }
+                if (order.status == ORDER_STATUS.DISPUTE) {
+                    order.labalStatuses = 'Disputed';
+                    order.allowedNextStatuses = "Response";
 
                 }
                 // No payment due and not reviewed yet ⇒ show normal progression
@@ -1040,18 +1033,8 @@ const getSoldProducts = async (req, res) => {
 
         const orderIds = orders.map(o => o._id);
 
-        const disputes = await Dispute.find({
-            orderId: { $in: orderIds },
 
-            isDeleted: false,
-            isDisable: false
-        })
-            .select(
-                "disputeId disputeType status orderId createdAt evidence sellerResponse adminReview"
-            )
-            .lean();
-        const disputesByOrder = {};
-        for (const d of disputes) disputesByOrder[d.orderId?.toString()] = d;
+
 
 
         // Filter each order's items to only include the seller's products (defensive step)
@@ -1075,7 +1058,7 @@ const getSoldProducts = async (req, res) => {
         const reviewedSet = new Set(existingReviews.map((r) => r.productId.toString()));
 
         for (const order of orders) {
-            order.dispute = disputesByOrder[order._id.toString()] || null;
+
 
 
             // Compute allowed next statuses based on current order status and delivery types
@@ -1111,6 +1094,17 @@ const getSoldProducts = async (req, res) => {
                 labalStatuses = "Unreviewed"
                 allowedNextStatuses = "REVIEW";
             }
+
+            if (order.status == ORDER_STATUS.DISPUTE) {
+                labalStatuses = "Disputed"
+                allowedNextStatuses = "Response"
+            }
+
+            if (order.status == ORDER_STATUS.COMPLETED) {
+                labalStatuses = "Completed"
+                allowedNextStatuses = ""
+
+            }
             // else if (currentStatus === ORDER_STATUS.SHIPPED) {
             //     allowedNextStatuses = ORDER_STATUS.DELIVERED;
             // }
@@ -1118,7 +1112,7 @@ const getSoldProducts = async (req, res) => {
             //     allowedNextStatuses = ALLOWED_NEXT_STATUSES[currentStatus] || [];
             // }
             order.allowedNextStatuses = allowedNextStatuses;
-            
+
             order.labalStatuses = labalStatuses;
 
         }
@@ -1409,8 +1403,6 @@ const updateOrderStatusBySeller = async (req, res) => {
         const populatedOrder = await order.populate('items.productId');
 
 
-
-
         // Check if ALL products are local pickup
         const allLocalPickup = populatedOrder.items.every(
             item => item.productId?.deliveryType === "local pickup"
@@ -1424,10 +1416,6 @@ const updateOrderStatusBySeller = async (req, res) => {
 
         // Define allowed status transitions based on current status and delivery types
         let allowedTransitions = [];
-
-
-
-
 
 
         if (currentStatus === ORDER_STATUS.PENDING) {
@@ -1699,7 +1687,7 @@ const updateOrderStatusBySeller = async (req, res) => {
             // Send notification to buyer about status change
             let notificationTitle = '';
             let notificationMessage = '';
-            
+
             switch (newStatus) {
                 case ORDER_STATUS.CONFIRMED:
                     notificationTitle = "Order Confirmed!";
@@ -1741,7 +1729,7 @@ const updateOrderStatusBySeller = async (req, res) => {
                 },
                 redirectUrl: `/order/${order._id}`
             }];
-            
+
             await saveNotification(statusNotifications);
 
             return apiSuccessRes(HTTP_STATUS.OK, res, "Order status updated successfully", {
@@ -2172,7 +2160,7 @@ const updateOrderStatusByBuyer = async (req, res) => {
             // Send notification to seller about buyer action
             let notificationTitle = '';
             let notificationMessage = '';
-            
+
             switch (newStatus) {
                 case ORDER_STATUS.CONFIRM_RECEIPT:
                     notificationTitle = "Order Confirmed by Buyer!";
@@ -2202,7 +2190,7 @@ const updateOrderStatusByBuyer = async (req, res) => {
                 },
                 redirectUrl: `/order/${order._id}`
             }];
-            
+
             await saveNotification(buyerActionNotifications);
 
             // Prepare success message
@@ -2622,7 +2610,7 @@ const addrequest = async (req, res) => {
                 },
                 redirectUrl: `/wallet/withdrawals`
             }];
-            
+
             await saveNotification(withdrawalRequestNotifications);
 
             return apiSuccessRes(
@@ -2712,11 +2700,11 @@ const changeStatus = async (req, res) => {
             );
 
             await updateWithdrawalRevenue(withdrawRequest, status, session);
-            
+
             // Send notification about withdrawal status change
             let notificationTitle = '';
             let notificationMessage = '';
-            
+
             if (status === 'Approved') {
                 notificationTitle = "Withdrawal Request Approved!";
                 notificationMessage = `Your withdrawal request for $${withdrawRequest.amount} has been approved and processed.`;
@@ -2724,7 +2712,7 @@ const changeStatus = async (req, res) => {
                 notificationTitle = "Withdrawal Request Rejected";
                 notificationMessage = `Your withdrawal request for $${withdrawRequest.amount} has been rejected. The amount has been refunded to your wallet.`;
             }
-            
+
             const withdrawalStatusNotifications = [{
                 recipientId: withdrawRequest.userId,
                 userId: withdrawRequest.userId,
@@ -2739,7 +2727,7 @@ const changeStatus = async (req, res) => {
                 },
                 redirectUrl: `/wallet/withdrawals`
             }];
-            
+
             await saveNotification(withdrawalStatusNotifications);
         });
 
@@ -2881,7 +2869,7 @@ const getAllTransactionsForAdmin = async (req, res) => {
         size = parseInt(size);
 
         // Build filter object
-        const filter = {  };
+        const filter = {};
         filter.paymentStatus = { $ne: PAYMENT_STATUS.PENDING };
 
 
@@ -3249,7 +3237,7 @@ const markSellerAsPaid = async (req, res) => {
                 },
                 redirectUrl: `/wallet/transactions`
             }];
-            
+
             await saveNotification(payoutNotifications);
 
             return apiSuccessRes(HTTP_STATUS.OK, res, "Seller withdrawal processed successfully", {

@@ -7,7 +7,7 @@ const { Dispute, Order, DisputeHistory } = require('../../db');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const { uploadImageCloudinary } = require('../../utils/cloudinary');
 const HTTP_STATUS = require('../../utils/statusCode');
-const { DISPUTE_STATUS } = require('../../utils/Role');
+const { DISPUTE_STATUS, ORDER_STATUS } = require('../../utils/Role');
 const { apiErrorRes, apiSuccessRes } = require('../../utils/globalFunction');
 const { createDisputeSchema, sellerRespondSchema, adminDecisionSchema } = require('../services/validations/disputeValidation');
 const { default: mongoose } = require('mongoose');
@@ -66,7 +66,7 @@ const createDispute = async (req, res) => {
         /* 5) reference dispute on order -------------------------------------- */
         await Order.updateOne(
             { _id: order._id },
-            { $set: { disputeId: saved._id } },
+            { $set: { disputeId: saved._id,status:ORDER_STATUS.DISPUTE } },
             { session }
         );
         /* 6) history --------------------------------------------------------- */
