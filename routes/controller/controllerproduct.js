@@ -1774,7 +1774,7 @@ const getProduct = async (req, res) => {
         if (isDraft) {
             query.isDraft = true;
         } else {
-            query.isSold = false;
+            // query.isSold = false;
             query.isDraft = { $ne: true };
         }
 

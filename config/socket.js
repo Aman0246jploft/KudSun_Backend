@@ -82,7 +82,7 @@ async function setupSocket(server) {
                     try {
                         // Extract file data and type from base64
                         const matches = content.match(/^data:([A-Za-z-+/]+);base64,(.+)$/);
-                        
+
                         if (!matches || matches.length !== 3) {
                             throw new Error('Invalid file data');
                         }
@@ -261,7 +261,7 @@ async function setupSocket(server) {
             }
         });
 
-    
+
 
 
         socket.on('markMessagesAsSeen', async ({ roomId }) => {
@@ -403,6 +403,167 @@ async function setupSocket(server) {
         });
 
 
+        socket.on('getTotalUnreadCount', async () => {
+            const userId = socket.user?.userId;
+            if (!userId) return;
+
+            await emitTotalUnreadCount(io, userId);
+        });
+
+
+
+        socket.on('markAllNotificationsAsRead', async () => {
+            try {
+                const userId = socket.user?.userId;
+                if (!userId) return;
+        
+                const { Notification } = require('../db');
+                await Notification.updateMany(
+                    { userId: toObjectId(userId), read: false },
+                    { read: true }
+                );
+        
+                // Emit updated total count
+                await emitTotalUnreadCount(io, userId);
+        
+                socket.emit('allNotificationsMarkedAsRead', { 
+                    success: true, 
+                    timestamp: new Date().toISOString() 
+                });
+        
+            } catch (error) {
+                console.error('Error marking notifications as read:', error);
+                socket.emit('error', { message: 'Failed to mark notifications as read' });
+            }
+        });
+
+        // Mark all messages in a specific room as read (accepts roomId or otherUserId)
+        socket.on('markRoomMessagesAsRead', async ({ roomId, otherUserId }) => {
+            try {
+                const userId = socket.user?.userId;
+                if (!userId) return;
+
+                let targetRoomId = roomId;
+
+                // If roomId not provided, find room using otherUserId
+                if (!targetRoomId && otherUserId) {
+                    const room = await ChatRoom.findOne({
+                        isGroup: false,
+                        participants: { $all: [toObjectId(userId), toObjectId(otherUserId)], $size: 2 }
+                    });
+
+                    if (!room) {
+                        return socket.emit('error', { message: 'Chat room not found' });
+                    }
+
+                    targetRoomId = room._id.toString();
+                }
+
+                if (!targetRoomId) {
+                    return socket.emit('error', { message: 'roomId or otherUserId is required' });
+                }
+
+                // Mark ALL messages in this room as read for current user
+                const result = await ChatMessage.updateMany(
+                    {
+                        chatRoom: toObjectId(targetRoomId),
+                        seenBy: { $ne: toObjectId(userId) },
+                        sender: { $ne: toObjectId(userId) }
+                    },
+                    { $addToSet: { seenBy: toObjectId(userId) } }
+                );
+
+                if (result.modifiedCount > 0) {
+                    // Broadcast seen event to room
+                    io.to(targetRoomId).emit('messagesSeen', {
+                        roomId: targetRoomId,
+                        userId,
+                        seenAt: new Date().toISOString(),
+                        allMessages: true
+                    });
+
+                    // Update room info for all participants
+                    const room = await ChatRoom.findById(targetRoomId)
+                        .populate('participants', '_id userName profileImage')
+                        .populate('lastMessage');
+
+                    if (room) {
+                        const roomObj = room.toObject();
+                        await Promise.all(room.participants.map(async (participant) => {
+                            const participantId = participant._id?.toString();
+                            let unreadCount = 0;
+                            if (participantId !== userId) {
+                                unreadCount = await ChatMessage.countDocuments({
+                                    chatRoom: targetRoomId,
+                                    seenBy: { $ne: toObjectId(participantId) },
+                                    sender: { $ne: toObjectId(participantId) }
+                                });
+                            }
+
+                            io.to(`user_${participantId}`).emit('roomUpdated', {
+                                ...roomObj,
+                                participants: roomObj.participants.filter(p => p._id?.toString() !== participantId),
+                                unreadCount
+                            });
+                        }));
+                    }
+
+                    // Emit updated total unread count
+                    await emitTotalUnreadCount(io, userId);
+                }
+
+                socket.emit('roomMessagesMarkedAsRead', {
+                    success: true,
+                    roomId: targetRoomId,
+                    messagesCount: result.modifiedCount,
+                    timestamp: new Date().toISOString()
+                });
+
+            } catch (error) {
+                console.error('❌ Error in markRoomMessagesAsRead:', error);
+                socket.emit('error', { message: 'Failed to mark room messages as read' });
+            }
+        });
+
+        // Mark all messages across all chats as read
+        socket.on('markAllChatsAsRead', async () => {
+            try {
+                const userId = socket.user?.userId;
+                if (!userId) return;
+
+                // Get all user's chat rooms
+                const userRooms = await ChatRoom.find({ 
+                    participants: toObjectId(userId) 
+                }).select('_id');
+
+                const roomIds = userRooms.map(room => room._id);
+
+                // Mark all messages as seen across all rooms
+                const result = await ChatMessage.updateMany(
+                    {
+                        chatRoom: { $in: roomIds },
+                        seenBy: { $ne: toObjectId(userId) },
+                        sender: { $ne: toObjectId(userId) }
+                    },
+                    { $addToSet: { seenBy: toObjectId(userId) } }
+                );
+
+                // Emit updated total count
+                await emitTotalUnreadCount(io, userId);
+
+                socket.emit('allChatsMarkedAsRead', { 
+                    success: true,
+                    roomsCount: roomIds.length,
+                    messagesCount: result.modifiedCount,
+                    timestamp: new Date().toISOString() 
+                });
+
+            } catch (error) {
+                console.error('Error marking all chats as read:', error);
+                socket.emit('error', { message: 'Failed to mark all chats as read' });
+            }
+        });
+
         socket.on('disconnect', () => {
             console.log(`🔴 User ${userId} disconnected`);
             delete connectedUsers[socket.id];
@@ -420,8 +581,132 @@ async function setupSocket(server) {
 
     });
 
+
+    // Send total unread count to user
+    async function emitTotalUnreadCount(io, userId) {
+        try {
+            const [chatUnreadCount, notificationUnreadCount] = await Promise.all([
+                calculateTotalChatUnreadCount(userId),
+                calculateTotalNotificationUnreadCount(userId)
+            ]);
+
+            const totalUnreadCount = chatUnreadCount + notificationUnreadCount;
+
+            io.to(`user_${userId}`).emit('totalUnreadCount', {
+                chatUnreadCount,
+                notificationUnreadCount,
+                totalUnreadCount,
+                timestamp: new Date().toISOString()
+            });
+
+            return { chatUnreadCount, notificationUnreadCount, totalUnreadCount };
+        } catch (error) {
+            console.error('Error emitting total unread count:', error);
+        }
+    }
+
     return io;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+async function calculateTotalChatUnreadCount(userId) {
+    try {
+        // Get all chat rooms for this user
+        const userRooms = await ChatRoom.find({
+            participants: toObjectId(userId)
+        }).select('_id');
+
+        const roomIds = userRooms.map(room => room._id);
+
+        // Count all unread messages across all rooms
+        const totalChatUnread = await ChatMessage.countDocuments({
+            chatRoom: { $in: roomIds },
+            seenBy: { $ne: toObjectId(userId) },
+            sender: { $ne: toObjectId(userId) }
+        });
+
+        return totalChatUnread;
+    } catch (error) {
+        console.error('Error calculating total chat unread:', error);
+        return 0;
+    }
+}
+
+// Calculate total unread notifications for a user  
+async function calculateTotalNotificationUnreadCount(userId) {
+    try {
+        const { Notification } = require('../db');
+        const totalNotificationUnread = await Notification.countDocuments({
+            userId: toObjectId(userId),
+            read: false
+        });
+        return totalNotificationUnread;
+    } catch (error) {
+        console.error('Error calculating notification unread:', error);
+        return 0;
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
