@@ -3,7 +3,7 @@ const express = require('express');
 const multer = require('multer');
 const upload = multer();
 const router = express.Router();
-const { Dispute, Order, DisputeHistory } = require('../../db');
+const { Dispute, Order, DisputeHistory, OrderStatusHistory } = require('../../db');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const { uploadImageCloudinary } = require('../../utils/cloudinary');
 const HTTP_STATUS = require('../../utils/statusCode');
@@ -43,6 +43,28 @@ const createDispute = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Order not found for this buyer');
         }
 
+
+
+        const deliveredHistory = await OrderStatusHistory.findOne({
+            orderId: order._id,
+            newStatus: ORDER_STATUS.DELIVERED
+        }).sort({ changedAt: -1 }).session(session);
+
+        if (!deliveredHistory) {
+            await session.abortTransaction();
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Order has never been marked as delivered');
+        }
+
+        const deliveredAt = deliveredHistory.changedAt;
+        const now = new Date();
+        const THREE_DAYS_IN_MS = 3 * 24 * 60 * 60 * 1000;
+
+        if ((now - deliveredAt) > THREE_DAYS_IN_MS) {
+            await session.abortTransaction();
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Dispute can only be raised within 3 days of delivery');
+        }
+
+
         /* 3) upload evidence ------------------------------------------------- */
         let evidence = [];
         if (req.files?.length) {
@@ -66,7 +88,7 @@ const createDispute = async (req, res) => {
         /* 5) reference dispute on order -------------------------------------- */
         await Order.updateOne(
             { _id: order._id },
-            { $set: { disputeId: saved._id,status:ORDER_STATUS.DISPUTE } },
+            { $set: { disputeId: saved._id, status: ORDER_STATUS.DISPUTE } },
             { session }
         );
         /* 6) history --------------------------------------------------------- */

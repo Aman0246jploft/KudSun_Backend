@@ -1659,22 +1659,16 @@ const fetchUserProducts = async (req, res) => {
 
 
 const createHistory = async (req, res) => {
-    const { searchQuery } = req.query
-    const { userId } = req.user
-
+    const { searchQuery } = req.query;
+    const { userId } = req.user;
 
     if (!searchQuery) {
-        return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Search query is required")
+        return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Search query is required");
     }
 
-    let obj = {
-        userId,
-        searchQuery
-    }
-    const existing = await SearchHistory.findOne(query);
+    const existing = await SearchHistory.findOne({ searchQuery, userId });
 
     if (existing) {
-        // Update isDeleted/isDisable to false if needed
         if (existing.isDeleted || existing.isDisable) {
             existing.isDeleted = false;
             existing.isDisable = false;
@@ -1683,12 +1677,12 @@ const createHistory = async (req, res) => {
         return apiSuccessRes(HTTP_STATUS.CREATED, res, 'History updated');
     }
 
-    // Else, create new record
-    const history = new SearchHistory(query);
-    await history.save();
+    // Create new search history
+    await SearchHistory.create({ userId, searchQuery });
 
     return apiSuccessRes(HTTP_STATUS.OK, res, 'History saved');
 }
+
 
 
 const clearAllHistory = async (req, res) => {
@@ -1746,12 +1740,12 @@ const getSearchHistory = async (req, res) => {
             SearchHistory.countDocuments({ userId, isDeleted: false })
         ]);
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, {
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Fetched search history", {
             pageNo: parseInt(pageNo),
             size: parseInt(size),
             total,
             data: history
-        }, "Fetched search history");
+        });
     } catch (error) {
         console.error("getSearchHistory error:", error);
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Internal server error");
@@ -2654,9 +2648,9 @@ router.get('/fetchUserProducts', perApiLimiter(), fetchUserProducts);
 router.get('/otherUserReviewlist', perApiLimiter(), otherUserReview);
 
 //Search Panel
-router.post('/createHistory', perApiLimiter(), createHistory);
-router.post('/clearAllHistory', perApiLimiter(), clearAllHistory);
-router.post('/clearOneHistory/:id', perApiLimiter(), clearOneHistory);
+router.get('/createHistory', perApiLimiter(), createHistory);
+router.get('/clearAllHistory', perApiLimiter(), clearAllHistory);
+router.get('/clearOneHistory/:id', perApiLimiter(), clearOneHistory);
 router.get('/getSearchHistory', perApiLimiter(), getSearchHistory);
 
 //comment
