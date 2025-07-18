@@ -2488,7 +2488,21 @@ const confirmreciptReview = async (req, res) => {
                 {
                     path: 'userId',
                     select: 'userName profileImage isLive is_Id_verified is_Verified_Seller'
-                }
+                },
+                {
+                    path: 'addressId',
+                    populate:(
+                        [
+                           { path:"provinceId",
+                            select:"value"},
+                              { path:"districtId",
+                            select:"value"},
+
+                        ]
+                    ),
+                    select: 'provinceId districtId notes fullName phone line1 postalCode'
+                },
+
             ])
             .lean();
 
