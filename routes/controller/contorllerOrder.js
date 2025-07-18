@@ -2184,6 +2184,8 @@ const getOrderDetails = async (req, res) => {
                 trackingNumber: shipping.trackingNumber || '',
                 shippingDate: shipping.updatedAt || null,
                 status: shipping.status || '',
+                createdAt: shipping.createdAt || '',
+
             } : null,
             statusHistory: (statusHistory || []).map(h => ({
                 oldStatus: h.oldStatus,
