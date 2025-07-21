@@ -4,24 +4,24 @@ const cron = require('node-cron');
 const moment = require('moment');
 
 // Import models
-const { 
-    Order, 
-    OrderStatusHistory, 
-    Dispute, 
-    FeeSetting, 
-    WalletTnx, 
-    User, 
+const {
+    Order,
+    OrderStatusHistory,
+    Dispute,
+    FeeSetting,
+    WalletTnx,
+    User,
     PlatformRevenue,
     ChatRoom,
-    ChatMessage 
+    ChatMessage
 } = require('../../../db');
 
 // Import constants
-const { 
-    ORDER_STATUS, 
-    PAYMENT_STATUS, 
-    DISPUTE_STATUS, 
-    PRICING_TYPE, 
+const {
+    ORDER_STATUS,
+    PAYMENT_STATUS,
+    DISPUTE_STATUS,
+    PRICING_TYPE,
     TNX_TYPE,
     CHARGE_TYPE,
     NOTIFICATION_TYPES,
@@ -46,8 +46,8 @@ let cronStats = {
 };
 
 // Environment variables with defaults
-const PROCESSING_DAY_LIMIT = parseInt(process.env.DAY) || 3;
-const CRON_SCHEDULE = process.env.CRON_SCHEDULE || '0 0 * * *'; // Daily at midnight by default
+const PROCESSING_DAY_LIMIT = parseInt(process.env.DAY);
+const CRON_SCHEDULE = process.env.CRON_SCHEDULE || '* * * * *'; // Daily at midnight by default
 const ENABLE_EMAIL_NOTIFICATIONS = process.env.ENABLE_EMAIL_NOTIFICATIONS === 'true';
 
 // Connect to MongoDB
@@ -63,23 +63,23 @@ mongoose.connect(process.env.DB_STRING, {
     cron.schedule(CRON_SCHEDULE, async () => {
         const runStartTime = new Date();
         console.log('🔄 Starting Order Status Update Cron Job at:', runStartTime.toISOString());
-        
+
         cronStats.lastRun = runStartTime;
         cronStats.totalRuns++;
-        
+
         const session = await mongoose.startSession();
         session.startTransaction();
-        
+
         try {
             // Validate environment and settings before processing
             await validateSystemState();
-            
+
             // Get current time
             const now = moment();
             const cutoffDate = now.clone().subtract(PROCESSING_DAY_LIMIT, 'days');
-            
+
             console.log('📅 Processing orders older than:', cutoffDate.format('YYYY-MM-DD HH:mm:ss'));
-            
+
             // Track processing stats
             let processedStats = {
                 shippedToDelivered: 0,
@@ -88,32 +88,32 @@ mongoose.connect(process.env.DB_STRING, {
                 disputesHandled: 0,
                 errors: []
             };
-            
+
             // STEP 1: Update SHIPPED to DELIVERED (after N days)
             const shippedStats = await updateShippedToDelivered(cutoffDate, session);
             processedStats.shippedToDelivered = shippedStats.updated;
             processedStats.errors.push(...shippedStats.errors);
-            
+
             // STEP 2: Update DELIVERED to COMPLETED (after N days, checking disputes)
             const completedStats = await updateDeliveredToCompleted(cutoffDate, session);
             processedStats.deliveredToCompleted = completedStats.updated;
             processedStats.paymentsProcessed = completedStats.paymentsProcessed;
             processedStats.disputesHandled = completedStats.disputesHandled;
             processedStats.errors.push(...completedStats.errors);
-            
+
             // Update global stats
             cronStats.ordersProcessed += (processedStats.shippedToDelivered + processedStats.deliveredToCompleted);
             cronStats.paymentsProcessed += processedStats.paymentsProcessed;
             cronStats.disputesHandled += processedStats.disputesHandled;
-            
+
             await session.commitTransaction();
-            
+
             const runEndTime = new Date();
             const duration = runEndTime - runStartTime;
-            
+
             cronStats.lastSuccessfulRun = runEndTime;
             cronStats.successfulRuns++;
-            
+
             console.log('✅ Order Status Update Cron Job completed successfully');
             console.log(`📊 Processing Summary:
             - Duration: ${duration}ms
@@ -122,22 +122,22 @@ mongoose.connect(process.env.DB_STRING, {
             - Payments Processed: ${processedStats.paymentsProcessed}
             - Disputes Handled: ${processedStats.disputesHandled}
             - Errors: ${processedStats.errors.length}`);
-            
+
             if (processedStats.errors.length > 0) {
                 console.log('⚠️ Errors during processing:', processedStats.errors);
             }
-            
+
             // Send summary notification if enabled
             if (ENABLE_EMAIL_NOTIFICATIONS) {
                 await sendCronSummaryNotification(processedStats, duration);
             }
-            
+
         } catch (error) {
             await session.abortTransaction();
             cronStats.failedRuns++;
-            
+
             console.error('❌ Critical Error in Order Status Update Cron:', error);
-            
+
             // Send error notification
             if (ENABLE_EMAIL_NOTIFICATIONS) {
                 await sendCronErrorNotification(error);
@@ -169,7 +169,7 @@ mongoose.connect(process.env.DB_STRING, {
  */
 async function validateSystemState() {
     console.log('🔍 Validating system state...');
-    
+
     // Check if required fee settings exist
     const requiredFeeSettings = ['SERVICE_CHARGE', 'TAX', 'WITHDRAWAL_FEE'];
     const feeSettings = await FeeSetting.find({
@@ -178,20 +178,20 @@ async function validateSystemState() {
         isDisable: false,
         isDeleted: false
     });
-    
+
     const missingSettings = requiredFeeSettings.filter(
         setting => !feeSettings.find(f => f.name === setting)
     );
-    
+
     if (missingSettings.length > 0) {
         throw new Error(`Missing required fee settings: ${missingSettings.join(', ')}`);
     }
-    
+
     // Check database connectivity
     if (mongoose.connection.readyState !== 1) {
         throw new Error('Database not connected');
     }
-    
+
     console.log('✅ System state validation passed');
 }
 
@@ -201,9 +201,9 @@ async function validateSystemState() {
 async function updateShippedToDelivered(cutoffDate, session) {
     try {
         console.log('🚛 Processing SHIPPED → DELIVERED updates...');
-        
+
         let stats = { updated: 0, errors: [] };
-        
+
         // Find orders that are currently SHIPPED with proper validation
         const shippedOrders = await Order.find({
             status: ORDER_STATUS.SHIPPED,
@@ -211,7 +211,7 @@ async function updateShippedToDelivered(cutoffDate, session) {
             isDeleted: false,
             isDisable: false,
             // Add safety check for order age
-            createdAt: { $lt: moment().subtract(1, 'hour').toDate() } // At least 1 hour old
+            // createdAt: { $lt: moment().subtract(1, 'hour').toDate() } // At least 1 hour old
         }).populate('sellerId userId', 'userName email').session(session);
 
         console.log(`📦 Found ${shippedOrders.length} shipped orders to check`);
@@ -230,11 +230,11 @@ async function updateShippedToDelivered(cutoffDate, session) {
                 }
 
                 const shippedDate = moment(shippedHistory.changedAt);
-                
+
                 // Check if N days have passed since shipped
                 if (shippedDate.isBefore(cutoffDate)) {
                     console.log(`📅 Order ${order._id} shipped on ${shippedDate.format('YYYY-MM-DD')}, updating to DELIVERED`);
-                    
+
                     // Additional validation - check if order is not in dispute
                     const activeDispute = await Dispute.findOne({
                         orderId: order._id,
@@ -247,11 +247,12 @@ async function updateShippedToDelivered(cutoffDate, session) {
                         console.log(`⚠️ Order ${order._id} has active dispute, skipping auto-delivery`);
                         continue;
                     }
-                    
+
+
                     // Update order status
                     await Order.findByIdAndUpdate(
                         order._id,
-                        { 
+                        {
                             status: ORDER_STATUS.DELIVERED,
                             updatedAt: new Date()
                         },
@@ -270,11 +271,11 @@ async function updateShippedToDelivered(cutoffDate, session) {
 
                     // Send notification to buyer
                     await sendStatusUpdateNotification(
-                        order, 
-                        ORDER_STATUS.DELIVERED, 
+                        order,
+                        ORDER_STATUS.DELIVERED,
                         `Your order has been automatically marked as delivered after ${PROCESSING_DAY_LIMIT} days. If you haven't received it, please contact the seller or start a dispute.`
                     );
-                    
+
                     stats.updated++;
                     console.log(`✅ Order ${order._id} updated to DELIVERED`);
                 } else {
@@ -286,10 +287,10 @@ async function updateShippedToDelivered(cutoffDate, session) {
                 console.error(`❌ ${errorMsg}`);
             }
         }
-        
+
         console.log(`✅ SHIPPED → DELIVERED: ${stats.updated} orders updated, ${stats.errors.length} errors`);
         return stats;
-        
+
     } catch (error) {
         console.error('❌ Error in updateShippedToDelivered:', error);
         throw error;
@@ -302,9 +303,9 @@ async function updateShippedToDelivered(cutoffDate, session) {
 async function updateDeliveredToCompleted(cutoffDate, session) {
     try {
         console.log('📋 Processing DELIVERED → COMPLETED updates...');
-        
+
         let stats = { updated: 0, paymentsProcessed: 0, disputesHandled: 0, errors: [] };
-        
+
         // Find orders that are currently DELIVERED with proper validation
         const deliveredOrders = await Order.find({
             status: ORDER_STATUS.DELIVERED,
@@ -312,7 +313,7 @@ async function updateDeliveredToCompleted(cutoffDate, session) {
             isDeleted: false,
             isDisable: false,
             // Add safety check for minimum delivery time
-            updatedAt: { $lt: moment().subtract(1, 'hour').toDate() } // At least 1 hour since delivered
+            // updatedAt: { $lt: moment().subtract(1, 'hour').toDate() } // At least 1 hour since delivered
         }).populate('sellerId userId', 'userName email').session(session);
 
         console.log(`📦 Found ${deliveredOrders.length} delivered orders to check`);
@@ -331,14 +332,14 @@ async function updateDeliveredToCompleted(cutoffDate, session) {
                 }
 
                 const deliveredDate = moment(deliveredHistory.changedAt);
-                
+
                 // Check if N days have passed since delivered
                 if (deliveredDate.isBefore(cutoffDate)) {
                     console.log(`📅 Order ${order._id} delivered on ${deliveredDate.format('YYYY-MM-DD')}, checking for disputes...`);
-                    
+
                     // Check for disputes and validate dispute resolution
                     const disputeInfo = await validateAndProcessDispute(order._id, session);
-                    
+
                     if (disputeInfo.shouldSkip) {
                         stats.errors.push(`Order ${order._id}: ${disputeInfo.reason}`);
                         continue;
@@ -353,19 +354,24 @@ async function updateDeliveredToCompleted(cutoffDate, session) {
 
                     // Proceed with completion
                     console.log(`🎉 Completing order ${order._id} and processing seller payment...`);
-                    
+
                     // Update order status to COMPLETED
-                    await Order.findByIdAndUpdate(
+                    const updated = await Order.findByIdAndUpdate(
                         order._id,
-                        { 
+                        {
                             status: ORDER_STATUS.COMPLETED,
                             updatedAt: new Date()
                         },
-                        { session }
+                        { session, new: true }
                     );
 
+                    if (!updated || updated.status !== ORDER_STATUS.COMPLETED) {
+                        stats.errors.push(`Order ${order._id}: status update to COMPLETED failed`);
+                        continue;
+                    }
+
                     // Create comprehensive status history entry
-                    const statusNote = disputeInfo.disputeData 
+                    const statusNote = disputeInfo.disputeData
                         ? `Auto-completed after ${PROCESSING_DAY_LIMIT} days with resolved dispute (${disputeInfo.disputeData.decision} favor, ${disputeInfo.disputeData.disputeAmountPercent}% dispute amount)`
                         : `Auto-completed after ${PROCESSING_DAY_LIMIT} days with no disputes`;
 
@@ -385,14 +391,14 @@ async function updateDeliveredToCompleted(cutoffDate, session) {
                     } else {
                         stats.errors.push(`Payment processing failed for order ${order._id}: ${paymentResult.error}`);
                     }
-                    
+
                     // Send comprehensive notifications
                     await sendCompletionNotifications(order, disputeInfo.disputeData);
-                    
+
                     if (disputeInfo.disputeData) {
                         stats.disputesHandled++;
                     }
-                    
+
                     stats.updated++;
                     console.log(`✅ Order ${order._id} completed${disputeInfo.disputeData ? ' (with dispute resolution)' : ''}`);
                 } else {
@@ -404,10 +410,10 @@ async function updateDeliveredToCompleted(cutoffDate, session) {
                 console.error(`❌ ${errorMsg}`);
             }
         }
-        
+
         console.log(`✅ DELIVERED → COMPLETED: ${stats.updated} orders completed, ${stats.paymentsProcessed} payments processed, ${stats.disputesHandled} disputes handled, ${stats.errors.length} errors`);
         return stats;
-        
+
     } catch (error) {
         console.error('❌ Error in updateDeliveredToCompleted:', error);
         throw error;
@@ -455,7 +461,7 @@ async function validateAndProcessDispute(orderId, session) {
 
             // Validate dispute amount percentage
             const { decision, disputeAmountPercent = 0 } = resolvedDispute.adminReview;
-            
+
             if (decision === DISPUTE_DECISION.BUYER && (disputeAmountPercent < 0 || disputeAmountPercent > 100)) {
                 return {
                     shouldSkip: true,
@@ -474,7 +480,7 @@ async function validateAndProcessDispute(orderId, session) {
             };
 
             console.log(`✅ Order ${orderId} had resolved dispute - Decision: ${disputeData.decision}, Amount%: ${disputeData.disputeAmountPercent}%`);
-            
+
             return {
                 shouldSkip: false,
                 reason: null,
@@ -564,7 +570,7 @@ async function validateOrderForCompletion(order, session) {
 async function processSellerPaymentEnhanced(order, session, disputeInfo = null) {
     try {
         console.log(`💰 Processing payment for seller ${order.sellerId} for order ${order._id}`);
-        
+
         // Get fee settings with validation
         const feeSettings = await FeeSetting.find({
             name: { $in: ["SERVICE_CHARGE", "TAX"] },
@@ -578,7 +584,7 @@ async function processSellerPaymentEnhanced(order, session, disputeInfo = null) 
 
         // Calculate amounts with enhanced validation
         const originalProductCost = Number(order.totalAmount) || 0;
-        
+
         if (originalProductCost <= 0) {
             throw new Error(`Invalid product cost: ${originalProductCost}`);
         }
@@ -589,7 +595,7 @@ async function processSellerPaymentEnhanced(order, session, disputeInfo = null) 
         // Apply dispute resolution if present
         if (disputeInfo) {
             const { decision, disputeAmountPercent = 0 } = disputeInfo;
-            
+
             if (decision === DISPUTE_DECISION.SELLER) {
                 adjustedProductCost = originalProductCost; // No deduction
                 disputeAdjustmentNote = `Dispute resolved in seller favor. Seller receives full amount (100%).`;
@@ -600,7 +606,7 @@ async function processSellerPaymentEnhanced(order, session, disputeInfo = null) 
                 adjustedProductCost = originalProductCost * ((100 - disputeAmountPercent) / 100);
                 disputeAdjustmentNote = `Dispute resolved in buyer favor. Seller receives ${100 - disputeAmountPercent}% of original amount. Buyer gets ${disputeAmountPercent}% refund.`;
             }
-            
+
             console.log(`⚖️ Dispute adjustment: Original ฿${originalProductCost} → Adjusted ฿${adjustedProductCost.toFixed(2)} (${disputeAdjustmentNote})`);
         }
 
@@ -637,7 +643,7 @@ async function processSellerPaymentEnhanced(order, session, disputeInfo = null) 
         console.log(`💳 Payment calculation: Original: ฿${originalProductCost}, Adjusted: ฿${adjustedProductCost.toFixed(2)}, Service: ฿${serviceCharge.toFixed(2)}, Tax: ฿${taxAmount.toFixed(2)}, Net: ฿${netAmount.toFixed(2)}`);
 
         // Create wallet transaction for seller with enhanced metadata
-        const transactionNotes = disputeInfo 
+        const transactionNotes = disputeInfo
             ? `Auto-payment on order completion with dispute resolution. ${disputeAdjustmentNote}`
             : 'Auto-payment on order completion (Cron Job)';
 
@@ -670,7 +676,7 @@ async function processSellerPaymentEnhanced(order, session, disputeInfo = null) 
                 })
             }
         });
-        
+
         await sellerWalletTnx.save({ session });
 
         // Update seller wallet balance
@@ -686,9 +692,9 @@ async function processSellerPaymentEnhanced(order, session, disputeInfo = null) 
         await trackCompletionRevenue(order, serviceCharge, taxAmount, serviceType, taxType, session);
 
         console.log(`✅ Seller payment processed: ฿${netAmount.toFixed(2)} credited to wallet${disputeInfo ? ' (dispute-adjusted)' : ''}`);
-        
+
         return { success: true, netAmount, disputeAdjusted: !!disputeInfo };
-        
+
     } catch (error) {
         console.error('❌ Error processing seller payment:', error);
         return { success: false, error: error.message };
@@ -728,6 +734,7 @@ async function trackCompletionRevenue(order, serviceCharge, taxAmount, serviceTy
                 revenueType: 'TAX',
                 amount: taxAmount,
                 calculationType: taxType,
+                calculationValue: taxAmount,
                 baseAmount: order.totalAmount,
                 status: 'COMPLETED',
                 completedAt: new Date(),
@@ -744,7 +751,7 @@ async function trackCompletionRevenue(order, serviceCharge, taxAmount, serviceTy
             await PlatformRevenue.insertMany(revenueEntries, { session });
             console.log(`📊 Platform revenue tracked: ${revenueEntries.length} entries`);
         }
-        
+
     } catch (error) {
         console.error('❌ Error tracking completion revenue:', error);
         throw error;
@@ -799,14 +806,14 @@ async function sendStatusUpdateNotification(order, newStatus, message) {
 async function sendCompletionNotifications(order, disputeInfo = null) {
     try {
         // Buyer notification
-        const buyerMessage = disputeInfo 
+        const buyerMessage = disputeInfo
             ? `Your order has been automatically completed after ${PROCESSING_DAY_LIMIT} days. A dispute was resolved in ${disputeInfo.decision === DISPUTE_DECISION.BUYER ? 'your' : 'seller'} favor. Thank you for your purchase!`
             : `Your order has been automatically completed after ${PROCESSING_DAY_LIMIT} days. Thank you for your purchase!`;
 
         // Seller notification
         let sellerTitle = "Order Completed - Payment Received!";
         let sellerMessage = `Your order has been completed and payment has been credited to your wallet.`;
-        
+
         if (disputeInfo) {
             if (disputeInfo.decision === DISPUTE_DECISION.SELLER) {
                 sellerTitle = "Order Completed - Dispute Resolved in Your Favor!";
@@ -852,7 +859,7 @@ async function sendCompletionNotifications(order, disputeInfo = null) {
                         disputeStatus: 'RESOLVED',
                         disputeDecision: disputeInfo.decision,
                         disputeAmountPercent: disputeInfo.disputeAmountPercent,
-                        refundAmount: disputeInfo.decision === DISPUTE_DECISION.BUYER ? 
+                        refundAmount: disputeInfo.decision === DISPUTE_DECISION.BUYER ?
                             (order.grandTotal * disputeInfo.disputeAmountPercent / 100) : 0
                     })
                 }),
@@ -892,9 +899,9 @@ async function sendCompletionNotifications(order, disputeInfo = null) {
                         disputeStatus: 'RESOLVED',
                         disputeDecision: disputeInfo.decision,
                         disputeAmountPercent: disputeInfo.disputeAmountPercent,
-                        netAmountPaid: disputeInfo.decision === DISPUTE_DECISION.SELLER ? 
+                        netAmountPaid: disputeInfo.decision === DISPUTE_DECISION.SELLER ?
                             order.totalAmount : (order.totalAmount * (100 - disputeInfo.disputeAmountPercent) / 100),
-                        refundAmount: disputeInfo.decision === DISPUTE_DECISION.BUYER ? 
+                        refundAmount: disputeInfo.decision === DISPUTE_DECISION.BUYER ?
                             (order.grandTotal * disputeInfo.disputeAmountPercent / 100) : 0
                     })
                 }),
@@ -915,7 +922,7 @@ async function sendCronSummaryNotification(stats, duration) {
     try {
         // This could be enhanced to send emails to admins
         console.log('📧 Sending cron summary notification (placeholder for email service)');
-        
+
         // You can implement actual email sending here
         // const emailService = require('../../../services/emailService');
         // await emailService.sendAdminNotification({
@@ -929,7 +936,7 @@ async function sendCronSummaryNotification(stats, duration) {
         //         - Errors: ${stats.errors.length}
         //     `
         // });
-        
+
     } catch (error) {
         console.error('❌ Error sending cron summary notification:', error);
     }
@@ -941,7 +948,7 @@ async function sendCronSummaryNotification(stats, duration) {
 async function sendCronErrorNotification(error) {
     try {
         console.log('🚨 Sending cron error notification (placeholder for email service)');
-        
+
         // You can implement actual email sending here
         // const emailService = require('../../../services/emailService');
         // await emailService.sendAdminAlert({
@@ -956,7 +963,7 @@ async function sendCronErrorNotification(error) {
         //         Please investigate immediately.
         //     `
         // });
-        
+
     } catch (notificationError) {
         console.error('❌ Error sending cron error notification:', notificationError);
     }
@@ -969,26 +976,26 @@ if (typeof global.app !== 'undefined') {
     global.app.post('/cron/trigger/order-status-update', async (req, res) => {
         try {
             console.log('🔄 Manual trigger for Order Status Update Cron');
-            
+
             // Add authentication check here
             // if (!req.user || req.user.role !== 'admin') {
             //     return res.status(403).json({ error: 'Unauthorized' });
             // }
-            
+
             const session = await mongoose.startSession();
             session.startTransaction();
-            
+
             try {
                 await validateSystemState();
-                
+
                 const now = moment();
                 const cutoffDate = now.clone().subtract(PROCESSING_DAY_LIMIT, 'days');
-                
+
                 const shippedStats = await updateShippedToDelivered(cutoffDate, session);
                 const completedStats = await updateDeliveredToCompleted(cutoffDate, session);
-                
+
                 await session.commitTransaction();
-                
+
                 res.json({
                     success: true,
                     message: 'Manual cron trigger completed',
@@ -1000,14 +1007,14 @@ if (typeof global.app !== 'undefined') {
                         errors: [...shippedStats.errors, ...completedStats.errors]
                     }
                 });
-                
+
             } catch (error) {
                 await session.abortTransaction();
                 throw error;
             } finally {
                 session.endSession();
             }
-            
+
         } catch (error) {
             console.error('❌ Manual trigger error:', error);
             res.status(500).json({
@@ -1018,7 +1025,7 @@ if (typeof global.app !== 'undefined') {
     });
 }
 
-console.log('📅 Order Status Update Cron Job initialized with enhanced monitoring and dispute handling.'); 
+console.log('📅 Order Status Update Cron Job initialized with enhanced monitoring and dispute handling.');
 console.log(`⚙️ Configuration: ${PROCESSING_DAY_LIMIT} days processing limit, Schedule: ${CRON_SCHEDULE}`);
 console.log('🔍 Health check available at: /cron/health/order-status-update');
 console.log('🧪 Manual trigger available at: POST /cron/trigger/order-status-update'); 

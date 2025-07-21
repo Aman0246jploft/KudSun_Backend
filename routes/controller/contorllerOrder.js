@@ -404,6 +404,10 @@ const paymentCallback = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, error.details[0].message);
     }
 
+
+    console.log("value",value)
+
+
     const { orderId, paymentStatus, paymentId, cardType, cardLast4 } = value;
 
     const session = await mongoose.startSession();
@@ -3523,7 +3527,7 @@ const getSellerPayoutCalculation = async (req, res) => {
 router.post('/previewOrder', perApiLimiter(), upload.none(), previewOrder);
 router.post('/placeOrder', perApiLimiter(), upload.none(), createOrder);
 
-router.post('/paymentCallback', paymentCallback);
+router.post('/paymentCallback', upload.none() ,paymentCallback);
 
 router.post('/updateOrderStatusBySeller/:orderId', perApiLimiter(), upload.none(), updateOrderStatusBySeller);
 
