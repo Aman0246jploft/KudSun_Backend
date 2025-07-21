@@ -109,7 +109,14 @@ SellProductsSchema.index({ "specifics.valueId": 1 });
 SellProductsSchema.index({ tags: 1 });
 SellProductsSchema.index({ title: "text", description: "text", tags: "text" });
 SellProductsSchema.pre('save', function (next) {
+
+
+
     if (this.saleType === SALE_TYPE.FIXED && !this.fixedPrice) {
+        // if (this.auctionSettings && Object.keys(this.auctionSettings).some(key => this.auctionSettings[key] != null)) {
+        //     return next(new Error("Auction settings should be empty when saleType is 'fixed'"));
+        // }
+
         return next(new Error("Fixed price is required when saleType is 'fixed'"));
     }
 
