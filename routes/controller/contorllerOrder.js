@@ -2821,7 +2821,9 @@ const getAllTransactionsForAdmin = async (req, res) => {
             buyerId,
             dateFrom,
             dateTo,
-            paidToSeller // New filter for paid to seller status
+            paidToSeller, // Filter for paid to seller status
+            hasDispute, // New filter for dispute existence
+            disputeStatus // New filter for dispute status
         } = req.query;
 
         pageNo = parseInt(pageNo);
@@ -2830,7 +2832,6 @@ const getAllTransactionsForAdmin = async (req, res) => {
         // Build filter object
         const filter = {};
         filter.paymentStatus = { $ne: PAYMENT_STATUS.PENDING };
-
 
         if (minAmount !== undefined || maxAmount !== undefined) {
             filter.amount = {};
@@ -2848,6 +2849,14 @@ const getAllTransactionsForAdmin = async (req, res) => {
             filter.createdAt = {};
             if (dateFrom) filter.createdAt.$gte = new Date(dateFrom);
             if (dateTo) filter.createdAt.$lte = new Date(dateTo);
+        }
+
+        // Dispute filter - we'll apply this after we get the data since dispute is in a separate collection
+        let disputeFilter = null;
+        if (hasDispute === 'true') {
+            disputeFilter = { hasDispute: true };
+        } else if (hasDispute === 'false') {
+            disputeFilter = { hasDispute: false };
         }
 
         // Build sort object
@@ -2872,6 +2881,10 @@ const getAllTransactionsForAdmin = async (req, res) => {
                 {
                     path: 'items.productId',
                     select: 'title productImages fixedPrice saleType'
+                },
+                {
+                    path: 'disputeId',
+                    select: 'disputeId status disputeType description adminReview createdAt'
                 }
             ])
             .sort(sort)
@@ -2888,9 +2901,16 @@ const getAllTransactionsForAdmin = async (req, res) => {
             tnxType: { $in: [TNX_TYPE.CREDIT, TNX_TYPE.WITHDRAWL] }
         }).lean();
 
-        // Create maps for both credit and withdrawal transactions
+        // Get disputes for all orders (in case disputeId is not populated in order)
+        const disputes = await Dispute.find({
+            orderId: { $in: orderIds },
+            isDeleted: false
+        }).lean();
+
+        // Create maps
         const creditTnxMap = {};
         const withdrawalTnxMap = {};
+        const disputeMap = {};
 
         walletTransactions.forEach(tnx => {
             if (tnx.tnxType === TNX_TYPE.CREDIT) {
@@ -2900,13 +2920,19 @@ const getAllTransactionsForAdmin = async (req, res) => {
             }
         });
 
+        disputes.forEach(dispute => {
+            disputeMap[dispute.orderId.toString()] = dispute;
+        });
+
         // Format response data
         let formattedOrders = orders.map(order => {
             const creditTnx = creditTnxMap[order._id.toString()];
             const withdrawalTnx = withdrawalTnxMap[order._id.toString()];
+            const dispute = order.disputeId || disputeMap[order._id.toString()];
 
             const orderData = {
                 orderId: order._id,
+                orderIdFor:order.orderId,
                 orderNumber: order._id.toString(),
                 orderDate: order.createdAt,
                 status: order.status,
@@ -2963,6 +2989,21 @@ const getAllTransactionsForAdmin = async (req, res) => {
                     } : null
                 } : null,
 
+                // Dispute Information
+                dispute: dispute ? {
+                    disputeId: dispute.disputeId,
+                    status: dispute.status,
+                    disputeType: dispute.disputeType,
+                    description: dispute.description,
+                    createdAt: dispute.createdAt,
+                    adminReview: dispute.adminReview || null,
+                    isResolved: dispute.status === 'RESOLVED'
+                } : null,
+
+                // Helper flags
+                hasDispute: !!dispute,
+                disputeStatus: dispute?.status || null,
+
                 // Product Details
                 products: order.items.map(item => ({
                     productId: item.productId?._id,
@@ -2989,6 +3030,8 @@ const getAllTransactionsForAdmin = async (req, res) => {
             return orderData;
         });
 
+        // Apply post-processing filters
+        
         // Filter by paidToSeller if specified
         if (paidToSeller !== undefined) {
             const isPaid = paidToSeller === 'true' || paidToSeller === true;
@@ -2997,12 +3040,46 @@ const getAllTransactionsForAdmin = async (req, res) => {
             );
         }
 
+        // Filter by dispute existence
+        if (disputeFilter) {
+            if (disputeFilter.hasDispute) {
+                formattedOrders = formattedOrders.filter(order => order.hasDispute);
+            } else {
+                formattedOrders = formattedOrders.filter(order => !order.hasDispute);
+            }
+        }
+
+        // Filter by dispute status
+        if (disputeStatus) {
+            formattedOrders = formattedOrders.filter(order => 
+                order.dispute?.status === disputeStatus
+            );
+        }
+
+        // Recalculate pagination info based on filtered results
+        const filteredTotal = formattedOrders.length;
+        const totalPages = Math.ceil(filteredTotal / size);
+
         return apiSuccessRes(HTTP_STATUS.OK, res, "Transactions fetched successfully", {
             pageNo,
             size,
-            totalPages: Math.ceil(total / size),
-            totalRecords: total,
-            transactions: formattedOrders
+            totalPages,
+            totalRecords: filteredTotal,
+            originalTotalRecords: total, // Total before dispute filtering
+            transactions: formattedOrders,
+            filters: {
+                hasDispute,
+                disputeStatus,
+                paidToSeller,
+                appliedFilters: {
+                    minAmount: minAmount || null,
+                    maxAmount: maxAmount || null,
+                    status: status || null,
+                    paymentStatus: paymentStatus || null,
+                    dateFrom: dateFrom || null,
+                    dateTo: dateTo || null
+                }
+            }
         });
 
     } catch (err) {
