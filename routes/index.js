@@ -22,6 +22,7 @@ module.exports = {
 
     revenue: require("./controller/controllerPlatformRevenue"),
     // chat: require("./controller/controllerChat"),
+    notifiaction: require('./controller/controllerNotification'),
 
 
 
