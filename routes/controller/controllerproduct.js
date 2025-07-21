@@ -821,6 +821,7 @@ const showAuctionProducts = async (req, res) => {
             sortBy = 'auctionSettings.biddingEndsAt',
             orderBy = 'asc'
         } = req.query;
+        const allowedSortFields = ['auctionSettings.biddingEndsAt', 'title', 'createdAt', 'isTrending']; // define valid fields
 
         const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'auctionSettings.biddingEndsAt';
         const sortOrder = orderBy.toLowerCase() === 'desc' ? -1 : 1;

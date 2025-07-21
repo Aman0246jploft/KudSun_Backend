@@ -1863,6 +1863,8 @@ const userList = async (req, res) => {
                 gender: 1,
                 dob: 1,
                 isDisable: 1,
+                is_Verified_Seller:1,
+                is_Id_verified:1,
                 createdAt: 1,
                 sellerVerificationStatus: 1,
                 sellerVerification: 1,
