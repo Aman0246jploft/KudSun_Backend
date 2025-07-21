@@ -24,7 +24,10 @@ const {
     PRICING_TYPE, 
     TNX_TYPE,
     CHARGE_TYPE,
-    NOTIFICATION_TYPES 
+    NOTIFICATION_TYPES,
+    DISPUTE_DECISION,
+    createStandardizedChatMeta,
+    createStandardizedNotificationMeta,
 } = require('../../../utils/Role');
 
 // Import notification service
@@ -196,11 +199,25 @@ async function updateDeliveredToCompleted(threeDaysAgo, session) {
                     status: DISPUTE_STATUS.RESOLVED
                 }).session(session);
 
+                let disputeInfo = null;
                 if (resolvedDispute) {
-                    console.log(`✅ Order ${order._id} had resolved dispute, proceeding with completion`);
+                    // Check if the dispute has been resolved by admin
+                    if (!resolvedDispute.adminReview || !resolvedDispute.adminReview.decision) {
+                        console.log(`⚠️ Order ${order._id} has resolved dispute but no admin review decision, skipping completion`);
+                        continue;
+                    }
+
+                    disputeInfo = {
+                        decision: resolvedDispute.adminReview.decision,
+                        disputeAmountPercent: resolvedDispute.adminReview.disputeAmountPercent || 0,
+                        decisionNote: resolvedDispute.adminReview.decisionNote,
+                        disputeId: resolvedDispute.disputeId
+                    };
+
+                    console.log(`✅ Order ${order._id} had resolved dispute - Decision: ${disputeInfo.decision}, Amount%: ${disputeInfo.disputeAmountPercent}%`);
                 }
 
-                // No active disputes - proceed with completion
+                // Proceed with completion
                 console.log(`🎉 Completing order ${order._id} and processing seller payment...`);
                 
                 // Update order status to COMPLETED
@@ -214,19 +231,23 @@ async function updateDeliveredToCompleted(threeDaysAgo, session) {
                 );
 
                 // Create status history entry
+                const statusNote = disputeInfo 
+                    ? `Auto-completed after 3 days with resolved dispute (${disputeInfo.decision} favor, ${disputeInfo.disputeAmountPercent}% dispute amount)`
+                    : 'Auto-completed after 3 days with no disputes';
+
                 await OrderStatusHistory.create([{
                     orderId: order._id,
                     oldStatus: ORDER_STATUS.DELIVERED,
                     newStatus: ORDER_STATUS.COMPLETED,
-                    note: 'Auto-completed after 3 days with no disputes',
+                    note: statusNote,
                     changedAt: new Date()
                 }], { session });
 
-                // Process seller payment
-                await processSellerPayment(order, session);
+                // Process seller payment with dispute information
+                await processSellerPayment(order, session, disputeInfo);
                 
                 // Send notifications
-                await sendCompletionNotifications(order);
+                await sendCompletionNotifications(order, disputeInfo);
                 
                 console.log(`✅ Order ${order._id} completed and seller paid`);
             }
@@ -239,9 +260,9 @@ async function updateDeliveredToCompleted(threeDaysAgo, session) {
 }
 
 /**
- * Process seller payment when order is completed
+ * Process seller payment for completed order, handling dispute resolutions
  */
-async function processSellerPayment(order, session) {
+async function processSellerPayment(order, session, disputeInfo = null) {
     try {
         console.log(`💰 Processing payment for seller ${order.sellerId} for order ${order._id}`);
         
@@ -269,8 +290,29 @@ async function processSellerPayment(order, session) {
         const serviceChargeSetting = feeSettings.find(f => f.name === "SERVICE_CHARGE");
         const taxSetting = feeSettings.find(f => f.name === "TAX");
 
-        // Calculate fees
-        const productCost = order.totalAmount || 0;
+        // Calculate original product cost
+        const originalProductCost = order.totalAmount || 0;
+        let adjustedProductCost = originalProductCost;
+        let disputeAdjustmentNote = '';
+
+        // Apply dispute resolution if present
+        if (disputeInfo) {
+            const { decision, disputeAmountPercent } = disputeInfo;
+            
+            if (decision === DISPUTE_DECISION.SELLER) {
+                // Seller wins - gets full amount (100%), disputeAmountPercent is ignored
+                adjustedProductCost = originalProductCost; // No deduction
+                disputeAdjustmentNote = `Dispute resolved in seller favor. Seller receives full amount (100%).`;
+            } else if (decision === DISPUTE_DECISION.BUYER) {
+                // Buyer wins - seller gets (100 - disputeAmountPercent)%, buyer gets disputeAmountPercent% refund
+                adjustedProductCost = originalProductCost * ((100 - disputeAmountPercent) / 100);
+                disputeAdjustmentNote = `Dispute resolved in buyer favor. Seller receives ${100 - disputeAmountPercent}% of original amount. Buyer gets ${disputeAmountPercent}% refund.`;
+            }
+            
+            console.log(`⚖️ Dispute adjustment: Original $${originalProductCost} → Adjusted $${adjustedProductCost.toFixed(2)} (${disputeAdjustmentNote})`);
+        }
+
+        // Calculate fees based on adjusted amount
         let serviceCharge = 0;
         let serviceType = PRICING_TYPE.FIXED;
         let taxAmount = 0;
@@ -279,7 +321,7 @@ async function processSellerPayment(order, session) {
         if (serviceChargeSetting) {
             serviceType = serviceChargeSetting.type;
             if (serviceChargeSetting.type === PRICING_TYPE.PERCENTAGE) {
-                serviceCharge = (productCost * serviceChargeSetting.value) / 100;
+                serviceCharge = (adjustedProductCost * serviceChargeSetting.value) / 100;
             } else {
                 serviceCharge = serviceChargeSetting.value;
             }
@@ -288,21 +330,25 @@ async function processSellerPayment(order, session) {
         if (taxSetting) {
             taxType = taxSetting.type;
             if (taxSetting.type === PRICING_TYPE.PERCENTAGE) {
-                taxAmount = (productCost * taxSetting.value) / 100;
+                taxAmount = (adjustedProductCost * taxSetting.value) / 100;
             } else {
                 taxAmount = taxSetting.value;
             }
         }
 
-        const netAmount = productCost - serviceCharge - taxAmount;
+        const netAmount = adjustedProductCost - serviceCharge - taxAmount;
 
-        console.log(`💳 Payment calculation: Product: $${productCost}, Service: $${serviceCharge}, Tax: $${taxAmount}, Net: $${netAmount}`);
+        console.log(`💳 Payment calculation: Original: $${originalProductCost}, Adjusted: $${adjustedProductCost.toFixed(2)}, Service: $${serviceCharge.toFixed(2)}, Tax: $${taxAmount.toFixed(2)}, Net: $${netAmount.toFixed(2)}`);
 
         // Create wallet transaction for seller
+        const transactionNotes = disputeInfo 
+            ? `Auto-payment on order completion with dispute resolution. ${disputeAdjustmentNote}`
+            : 'Auto-payment on order completion';
+
         const sellerWalletTnx = new WalletTnx({
             orderId: order._id,
             userId: order.sellerId,
-            amount: productCost,
+            amount: adjustedProductCost,
             netAmount: netAmount,
             serviceCharge,
             taxCharge: taxAmount,
@@ -310,12 +356,22 @@ async function processSellerPayment(order, session) {
             serviceType: serviceType,
             taxType: taxType,
             tnxStatus: PAYMENT_STATUS.COMPLETED,
-            notes: 'Auto-payment on order completion'
+            notes: transactionNotes,
+            // Add dispute info to transaction metadata if present
+            ...(disputeInfo && {
+                disputeInfo: {
+                    disputeId: disputeInfo.disputeId,
+                    decision: disputeInfo.decision,
+                    disputeAmountPercent: disputeInfo.disputeAmountPercent,
+                    originalAmount: originalProductCost,
+                    adjustedAmount: adjustedProductCost
+                }
+            })
         });
         
         await sellerWalletTnx.save({ session });
 
-        // ✅ Credits seller wallet
+        // ✅ Credits seller wallet with adjusted amount
         await User.findByIdAndUpdate(
             order.sellerId,
             {
@@ -324,10 +380,10 @@ async function processSellerPayment(order, session) {
             { session }
         );
 
-        // Track platform revenue
+        // Track platform revenue based on adjusted amount
         await trackCompletionRevenue(order, serviceCharge, taxAmount, serviceType, taxType, session);
 
-        console.log(`✅ Seller payment processed: $${netAmount} credited to wallet`);
+        console.log(`✅ Seller payment processed: $${netAmount.toFixed(2)} credited to wallet${disputeInfo ? ' (dispute-adjusted)' : ''}`);
         
     } catch (error) {
         console.error('❌ Error processing seller payment:', error);
@@ -402,11 +458,24 @@ async function sendStatusUpdateNotification(order, newStatus, message) {
             type: NOTIFICATION_TYPES.ORDER,
             title: `Order ${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}`,
             message: message,
-            meta: {
+            meta: createStandardizedNotificationMeta({
                 orderNumber: order._id.toString(),
+                orderId: order._id.toString(),
+                itemCount: order.items?.length || 0,
+                totalAmount: order.totalAmount,
+                amount: order.grandTotal,
+                oldStatus: order.status,
                 newStatus: newStatus,
-                autoUpdate: true
-            },
+                paymentMethod: order.paymentMethod,
+                paymentId: order.paymentId,
+                productId: order.items[0]?.productId,
+                productTitle: order.items[0]?.productTitle,
+                sellerId: order.sellerId,
+                buyerId: order.userId,
+                status: newStatus,
+                autoUpdate: true,
+                actionBy: 'system'
+            }),
             redirectUrl: `/order/${order._id}`
         }];
 
@@ -419,8 +488,27 @@ async function sendStatusUpdateNotification(order, newStatus, message) {
 /**
  * Send notifications when order is completed
  */
-async function sendCompletionNotifications(order) {
+async function sendCompletionNotifications(order, disputeInfo = null) {
     try {
+        // Buyer notification
+        const buyerMessage = disputeInfo 
+            ? `Your order has been automatically completed after 3 days. A dispute was resolved in ${disputeInfo.decision === DISPUTE_DECISION.BUYER ? 'your' : 'seller'} favor. Thank you for your purchase!`
+            : `Your order has been automatically completed after 3 days. Thank you for your purchase!`;
+
+        // Seller notification
+        let sellerTitle = "Order Completed - Payment Received!";
+        let sellerMessage = `Your order has been completed and payment has been credited to your wallet.`;
+        
+        if (disputeInfo) {
+            if (disputeInfo.decision === DISPUTE_DECISION.SELLER) {
+                sellerTitle = "Order Completed - Dispute Resolved in Your Favor!";
+                sellerMessage = `Your order has been completed and full payment has been credited to your wallet. Dispute was resolved in your favor. ${disputeInfo.decisionNote || ''}`;
+            } else {
+                sellerTitle = "Order Completed - Partial Payment Due to Dispute";
+                sellerMessage = `Your order has been completed with partial payment (${100 - disputeInfo.disputeAmountPercent}% of order value) credited to your wallet. Dispute was resolved in buyer favor. ${disputeInfo.decisionNote || ''}`;
+            }
+        }
+
         const notifications = [
             // Notification to buyer
             {
@@ -430,12 +518,34 @@ async function sendCompletionNotifications(order) {
                 productId: order.items[0]?.productId,
                 type: NOTIFICATION_TYPES.ORDER,
                 title: "Order Completed!",
-                message: `Your order has been automatically completed after 3 days. Thank you for your purchase!`,
-                meta: {
+                message: buyerMessage,
+                meta: createStandardizedNotificationMeta({
                     orderNumber: order._id.toString(),
+                    orderId: order._id.toString(),
+                    itemCount: order.items?.length || 0,
+                    totalAmount: order.totalAmount,
+                    amount: order.grandTotal,
+                    oldStatus: ORDER_STATUS.DELIVERED,
+                    newStatus: ORDER_STATUS.COMPLETED,
+                    paymentMethod: order.paymentMethod,
+                    paymentId: order.paymentId,
+                    productId: order.items[0]?.productId,
+                    productTitle: order.items[0]?.productTitle,
+                    sellerId: order.sellerId,
+                    buyerId: order.userId,
                     status: ORDER_STATUS.COMPLETED,
-                    autoCompleted: true
-                },
+                    actionBy: 'system',
+                    processedBy: 'auto-completion',
+                    autoCompleted: true,
+                    ...(disputeInfo && {
+                        disputeId: disputeInfo.disputeId,
+                        disputeStatus: 'RESOLVED',
+                        disputeDecision: disputeInfo.decision,
+                        disputeAmountPercent: disputeInfo.disputeAmountPercent,
+                        refundAmount: disputeInfo.decision === DISPUTE_DECISION.BUYER ? 
+                            (order.grandTotal * disputeInfo.disputeAmountPercent / 100) : 0
+                    })
+                }),
                 redirectUrl: `/order/${order._id}`
             },
             // Notification to seller
@@ -445,13 +555,37 @@ async function sendCompletionNotifications(order) {
                 orderId: order._id,
                 productId: order.items[0]?.productId,
                 type: NOTIFICATION_TYPES.ORDER,
-                title: "Order Completed - Payment Received!",
-                message: `Your order has been completed and payment has been credited to your wallet.`,
-                meta: {
+                title: sellerTitle,
+                message: sellerMessage,
+                meta: createStandardizedNotificationMeta({
                     orderNumber: order._id.toString(),
+                    orderId: order._id.toString(),
+                    itemCount: order.items?.length || 0,
+                    totalAmount: order.totalAmount,
+                    amount: order.grandTotal,
+                    oldStatus: ORDER_STATUS.DELIVERED,
+                    newStatus: ORDER_STATUS.COMPLETED,
+                    paymentMethod: order.paymentMethod,
+                    paymentId: order.paymentId,
+                    productId: order.items[0]?.productId,
+                    productTitle: order.items[0]?.productTitle,
+                    sellerId: order.sellerId,
+                    buyerId: order.userId,
                     status: ORDER_STATUS.COMPLETED,
-                    paymentProcessed: true
-                },
+                    actionBy: 'system',
+                    processedBy: 'auto-completion',
+                    paymentProcessed: true,
+                    ...(disputeInfo && {
+                        disputeId: disputeInfo.disputeId,
+                        disputeStatus: 'RESOLVED',
+                        disputeDecision: disputeInfo.decision,
+                        disputeAmountPercent: disputeInfo.disputeAmountPercent,
+                        netAmountPaid: disputeInfo.decision === DISPUTE_DECISION.SELLER ? 
+                            order.totalAmount : (order.totalAmount * (100 - disputeInfo.disputeAmountPercent) / 100),
+                        refundAmount: disputeInfo.decision === DISPUTE_DECISION.BUYER ? 
+                            (order.grandTotal * disputeInfo.disputeAmountPercent / 100) : 0
+                    })
+                }),
                 redirectUrl: `/wallet/transactions`
             }
         ];
