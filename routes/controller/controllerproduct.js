@@ -1678,7 +1678,9 @@ const createHistory = async (req, res) => {
             history.isDisable = false;
             await history.save();
         }
-
+    } else {
+        // Only create if it doesn't already exist
+        await SearchHistory.create({ userId, searchQuery });
     }
 
     const total = await SearchHistory.countDocuments({
@@ -1686,27 +1688,25 @@ const createHistory = async (req, res) => {
         isDeleted: false,
         isDisable: false,
     });
-    await SearchHistory.create({ userId, searchQuery });
-    // Fetch all active history entries
+
     const allHistories = await SearchHistory.find({
         userId,
         isDeleted: false,
         isDisable: false,
     })
         .select('-createdAt -updatedAt')
-
         .sort({ _id: -1 })
         .skip(skip)
         .limit(limit);
 
-
-
-    return apiSuccessRes(HTTP_STATUS.CREATED, res, 'History updated', { pageNo: page, size: size, total: total, data: allHistories });
-
-    // Create new search history
-
-
+    return apiSuccessRes(HTTP_STATUS.CREATED, res, 'History updated', {
+        pageNo: page,
+        size: limit,
+        total,
+        data: allHistories,
+    });
 };
+
 
 
 
