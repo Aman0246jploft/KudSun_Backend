@@ -416,26 +416,32 @@ async function setupSocket(server) {
             try {
                 const userId = socket.user?.userId;
                 if (!userId) return;
-        
-                const { Notification } = require('../db');
-                await Notification.updateMany(
-                    { userId: toObjectId(userId), read: false },
-                    { read: true }
-                );
-        
-                // Emit updated total count
-                await emitTotalUnreadCount(io, userId);
-        
-                socket.emit('allNotificationsMarkedAsRead', { 
-                    success: true, 
-                    timestamp: new Date().toISOString() 
+
+
+                await updateNotificationQueue.add({ userId });
+
+                socket.emit('allNotificationsMarkedAsRead', {
+                    success: true,
+                    queued: true,
+                    timestamp: new Date().toISOString()
                 });
-        
+
+
+                // const { Notification } = require('../db');
+                // await Notification.updateMany(
+                //     { userId: toObjectId(userId), read: false },
+                //     { read: true }
+                // );
+
+
+
             } catch (error) {
                 console.error('Error marking notifications as read:', error);
                 socket.emit('error', { message: 'Failed to mark notifications as read' });
             }
         });
+
+
 
         // Mark all messages in a specific room as read (accepts roomId or otherUserId)
         socket.on('markRoomMessagesAsRead', async ({ roomId, otherUserId }) => {
@@ -532,8 +538,8 @@ async function setupSocket(server) {
                 if (!userId) return;
 
                 // Get all user's chat rooms
-                const userRooms = await ChatRoom.find({ 
-                    participants: toObjectId(userId) 
+                const userRooms = await ChatRoom.find({
+                    participants: toObjectId(userId)
                 }).select('_id');
 
                 const roomIds = userRooms.map(room => room._id);
@@ -551,11 +557,11 @@ async function setupSocket(server) {
                 // Emit updated total count
                 await emitTotalUnreadCount(io, userId);
 
-                socket.emit('allChatsMarkedAsRead', { 
+                socket.emit('allChatsMarkedAsRead', {
                     success: true,
                     roomsCount: roomIds.length,
                     messagesCount: result.modifiedCount,
-                    timestamp: new Date().toISOString() 
+                    timestamp: new Date().toISOString()
                 });
 
             } catch (error) {
@@ -712,6 +718,24 @@ async function calculateTotalNotificationUnreadCount(userId) {
 
 // queue setup
 const LIVE_STATUS_QUEUE = 'live-status-queue';
+
+const UPDATE_NOTIFICATION = 'updateNotification';
+const updateNotificationQueue = createQueue(UPDATE_NOTIFICATION);
+
+processQueue(updateNotificationQueue, async (job) => {
+    const { userId } = job.data;
+
+    const { Notification } = require('../db');
+    await Notification.updateMany(
+        { userId: toObjectId(userId), read: false },
+        { read: true }
+    );
+
+    console.log(`Marked all notifications as read for user ${userId}`);
+});
+
+
+
 const liveStatusQueue = createQueue(LIVE_STATUS_QUEUE);
 processQueue(liveStatusQueue, async (job) => {
     const { userId, isLive } = job.data;
