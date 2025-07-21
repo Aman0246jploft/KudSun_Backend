@@ -821,7 +821,7 @@ const getBoughtProducts = async (req, res) => {
                 order.labalStatuses = 'Unpaid';
                 order.allowedNextStatuses = 'Pay now';
             } else if (!order.isReviewed) {
-                order.labalStatuses = 'Unreviewed';
+                // order.labalStatuses = 'Unreviewed';
 
                 if (order.status == ORDER_STATUS.SHIPPED) {
                     order.labalStatuses = 'Shipped';
