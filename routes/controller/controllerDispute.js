@@ -157,16 +157,24 @@ const sellerRespond = async (req, res) => {
 const adminDecision = async (req, res) => {
     const { value, error } = adminDecisionSchema.validate(req.body);
     if (error) return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, error.message);
-    const { disputeId, decision, decisionNote } = value;
+    const { disputeId, decision, decisionNote, disputeAmountPercent } = value;
 
     try {
         const dispute = await Dispute.findById(disputeId);
         if (!dispute) return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Dispute not found');
 
+        // Validate disputeAmountPercent only when decision is in favor of buyer
+        if (decision === 'BUYER' && disputeAmountPercent !== undefined) {
+            if (disputeAmountPercent < 0 || disputeAmountPercent > 100) {
+                return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Dispute amount percent must be between 0 and 100');
+            }
+        }
+
         dispute.adminReview = {
             reviewedBy: req.user.userId, // admin
             decision,
             decisionNote,
+            disputeAmountPercent: decision === 'BUYER' ? disputeAmountPercent || 0 : 0,
             resolvedAt: new Date()
         };
         dispute.status = DISPUTE_STATUS.RESOLVED;
