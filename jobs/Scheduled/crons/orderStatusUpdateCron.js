@@ -42,7 +42,7 @@ mongoose.connect(process.env.DB_STRING, {
 
     // Run every hour at minute 0 (0 0 * * * *)
     // For testing, you can use '*/5 * * * *' to run every 5 minutes
-    cron.schedule('0 0 * * *', async () => {
+    cron.schedule('*/2 0 * * *', async () => {
         console.log('🔄 Starting Order Status Update Cron Job at:', new Date().toISOString());
         
         const session = await mongoose.startSession();
