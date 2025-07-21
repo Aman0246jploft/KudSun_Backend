@@ -36,6 +36,10 @@ const DisputeSchema = new Schema({
             type: String,
             enum: Object.values(DISPUTE_DECISION), // 'Buyer', 'Seller'
         },
+        disputeAmountPercent:{
+            type:Number,
+            default:0
+        },
         decisionNote: { type: String },
         resolvedAt: { type: Date }
     },

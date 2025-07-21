@@ -1679,36 +1679,30 @@ const createHistory = async (req, res) => {
             await history.save();
         }
 
-        const total = await SearchHistory.countDocuments({
-            userId,
-            isDeleted: false,
-            isDisable: false,
-        });
-
-        // Fetch all active history entries
-        const allHistories = await SearchHistory.find({
-            userId,
-            isDeleted: false,
-            isDisable: false,
-        }) .sort({ _id: -1 })
-            .skip(skip)
-            .limit(limit);
-
-
-        return apiSuccessRes(HTTP_STATUS.CREATED, res, 'History updated', { pageNo: page, size: size, total: total, data: allHistories });
     }
 
-    // Create new search history
+    const total = await SearchHistory.countDocuments({
+        userId,
+        isDeleted: false,
+        isDisable: false,
+    });
     await SearchHistory.create({ userId, searchQuery });
-
     // Fetch all active history entries
     const allHistories = await SearchHistory.find({
         userId,
         isDeleted: false,
         isDisable: false,
-    }).sort({ _id: -1 });
+    }).sort({ _id: -1 })
+        .skip(skip)
+        .limit(limit);
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, 'History saved', allHistories);
+
+
+    return apiSuccessRes(HTTP_STATUS.CREATED, res, 'History updated', { pageNo: page, size: size, total: total, data: allHistories });
+
+    // Create new search history
+
+
 };
 
 
