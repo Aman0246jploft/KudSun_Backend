@@ -9,7 +9,7 @@ const { saveNotification } = require('../services/serviceNotification');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const HTTP_STATUS = require('../../utils/statusCode');
 const { toObjectId, apiSuccessRes, apiErrorRes, parseItems } = require('../../utils/globalFunction');
-const { SALE_TYPE, DEFAULT_AMOUNT, PAYMENT_METHOD, ORDER_STATUS, PAYMENT_STATUS, CHARGE_TYPE, PRICING_TYPE, SHIPPING_STATUS, TNX_TYPE, NOTIFICATION_TYPES, createStandardizedChatMeta,createStandardizedNotificationMeta } = require('../../utils/Role');
+const { SALE_TYPE, DEFAULT_AMOUNT, PAYMENT_METHOD, ORDER_STATUS, PAYMENT_STATUS, CHARGE_TYPE, PRICING_TYPE, SHIPPING_STATUS, TNX_TYPE, NOTIFICATION_TYPES, createStandardizedChatMeta, createStandardizedNotificationMeta } = require('../../utils/Role');
 const { default: mongoose } = require('mongoose');
 const Joi = require('joi');
 
@@ -858,7 +858,11 @@ const getBoughtProducts = async (req, res) => {
                 // Already reviewed ⇒ no further action
                 order.allowedNextStatuses = '';
             }
+            if (order.status == ORDER_STATUS.PENDING) {
+                order.labalStatuses = 'Unsent';
 
+
+            }
 
 
             if (order.status == ORDER_STATUS.COMPLETED) {
