@@ -17,6 +17,6 @@ const SearchHistorySchema = new mongoose.Schema({
   },
   isDisable: { type: Boolean, default: false },
   isDeleted: { type: Boolean, default: false },
-});
+},{timestamps:true});
 
 module.exports = mongoose.model('SearchHistory', SearchHistorySchema,'SearchHistory');

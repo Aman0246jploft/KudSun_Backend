@@ -1692,7 +1692,10 @@ const createHistory = async (req, res) => {
         userId,
         isDeleted: false,
         isDisable: false,
-    }).sort({ _id: -1 })
+    })
+        .select('-createdAt -updatedAt')
+
+        .sort({ _id: -1 })
         .skip(skip)
         .limit(limit);
 
@@ -1756,7 +1759,8 @@ const getSearchHistory = async (req, res) => {
 
         const [history, total] = await Promise.all([
             SearchHistory.find({ userId, isDeleted: false })
-                .sort({ updatedAt: -1 }) // optional: newest first
+                .select('-createdAt -updatedAt')
+                .sort({ createdAt: -1 })
                 .skip(skip)
                 .limit(limit),
             SearchHistory.countDocuments({ userId, isDeleted: false })
