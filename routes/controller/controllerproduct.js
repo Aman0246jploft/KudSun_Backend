@@ -1659,12 +1659,16 @@ const fetchUserProducts = async (req, res) => {
 
 
 const createHistory = async (req, res) => {
-    const { searchQuery } = req.query;
+    const { searchQuery, pageNo = 1, size = 10 } = req.query;
     const { userId } = req.user;
 
     if (!searchQuery) {
         return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Search query is required");
     }
+
+    const page = parseInt(pageNo);
+    const limit = parseInt(size);
+    const skip = (page - 1) * limit;
 
     let history = await SearchHistory.findOne({ searchQuery, userId });
 
@@ -1675,14 +1679,23 @@ const createHistory = async (req, res) => {
             await history.save();
         }
 
+        const total = await SearchHistory.countDocuments({
+            userId,
+            isDeleted: false,
+            isDisable: false,
+        });
+
         // Fetch all active history entries
         const allHistories = await SearchHistory.find({
             userId,
             isDeleted: false,
             isDisable: false,
-        }).sort({ _id: -1 });
+        }) .sort({ _id: -1 })
+            .skip(skip)
+            .limit(limit);
 
-        return apiSuccessRes(HTTP_STATUS.CREATED, res, 'History updated', allHistories);
+
+        return apiSuccessRes(HTTP_STATUS.CREATED, res, 'History updated', { pageNo: page, size: size, total: total, data: allHistories });
     }
 
     // Create new search history

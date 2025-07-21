@@ -858,7 +858,7 @@ const getBoughtProducts = async (req, res) => {
                 // Already reviewed ⇒ no further action
                 order.allowedNextStatuses = '';
             }
-            if (order.status == ORDER_STATUS.PENDING) {
+            if (order.status == ORDER_STATUS.PENDING || order.status == ORDER_STATUS.CONFIRMED) {
                 order.labalStatuses = 'Unsent';
 
 
