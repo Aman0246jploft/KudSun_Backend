@@ -116,6 +116,82 @@ const CHARGE_TYPE = {
     BUYER_PROTECTION_FEE: "BUYER_PROTECTION_FEE"
 }
 
+
+const createStandardizedChatMeta = (data = {}) => {
+    return {
+        orderNumber: data.orderNumber || null,
+        totalAmount: data.totalAmount || null,
+        amount: data.amount || null,
+        itemCount: data.itemCount || null,
+        timestamp: data.timestamp || new Date().toISOString(),
+        paymentId: data.paymentId || null,
+        paymentMethod: data.paymentMethod || null,
+        cardInfo: data.cardInfo || null,
+        carrier: data.carrier || null,
+        trackingNumber: data.trackingNumber || null,
+        previousStatus: data.previousStatus || null,
+        newStatus: data.newStatus || null,
+        notes: data.notes || null,
+        withdrawalFee: data.withdrawalFee || null,
+        netAmount: data.netAmount || null,
+        withdrawalAmount: data.withdrawalAmount || null,
+        transactionId: data.transactionId || null,
+        productTitle: data.productTitle || null,
+        productId: data.productId || null,
+        sellerId: data.sellerId || null,
+        buyerId: data.buyerId || null,
+        orderStatus: data.orderStatus || null,
+        paymentStatus: data.paymentStatus || null,
+        shippingStatus: data.shippingStatus || null,
+        disputeId: data.disputeId || null,
+        disputeStatus: data.disputeStatus || null,
+        refundAmount: data.refundAmount || null,
+        processingFee: data.processingFee || null
+    };
+};
+
+// Helper function to create standardized notification meta
+const createStandardizedNotificationMeta = (data = {}) => {
+    return {
+        orderNumber: data.orderNumber || null,
+        orderId: data.orderId || null,
+        itemCount: data.itemCount || null,
+        totalAmount: data.totalAmount || null,
+        amount: data.amount || null,
+        trackingNumber: data.trackingNumber || null,
+        oldStatus: data.oldStatus || null,
+        newStatus: data.newStatus || null,
+        paymentMethod: data.paymentMethod || null,
+        paymentId: data.paymentId || null,
+        cardType: data.cardType || null,
+        cardLast4: data.cardLast4 || null,
+        withdrawalId: data.withdrawalId || null,
+        withdrawalFee: data.withdrawalFee || null,
+        withdrawalAmount: data.withdrawalAmount || null,
+        netAmount: data.netAmount || null,
+        netAmountPaid: data.netAmountPaid || null,
+        status: data.status || null,
+        processedBy: data.processedBy || null,
+        actionBy: data.actionBy || null,
+        transactionId: data.transactionId || null,
+        productId: data.productId || null,
+        productTitle: data.productTitle || null,
+        sellerId: data.sellerId || null,
+        buyerId: data.buyerId || null,
+        timestamp: data.timestamp || new Date().toISOString(),
+        disputeId: data.disputeId || null,
+        disputeStatus: data.disputeStatus || null,
+        refundAmount: data.refundAmount || null,
+        processingFee: data.processingFee || null,
+        carrier: data.carrier || null,
+        shippingFee: data.shippingFee || null,
+        taxAmount: data.taxAmount || null,
+        serviceCharge: data.serviceCharge || null,
+        platformFee: data.platformFee || null
+    };
+};
+
+
 module.exports = {
     roleId,
     conditions,
@@ -132,7 +208,8 @@ module.exports = {
     PRICING_TYPE,
     CHARGE_TYPE,
     TNX_TYPE,
-
+    createStandardizedChatMeta,
+    createStandardizedNotificationMeta,
 
 
 

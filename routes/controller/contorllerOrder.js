@@ -9,9 +9,12 @@ const { saveNotification } = require('../services/serviceNotification');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const HTTP_STATUS = require('../../utils/statusCode');
 const { toObjectId, apiSuccessRes, apiErrorRes, parseItems } = require('../../utils/globalFunction');
-const { SALE_TYPE, DEFAULT_AMOUNT, PAYMENT_METHOD, ORDER_STATUS, PAYMENT_STATUS, CHARGE_TYPE, PRICING_TYPE, SHIPPING_STATUS, TNX_TYPE, NOTIFICATION_TYPES } = require('../../utils/Role');
+const { SALE_TYPE, DEFAULT_AMOUNT, PAYMENT_METHOD, ORDER_STATUS, PAYMENT_STATUS, CHARGE_TYPE, PRICING_TYPE, SHIPPING_STATUS, TNX_TYPE, NOTIFICATION_TYPES, createStandardizedChatMeta,createStandardizedNotificationMeta } = require('../../utils/Role');
 const { default: mongoose } = require('mongoose');
 const Joi = require('joi');
+
+
+
 
 const emitSystemMessage = async (io, systemMessage, room, buyerId, sellerId) => {
     if (!io) return;
@@ -254,11 +257,17 @@ const createOrder = async (req, res) => {
                 status: ORDER_STATUS.PENDING,
                 orderId: order._id,
                 productId: orderItems[0].productId, // First product in order
-                meta: {
+                meta: createStandardizedChatMeta({
                     orderNumber: order._id.toString(),
                     totalAmount: order.grandTotal,
-                    itemCount: orderItems.length
-                },
+                    amount: order.grandTotal,
+                    itemCount: orderItems.length,
+                    sellerId: sellerId,
+                    buyerId: userId,
+                    orderStatus: ORDER_STATUS.PENDING,
+                    paymentStatus: order.paymentStatus,
+                    paymentMethod: order.paymentMethod
+                }),
                 actions: [
                     {
                         label: "View Order",
@@ -303,11 +312,19 @@ const createOrder = async (req, res) => {
                 type: NOTIFICATION_TYPES.ORDER,
                 title: "New Order Received!",
                 message: `You have received a new order for ${orderItems.length} item(s). Order amount: $${order.grandTotal.toFixed(2)}`,
-                meta: {
+                meta: createStandardizedNotificationMeta({
                     orderNumber: order._id.toString(),
+                    orderId: order._id.toString(),
                     itemCount: orderItems.length,
-                    totalAmount: order.grandTotal
-                },
+                    totalAmount: order.grandTotal,
+                    amount: order.grandTotal,
+                    sellerId: sellerId,
+                    buyerId: userId,
+                    status: ORDER_STATUS.PENDING,
+                    newStatus: ORDER_STATUS.PENDING,
+                    paymentMethod: order.paymentMethod,
+                    paymentStatus: order.paymentStatus
+                }),
                 redirectUrl: `/order/${order._id}`
             }
         ];
@@ -439,15 +456,19 @@ const paymentCallback = async (req, res) => {
                 orderId: order._id,
                 productId: order.items[0].productId, // First product in order
                 title: paymentStatus === PAYMENT_STATUS.COMPLETED ? 'Payment Completed' : 'Payment Failed',
-                meta: {
+                meta: createStandardizedChatMeta({
                     orderNumber: order._id.toString(),
+                    totalAmount: order.grandTotal,
                     amount: `$${(order.grandTotal || 0).toFixed(2)}`,
                     itemCount: order.items.length,
                     paymentId: paymentId,
                     paymentMethod: order.paymentMethod,
                     cardInfo: paymentStatus === PAYMENT_STATUS.COMPLETED ? `${cardType} ending in ${cardLast4}` : null,
-                    timestamp: new Date().toISOString()
-                },
+                    sellerId: order.sellerId,
+                    buyerId: order.userId,
+                    orderStatus: order.status,
+                    paymentStatus: paymentStatus
+                }),
                 actions: paymentStatus === PAYMENT_STATUS.COMPLETED ? [
                     {
                         label: "View Order",
@@ -528,11 +549,21 @@ const paymentCallback = async (req, res) => {
                 type: NOTIFICATION_TYPES.ORDER,
                 title: "Payment Successful!",
                 message: `Your payment of $${order.grandTotal.toFixed(2)} has been processed successfully. Your order is now being prepared.`,
-                meta: {
+                meta: createStandardizedNotificationMeta({
                     orderNumber: order._id.toString(),
+                    orderId: order._id.toString(),
                     amount: order.grandTotal,
-                    paymentMethod: order.paymentMethod
-                },
+                    totalAmount: order.grandTotal,
+                    paymentMethod: order.paymentMethod,
+                    paymentId: paymentId,
+                    cardType: cardType,
+                    cardLast4: cardLast4,
+                    status: paymentStatus,
+                    newStatus: paymentStatus,
+                    sellerId: order.sellerId,
+                    buyerId: order.userId,
+                    itemCount: order.items.length
+                }),
                 redirectUrl: `/order/${order._id}`
             });
 
@@ -545,11 +576,21 @@ const paymentCallback = async (req, res) => {
                 type: NOTIFICATION_TYPES.ORDER,
                 title: "Payment Received!",
                 message: `Payment of $${order.grandTotal.toFixed(2)} has been received for your order. Please prepare the items for shipment.`,
-                meta: {
+                meta: createStandardizedNotificationMeta({
                     orderNumber: order._id.toString(),
+                    orderId: order._id.toString(),
                     amount: order.grandTotal,
-                    itemCount: order.items.length
-                },
+                    totalAmount: order.grandTotal,
+                    itemCount: order.items.length,
+                    paymentMethod: order.paymentMethod,
+                    paymentId: paymentId,
+                    cardType: cardType,
+                    cardLast4: cardLast4,
+                    status: paymentStatus,
+                    newStatus: paymentStatus,
+                    sellerId: order.sellerId,
+                    buyerId: order.userId
+                }),
                 redirectUrl: `/order/${order._id}`
             });
         } else if (paymentStatus === PAYMENT_STATUS.FAILED) {
@@ -562,11 +603,18 @@ const paymentCallback = async (req, res) => {
                 type: NOTIFICATION_TYPES.ORDER,
                 title: "Payment Failed",
                 message: `Your payment of $${order.grandTotal.toFixed(2)} could not be processed. Please try again or use a different payment method.`,
-                meta: {
+                meta: createStandardizedNotificationMeta({
                     orderNumber: order._id.toString(),
+                    orderId: order._id.toString(),
                     amount: order.grandTotal,
-                    paymentMethod: order.paymentMethod
-                },
+                    totalAmount: order.grandTotal,
+                    paymentMethod: order.paymentMethod,
+                    status: paymentStatus,
+                    newStatus: paymentStatus,
+                    sellerId: order.sellerId,
+                    buyerId: order.userId,
+                    itemCount: order.items.length
+                }),
                 redirectUrl: `/payment/retry/${order._id}`
             });
         }
@@ -1580,15 +1628,20 @@ const updateOrderStatusBySeller = async (req, res) => {
                 orderId: order._id,
                 productId: order.items[0].productId,
                 title: messageTitle,
-                meta: {
+                meta: createStandardizedChatMeta({
                     orderNumber: order._id.toString(),
                     previousStatus: currentStatus,
                     newStatus: newStatus,
                     totalAmount: `$${(order.grandTotal || 0).toFixed(2)}`,
+                    amount: order.grandTotal,
                     itemCount: order.items.length,
-                    timestamp: new Date().toISOString(),
+                    sellerId: sellerId,
+                    buyerId: order.userId,
+                    orderStatus: newStatus,
+                    paymentStatus: order.paymentStatus,
+                    paymentMethod: order.paymentMethod,
                     ...additionalMeta
-                },
+                }),
                 actions: [
                     {
                         label: "View Order",
@@ -1744,12 +1797,22 @@ const updateOrderStatusBySeller = async (req, res) => {
                 type: NOTIFICATION_TYPES.ORDER,
                 title: notificationTitle,
                 message: notificationMessage,
-                meta: {
+                meta: createStandardizedNotificationMeta({
                     orderNumber: order._id.toString(),
+                    orderId: order._id.toString(),
                     oldStatus: currentStatus,
                     newStatus: newStatus,
-                    trackingNumber: req.body.trackingNumber || null
-                },
+                    trackingNumber: req.body.trackingNumber || null,
+                    carrier: req.body.carrierId || null,
+                    sellerId: sellerId,
+                    buyerId: order.userId,
+                    totalAmount: order.grandTotal,
+                    amount: order.grandTotal,
+                    itemCount: order.items.length,
+                    paymentMethod: order.paymentMethod,
+                    status: newStatus,
+                    actionBy: 'seller'
+                }),
                 redirectUrl: `/order/${order._id}`
             }];
 
@@ -1883,15 +1946,20 @@ const updateOrderStatusByBuyer = async (req, res) => {
                 orderId: order._id,
                 productId: order.items[0].productId,
                 title: messageTitle,
-                meta: {
+                meta: createStandardizedChatMeta({
                     orderNumber: order._id.toString(),
                     previousStatus: currentStatus,
                     newStatus: newStatus,
                     totalAmount: `$${(order.grandTotal || 0).toFixed(2)}`,
+                    amount: order.grandTotal,
                     itemCount: order.items.length,
-                    timestamp: new Date().toISOString(),
+                    sellerId: order.sellerId,
+                    buyerId: buyerId,
+                    orderStatus: newStatus,
+                    paymentStatus: order.paymentStatus,
+                    paymentMethod: order.paymentMethod,
                     ...additionalMeta
-                },
+                }),
                 actions: [
                     {
                         label: "View Order",
@@ -1934,15 +2002,20 @@ const updateOrderStatusByBuyer = async (req, res) => {
                         orderId: order._id,
                         productId: order.items[0].productId,
                         title: 'Order Delivered',
-                        meta: {
+                        meta: createStandardizedChatMeta({
                             orderNumber: order._id.toString(),
                             previousStatus: currentStatus,
                             newStatus: ORDER_STATUS.DELIVERED,
                             totalAmount: `${(order.grandTotal || 0).toFixed(2)}`,
+                            amount: order.grandTotal,
                             itemCount: order.items.length,
-                            timestamp: new Date().toISOString(),
+                            sellerId: order.sellerId,
+                            buyerId: buyerId,
+                            orderStatus: ORDER_STATUS.DELIVERED,
+                            paymentStatus: order.paymentStatus,
+                            paymentMethod: order.paymentMethod,
                             ...additionalMeta
-                        },
+                        }),
                         actions: [
                             {
                                 label: "View Order",
@@ -2020,11 +2093,20 @@ const updateOrderStatusByBuyer = async (req, res) => {
                 type: NOTIFICATION_TYPES.ORDER,
                 title: notificationTitle,
                 message: notificationMessage,
-                meta: {
+                meta: createStandardizedNotificationMeta({
                     orderNumber: order._id.toString(),
+                    orderId: order._id.toString(),
                     newStatus: newStatus,
-                    actionBy: 'buyer'
-                },
+                    oldStatus: currentStatus,
+                    actionBy: 'buyer',
+                    sellerId: order.sellerId,
+                    buyerId: buyerId,
+                    totalAmount: order.grandTotal,
+                    amount: order.grandTotal,
+                    itemCount: order.items.length,
+                    paymentMethod: order.paymentMethod,
+                    status: newStatus
+                }),
                 redirectUrl: `/order/${order._id}`
             }];
 
@@ -2470,12 +2552,16 @@ const addrequest = async (req, res) => {
                 type: NOTIFICATION_TYPES.SYSTEM,
                 title: "Withdrawal Request Submitted",
                 message: `Your withdrawal request for $${amount} has been submitted successfully and is pending approval.`,
-                meta: {
-                    withdrawalId: newRequest._id,
+                meta: createStandardizedNotificationMeta({
+                    withdrawalId: newRequest._id.toString(),
                     amount: amount,
+                    withdrawalAmount: amount,
                     withdrawalFee: withdrawfee,
-                    status: newRequest.status
-                },
+                    status: newRequest.status,
+                    newStatus: newRequest.status,
+                    sellerId: userId,
+                    processedBy: 'system'
+                }),
                 redirectUrl: `/wallet/withdrawals`
             }];
 
@@ -2587,12 +2673,17 @@ const changeStatus = async (req, res) => {
                 type: NOTIFICATION_TYPES.SYSTEM,
                 title: notificationTitle,
                 message: notificationMessage,
-                meta: {
-                    withdrawalId: withdrawRequest._id,
+                meta: createStandardizedNotificationMeta({
+                    withdrawalId: withdrawRequest._id.toString(),
                     amount: withdrawRequest.amount,
+                    withdrawalAmount: withdrawRequest.amount,
+                    withdrawalFee: withdrawRequest.withdrawfee,
                     status: status,
-                    processedBy: 'admin'
-                },
+                    newStatus: status,
+                    oldStatus: 'pending',
+                    processedBy: 'admin',
+                    sellerId: withdrawRequest.userId
+                }),
                 redirectUrl: `/wallet/withdrawals`
             }];
 
@@ -3049,16 +3140,22 @@ const markSellerAsPaid = async (req, res) => {
                     orderId: order._id,
                     productId: order.items[0].productId,
                     title: 'Manual Withdrawal Completed',
-                    meta: {
+                    meta: createStandardizedChatMeta({
                         orderNumber: order._id.toString(),
+                        totalAmount: order.grandTotal,
                         amount: `$${amountToWithdraw.toFixed(2)}`,
                         withdrawalFee: `$${withdrawalFee.toFixed(2)}`,
                         netAmount: `$${(amountToWithdraw - withdrawalFee).toFixed(2)}`,
+                        withdrawalAmount: amountToWithdraw,
                         itemCount: order.items.length,
                         paymentMethod: 'Manual Admin Withdrawal',
-                        timestamp: new Date().toISOString(),
-                        notes: notes || 'Withdrawal processed by admin'
-                    },
+                        notes: notes || 'Withdrawal processed by admin',
+                        sellerId: order.sellerId._id,
+                        buyerId: order.userId,
+                        orderStatus: order.status,
+                        paymentStatus: order.paymentStatus,
+                        transactionId: withdrawalTnx._id.toString()
+                    }),
                     actions: [
                         {
                             label: "View Order",
@@ -3095,14 +3192,24 @@ const markSellerAsPaid = async (req, res) => {
                 type: NOTIFICATION_TYPES.ORDER,
                 title: "Payment Processed!",
                 message: `Your earnings of $${(amountToWithdraw - withdrawalFee).toFixed(2)} for order ${order._id.toString().slice(-6)} have been processed and withdrawn from your wallet.`,
-                meta: {
+                meta: createStandardizedNotificationMeta({
                     orderNumber: order._id.toString(),
+                    orderId: order._id.toString(),
                     withdrawalAmount: amountToWithdraw,
+                    amount: amountToWithdraw,
                     withdrawalFee: withdrawalFee,
                     netAmount: amountToWithdraw - withdrawalFee,
-                    transactionId: withdrawalTnx._id,
-                    processedBy: 'admin'
-                },
+                    netAmountPaid: amountToWithdraw - withdrawalFee,
+                    transactionId: withdrawalTnx._id.toString(),
+                    processedBy: 'admin',
+                    sellerId: order.sellerId._id,
+                    buyerId: order.userId,
+                    totalAmount: order.grandTotal,
+                    itemCount: order.items.length,
+                    paymentMethod: order.paymentMethod,
+                    status: 'COMPLETED',
+                    newStatus: 'COMPLETED'
+                }),
                 redirectUrl: `/wallet/transactions`
             }];
 
