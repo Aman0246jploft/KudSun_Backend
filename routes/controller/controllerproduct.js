@@ -817,8 +817,16 @@ const showAuctionProducts = async (req, res) => {
             deliveryFilter,
             isSold = false,
             includeSold = false,
-            isTrending
+            isTrending,
+            sortBy = 'auctionSettings.biddingEndsAt',
+            orderBy = 'asc'
         } = req.query;
+
+        const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'auctionSettings.biddingEndsAt';
+        const sortOrder = orderBy.toLowerCase() === 'desc' ? -1 : 1;
+
+        const sortOptions = {};
+        sortOptions[sortField] = sortOrder;
 
         let isAdmin = req.user.roleId == roleId?.SUPER_ADMIN || false
         const page = parseInt(pageNo);
@@ -884,7 +892,7 @@ const showAuctionProducts = async (req, res) => {
         // Step 2: Query and paginate
         const [products, total] = await Promise.all([
             SellProduct.find(filter)
-                .sort({ 'auctionSettings.biddingEndsAt': 1 }) // Ending soonest first
+                .sort(sortOptions) // Ending soonest first
                 .skip(skip)
                 .limit(limit)
                 .select("title productImages condition isDisable subCategoryId auctionSettings tags description specifics")

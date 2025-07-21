@@ -848,10 +848,6 @@ const getBoughtProducts = async (req, res) => {
                     order.allowedNextStatuses = "";
 
                 }
-
-
-
-
                 // No payment due and not reviewed yet ⇒ show normal progression
 
             } else {

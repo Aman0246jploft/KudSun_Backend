@@ -92,7 +92,11 @@ const createOrUpdateReview = async (req, res) => {
                 seller.totalRatingSum = seller.totalRatingSum - oldRating + rating;
                 // totalRatingCount stays the same
             }
-            seller.averageRatting = seller.totalRatingCount > 0 ? seller.totalRatingSum / seller.totalRatingCount : 0;
+            // seller.averageRatting = seller.totalRatingCount > 0 ? seller.totalRatingSum / seller.totalRatingCount : 0;
+            seller.averageRating = seller.totalRatingCount > 0
+                ? parseFloat((seller.totalRatingSum / seller.totalRatingCount).toFixed(2))
+                : 0;
+                
             await seller.save();
 
         } else if (raterRole === 'seller') {
@@ -584,7 +588,7 @@ const getProductReviews = async (req, res) => {
             .sort(sortConditions)
             .lean();
 
-    
+
         // Calculate review statistics
         const reviewStats = await ProductReview.aggregate([
             {
@@ -674,7 +678,7 @@ const getProductReviews = async (req, res) => {
             category: product.categoryId?.name,
             subCategory: product.subCategoryId?.name,
             createdAt: product.createdAt,
-            isSold:product.isSold,
+            isSold: product.isSold,
             seller: {
                 _id: product.userId._id,
                 userName: product.userId.userName,

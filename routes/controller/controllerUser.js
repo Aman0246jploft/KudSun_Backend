@@ -309,8 +309,8 @@ const loginStepOne = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.UNPROCESSABLE_ENTITY, res, CONSTANTS_MSG.ACCOUNT_DELETED);
         }
 
-        if(req.body?.language&&req.body.language!==""){
-            user.language=req.body?.language
+        if (req.body?.language && req.body.language !== "") {
+            user.language = req.body?.language
             user.save()
         }
 
@@ -1721,7 +1721,7 @@ const userList = async (req, res) => {
 
         if (keyWord) {
             const regex = new RegExp(keyWord, "i");
-            query.$or = [
+            query.$or = [   
                 { userName: regex },
                 { email: regex },
                 { phoneNumber: regex },
@@ -1779,31 +1779,34 @@ const userList = async (req, res) => {
                     },
                 },
             },
-            {
-                $lookup: {
-                    from: "UserLocation",
-                    let: { userId: "$_id" },
-                    pipeline: [
-                        {
-                            $match: {
-                                $expr: { $eq: ["$userId", "$$userId"] },
-                                isDeleted: false,
-                                isDisable: false,
-                                isActive: true,
-                            },
-                        },
-                        { $sort: sortStage },
-                        { $limit: 1 },
-                    ],
-                    as: "userAddress",
-                },
-            },
-            {
-                $addFields: {
-                    userAddress: { $arrayElemAt: ["$userAddress", 0] },
-                },
-            },
 
+
+{
+    $lookup: {
+        from: "Location",
+        localField: "provinceId",
+        foreignField: "_id",
+        as: "province",
+    },
+},
+{
+    $addFields: {
+        "userAddress.province": { $arrayElemAt: ["$province", 0] },
+    },
+},
+{
+    $lookup: {
+        from: "Location",
+        localField: "districtId",
+        foreignField: "_id",
+        as: "district",
+    },
+},
+{
+    $addFields: {
+        "userAddress.district": { $arrayElemAt: ["$district", 0] },
+    },
+},
 
 
             {
@@ -1846,6 +1849,7 @@ const userList = async (req, res) => {
                 },
             });
         }
+        
 
         aggregation.push({
             $project: {
@@ -1853,15 +1857,28 @@ const userList = async (req, res) => {
                 _id: 1,
                 email: 1,
                 phoneNumber: 1,
+                profileImage: 1,
+                averageBuyerRatting: 1,
+                averageRatting: 1,
                 gender: 1,
                 dob: 1,
                 isDisable: 1,
                 createdAt: 1,
                 sellerVerificationStatus: 1,
                 sellerVerification: 1,
-                userAddress: 1,
+                isLive: 1,
                 reportCount: 1,
-                isFlagedReported: 1
+                isFlagedReported: 1,
+                userAddress: {
+                    province: {
+                        _id: "$userAddress.province._id",
+                        name: "$userAddress.province.value",
+                    },
+                    district: {
+                        _id: "$userAddress.district._id",
+                        name: "$userAddress.district.value",
+                    },
+                },
             },
         });
 
@@ -2061,7 +2078,7 @@ const getOtherProfile = async (req, res) => {
 
         const [totalThreads, totalProducts, totalReviews] = await Promise.all([
             Thread.countDocuments({ userId, isDeleted: false, isDisable: false }),
-            SellProduct.countDocuments({ userId, isDeleted: false, isDisable: false,  }),
+            SellProduct.countDocuments({ userId, isDeleted: false, isDisable: false, }),
             ProductReview.countDocuments({ userId, isDeleted: false, isDisable: false })
         ]);
         return apiSuccessRes(
