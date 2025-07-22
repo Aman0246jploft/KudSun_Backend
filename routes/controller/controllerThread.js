@@ -681,10 +681,10 @@ const getThreads = async (req, res) => {
 
 
         let userFilter = {};
-        if (provinceId &&  mongoose.Types.ObjectId.isValid(provinceId)) {
+        if (provinceId && mongoose.Types.ObjectId.isValid(provinceId)) {
             userFilter.provinceId = provinceId;
         }
-        if (districtId &&  mongoose.Types.ObjectId.isValid(districtId)) {
+        if (districtId && mongoose.Types.ObjectId.isValid(districtId)) {
             userFilter.districtId = districtId;
         }
 
