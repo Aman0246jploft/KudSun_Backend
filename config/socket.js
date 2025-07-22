@@ -619,18 +619,6 @@ async function setupSocket(server) {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 async function calculateTotalChatUnreadCount(userId) {
     try {
         // Get all chat rooms for this user
@@ -668,25 +656,6 @@ async function calculateTotalNotificationUnreadCount(userId) {
         return 0;
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

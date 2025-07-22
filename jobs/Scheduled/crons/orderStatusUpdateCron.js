@@ -47,8 +47,9 @@ let cronStats = {
 
 // Environment variables with defaults
 const PROCESSING_DAY_LIMIT = parseInt(process.env.DAY);
-const CRON_SCHEDULE = process.env.CRON_SCHEDULE || '* * * * *'; // Daily at midnight by default
+const CRON_SCHEDULE =  '* * * * *'; // Daily at midnight by default
 const ENABLE_EMAIL_NOTIFICATIONS = process.env.ENABLE_EMAIL_NOTIFICATIONS === 'true';
+const CONFIRM_RECEIPT_TO_COMPLETED_DAY_LIMIT = PROCESSING_DAY_LIMIT;
 
 // Connect to MongoDB
 mongoose.connect(process.env.DB_STRING, {
@@ -101,8 +102,15 @@ mongoose.connect(process.env.DB_STRING, {
             processedStats.disputesHandled = completedStats.disputesHandled;
             processedStats.errors.push(...completedStats.errors);
 
+            // STEP 3: Update CONFIRM_RECEIPT to COMPLETED (after N days, checking disputes)
+            const confirmReceiptStats = await updateConfirmReceiptToCompleted(now.clone().subtract(CONFIRM_RECEIPT_TO_COMPLETED_DAY_LIMIT, 'days'), session);
+            processedStats.confirmReceiptToCompleted = confirmReceiptStats.updated;
+            processedStats.paymentsProcessed += confirmReceiptStats.paymentsProcessed;
+            processedStats.disputesHandled += confirmReceiptStats.disputesHandled;
+            processedStats.errors.push(...confirmReceiptStats.errors);
+
             // Update global stats
-            cronStats.ordersProcessed += (processedStats.shippedToDelivered + processedStats.deliveredToCompleted);
+            cronStats.ordersProcessed += (processedStats.shippedToDelivered + processedStats.deliveredToCompleted + processedStats.confirmReceiptToCompleted);
             cronStats.paymentsProcessed += processedStats.paymentsProcessed;
             cronStats.disputesHandled += processedStats.disputesHandled;
 
@@ -171,7 +179,9 @@ async function validateSystemState() {
     console.log('🔍 Validating system state...');
 
     // Check if required fee settings exist
-    const requiredFeeSettings = ['SERVICE_CHARGE', 'TAX', 'WITHDRAWAL_FEE'];
+    const requiredFeeSettings = ['SERVICE_CHARGE', 'WITHDRAWAL_FEE'];
+
+    // const requiredFeeSettings = ['SERVICE_CHARGE', 'TAX', 'WITHDRAWAL_FEE'];
     const feeSettings = await FeeSetting.find({
         name: { $in: requiredFeeSettings },
         isActive: true,
@@ -416,6 +426,127 @@ async function updateDeliveredToCompleted(cutoffDate, session) {
 
     } catch (error) {
         console.error('❌ Error in updateDeliveredToCompleted:', error);
+        throw error;
+    }
+}
+
+/**
+ * Update orders from CONFIRM_RECEIPT to COMPLETED after N days (checking for disputes)
+ */
+async function updateConfirmReceiptToCompleted(cutoffDate, session) {
+    try {
+        console.log('📋 Processing CONFIRM_RECEIPT → COMPLETED updates...');
+
+        let stats = { updated: 0, paymentsProcessed: 0, disputesHandled: 0, errors: [] };
+
+        // Find orders that are currently CONFIRM_RECEIPT with proper validation
+        const confirmReceiptOrders = await Order.find({
+            status: ORDER_STATUS.CONFIRM_RECEIPT,
+            paymentStatus: PAYMENT_STATUS.COMPLETED,
+            isDeleted: false,
+            isDisable: false,
+        }).populate('sellerId userId', 'userName email').session(session);
+
+        console.log(`📦 Found ${confirmReceiptOrders.length} confirm receipt orders to check`);
+
+        for (const order of confirmReceiptOrders) {
+            try {
+                // Find when the order was marked as CONFIRM_RECEIPT
+                const confirmReceiptHistory = await OrderStatusHistory.findOne({
+                    orderId: order._id,
+                    newStatus: ORDER_STATUS.DELIVERED
+                }).sort({ changedAt: -1 }).session(session);
+
+                if (!confirmReceiptHistory) {
+                    stats.errors.push(`No confirm receipt history found for order ${order._id}`);
+                    continue;
+                }
+
+                const confirmReceiptDate = moment(confirmReceiptHistory.changedAt);
+
+                // Check if N days have passed since confirm receipt
+                if (confirmReceiptDate.isBefore(cutoffDate)) {
+                    console.log(`📅 Order ${order._id} confirm receipt on ${confirmReceiptDate.format('YYYY-MM-DD')}, checking for disputes...`);
+
+                    // Check for disputes and validate dispute resolution
+                    const disputeInfo = await validateAndProcessDispute(order._id, session);
+
+                    if (disputeInfo.shouldSkip) {
+                        stats.errors.push(`Order ${order._id}: ${disputeInfo.reason}`);
+                        continue;
+                    }
+
+                    // Additional validation before completion
+                    const validationResult = await validateOrderForCompletion(order, session);
+                    if (!validationResult.isValid) {
+                        stats.errors.push(`Order ${order._id}: ${validationResult.reason}`);
+                        continue;
+                    }
+
+                    // Proceed with completion
+                    console.log(`🎉 Completing order ${order._id} and processing seller payment...`);
+
+                    // Update order status to COMPLETED
+                    const updated = await Order.findByIdAndUpdate(
+                        order._id,
+                        {
+                            status: ORDER_STATUS.COMPLETED,
+                            updatedAt: new Date()
+                        },
+                        { session, new: true }
+                    );
+
+                    if (!updated || updated.status !== ORDER_STATUS.COMPLETED) {
+                        stats.errors.push(`Order ${order._id}: status update to COMPLETED failed`);
+                        continue;
+                    }
+
+                    // Create comprehensive status history entry
+                    const statusNote = disputeInfo.disputeData
+                        ? `Auto-completed after ${CONFIRM_RECEIPT_TO_COMPLETED_DAY_LIMIT} days with resolved dispute (${disputeInfo.disputeData.decision} favor, ${disputeInfo.disputeData.disputeAmountPercent}% dispute amount)`
+                        : `Auto-completed after ${CONFIRM_RECEIPT_TO_COMPLETED_DAY_LIMIT} days with no disputes`;
+
+                    await OrderStatusHistory.create([{
+                        orderId: order._id,
+                        oldStatus: ORDER_STATUS.CONFIRM_RECEIPT,
+                        newStatus: ORDER_STATUS.COMPLETED,
+                        note: statusNote,
+                        changedAt: new Date(),
+                        changedBy: null // System update
+                    }], { session });
+
+                    // Process seller payment with enhanced error handling
+                    const paymentResult = await processSellerPaymentEnhanced(order, session, disputeInfo.disputeData);
+                    if (paymentResult.success) {
+                        stats.paymentsProcessed++;
+                    } else {
+                        stats.errors.push(`Payment processing failed for order ${order._id}: ${paymentResult.error}`);
+                    }
+
+                    // Send comprehensive notifications
+                    await sendCompletionNotifications(order, disputeInfo.disputeData);
+
+                    if (disputeInfo.disputeData) {
+                        stats.disputesHandled++;
+                    }
+
+                    stats.updated++;
+                    console.log(`✅ Order ${order._id} completed from CONFIRM_RECEIPT${disputeInfo.disputeData ? ' (with dispute resolution)' : ''}`);
+                } else {
+                    console.log(`⏳ Order ${order._id} not yet ready for completion (confirm receipt ${confirmReceiptDate.fromNow()})`);
+                }
+            } catch (orderError) {
+                const errorMsg = `Error processing confirm receipt order ${order._id}: ${orderError.message}`;
+                stats.errors.push(errorMsg);
+                console.error(`❌ ${errorMsg}`);
+            }
+        }
+
+        console.log(`✅ CONFIRM_RECEIPT → COMPLETED: ${stats.updated} orders completed, ${stats.paymentsProcessed} payments processed, ${stats.disputesHandled} disputes handled, ${stats.errors.length} errors`);
+        return stats;
+
+    } catch (error) {
+        console.error('❌ Error in updateConfirmReceiptToCompleted:', error);
         throw error;
     }
 }
@@ -993,6 +1124,7 @@ if (typeof global.app !== 'undefined') {
 
                 const shippedStats = await updateShippedToDelivered(cutoffDate, session);
                 const completedStats = await updateDeliveredToCompleted(cutoffDate, session);
+                const confirmReceiptStats = await updateConfirmReceiptToCompleted(now.clone().subtract(CONFIRM_RECEIPT_TO_COMPLETED_DAY_LIMIT, 'days'), session);
 
                 await session.commitTransaction();
 
