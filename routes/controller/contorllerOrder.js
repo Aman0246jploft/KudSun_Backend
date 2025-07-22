@@ -9,7 +9,7 @@ const { saveNotification } = require('../services/serviceNotification');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const HTTP_STATUS = require('../../utils/statusCode');
 const { toObjectId, apiSuccessRes, apiErrorRes, parseItems } = require('../../utils/globalFunction');
-const { SALE_TYPE, DEFAULT_AMOUNT, PAYMENT_METHOD, ORDER_STATUS, PAYMENT_STATUS, CHARGE_TYPE, PRICING_TYPE, SHIPPING_STATUS, TNX_TYPE, NOTIFICATION_TYPES, createStandardizedChatMeta, createStandardizedNotificationMeta } = require('../../utils/Role');
+const { SALE_TYPE, DEFAULT_AMOUNT, PAYMENT_METHOD, ORDER_STATUS, PAYMENT_STATUS, CHARGE_TYPE, PRICING_TYPE, SHIPPING_STATUS, TNX_TYPE, NOTIFICATION_TYPES, createStandardizedChatMeta, createStandardizedNotificationMeta, DISPUTE_STATUS } = require('../../utils/Role');
 const { default: mongoose } = require('mongoose');
 const Joi = require('joi');
 
@@ -3550,6 +3550,521 @@ router.get('/getAllWithdrawRequests', perApiLimiter(), upload.none(), getAllWith
 //////////////////////////////////////////////////////////////////////////////
 /////////////////////////////******ADMIN TRANSACTIONS******///////////////////////////////
 router.get('/admin/transactions', perApiLimiter(), upload.none(), getAllTransactionsForAdmin);
+
+const getAdminFinancialDashboard = async (req, res) => {
+    try {
+        const { dateFrom, dateTo } = req.query;
+
+        // Build date filter
+        const dateFilter = {};
+        if (dateFrom) dateFilter.createdAt = { $gte: new Date(dateFrom) };
+        if (dateTo) dateFilter.createdAt = { ...dateFilter.createdAt, $lte: new Date(dateTo) };
+
+        // Get total orders and amounts
+        const totalOrdersStats = await Order.aggregate([
+            { $match: { paymentStatus: PAYMENT_STATUS.COMPLETED, ...dateFilter } },
+            {
+                $group: {
+                    _id: null,
+                    totalOrders: { $sum: 1 },
+                    totalGMV: { $sum: '$grandTotal' },
+                    totalProductValue: { $sum: '$totalAmount' },
+                    totalShipping: { $sum: '$shippingCharge' },
+                    totalBuyerProtectionFee: { $sum: '$BuyerProtectionFee' },
+                    totalTax: { $sum: '$Tax' }
+                }
+            }
+        ]);
+
+        // Get seller payouts
+        const sellerPayoutStats = await WalletTnx.aggregate([
+            { $match: { tnxType: TNX_TYPE.CREDIT, tnxStatus: PAYMENT_STATUS.COMPLETED, ...dateFilter } },
+            {
+                $group: {
+                    _id: null,
+                    totalSellerPayouts: { $sum: '$netAmount' },
+                    totalServiceCharges: { $sum: { $toDouble: '$serviceCharge' } },
+                    totalTaxCharges: { $sum: { $toDouble: '$taxCharge' } },
+                    payoutCount: { $sum: 1 }
+                }
+            }
+        ]);
+
+        // Get withdrawal stats
+        const withdrawalStats = await WalletTnx.aggregate([
+            { $match: { tnxType: TNX_TYPE.WITHDRAWL, tnxStatus: PAYMENT_STATUS.COMPLETED, ...dateFilter } },
+            {
+                $group: {
+                    _id: null,
+                    totalWithdrawals: { $sum: '$amount' },
+                    totalWithdrawalFees: { $sum: '$withdrawfee' },
+                    withdrawalCount: { $sum: 1 }
+                }
+            }
+        ]);
+
+        // Get platform revenue
+        const platformRevenue = await PlatformRevenue.aggregate([
+            { $match: { status: 'COMPLETED', ...dateFilter } },
+            {
+                $group: {
+                    _id: '$revenueType',
+                    totalAmount: { $sum: '$amount' },
+                    count: { $sum: 1 }
+                }
+            }
+        ]);
+
+        // Get dispute financial impact
+        const disputeImpact = await Dispute.aggregate([
+            { $match: { status: DISPUTE_STATUS.RESOLVED, ...dateFilter } },
+            {
+                $lookup: {
+                    from: 'Order',
+                    localField: 'orderId',
+                    foreignField: '_id',
+                    as: 'order'
+                }
+            },
+            { $unwind: '$order' },
+            {
+                $group: {
+                    _id: '$adminReview.decision',
+                    count: { $sum: 1 },
+                    totalOrderValue: { $sum: '$order.grandTotal' },
+                    avgRefundPercent: { $avg: '$adminReview.disputeAmountPercent' }
+                }
+            }
+        ]);
+
+        // Payment method breakdown
+        const paymentMethodStats = await Order.aggregate([
+            { $match: { paymentStatus: PAYMENT_STATUS.COMPLETED, ...dateFilter } },
+            {
+                $group: {
+                    _id: '$paymentMethod',
+                    count: { $sum: 1 },
+                    totalAmount: { $sum: '$grandTotal' }
+                }
+            }
+        ]);
+
+        // Daily transaction trends (last 30 days)
+        const dailyTrends = await Order.aggregate([
+            { 
+                $match: { 
+                    paymentStatus: PAYMENT_STATUS.COMPLETED,
+                    createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+                }
+            },
+            {
+                $group: {
+                    _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+                    orderCount: { $sum: 1 },
+                    totalGMV: { $sum: '$grandTotal' },
+                    uniqueBuyers: { $addToSet: '$userId' },
+                    uniqueSellers: { $addToSet: '$sellerId' }
+                }
+            },
+            {
+                $project: {
+                    date: '$_id',
+                    orderCount: 1,
+                    totalGMV: 1,
+                    uniqueBuyerCount: { $size: '$uniqueBuyers' },
+                    uniqueSellerCount: { $size: '$uniqueSellers' }
+                }
+            },
+            { $sort: { date: 1 } }
+        ]);
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Financial dashboard data fetched successfully", {
+            overview: {
+                orders: totalOrdersStats[0] || {},
+                sellerPayouts: sellerPayoutStats[0] || {},
+                withdrawals: withdrawalStats[0] || {},
+                disputes: disputeImpact
+            },
+            platformRevenue,
+            paymentMethodBreakdown: paymentMethodStats,
+            dailyTrends,
+            dateRange: { dateFrom, dateTo }
+        });
+
+    } catch (err) {
+        console.error("getAdminFinancialDashboard error:", err);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to fetch financial dashboard data");
+    }
+};
+
+const getProductFinancialDetails = async (req, res) => {
+    try {
+        const { productId } = req.params;
+        const { includeHistory = true } = req.query;
+
+        if (!productId) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Product ID is required");
+        }
+
+        // Get product basic info
+        const product = await SellProduct.findById(productId)
+            .populate('userId', 'userName email')
+            .populate('categoryId', 'name')
+            .lean();
+
+        if (!product) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Product not found");
+        }
+
+        // Get all orders for this product
+        const orders = await Order.find({
+            'items.productId': toObjectId(productId),
+            paymentStatus: { $ne: PAYMENT_STATUS.PENDING }
+        })
+        .populate('userId', 'userName email phone')
+        .populate('sellerId', 'userName email phone')
+        .populate('disputeId')
+        .sort({ createdAt: -1 })
+        .lean();
+
+        // Get financial summary for this product
+        const financialSummary = await Order.aggregate([
+            { $match: { 'items.productId': toObjectId(productId), paymentStatus: PAYMENT_STATUS.COMPLETED } },
+            { $unwind: '$items' },
+            { $match: { 'items.productId': toObjectId(productId) } },
+            {
+                $group: {
+                    _id: null,
+                    totalSales: { $sum: 1 },
+                    totalRevenue: { $sum: '$items.priceAtPurchase' },
+                    totalOrderValue: { $sum: '$grandTotal' },
+                    totalShippingCharges: { $sum: '$shippingCharge' },
+                    totalBuyerProtectionFees: { $sum: '$BuyerProtectionFee' },
+                    totalTaxes: { $sum: '$Tax' },
+                    avgOrderValue: { $avg: '$grandTotal' },
+                    firstSaleDate: { $min: '$createdAt' },
+                    lastSaleDate: { $max: '$createdAt' }
+                }
+            }
+        ]);
+
+        // Get seller payout details for this product
+        const orderIds = orders.map(order => order._id);
+        const sellerPayouts = await WalletTnx.find({
+            orderId: { $in: orderIds },
+            tnxType: TNX_TYPE.CREDIT
+        }).lean();
+
+        const withdrawals = await WalletTnx.find({
+            orderId: { $in: orderIds },
+            tnxType: TNX_TYPE.WITHDRAWL
+        }).lean();
+
+        // Calculate platform revenue from this product
+        const platformRevenueFromProduct = await PlatformRevenue.find({
+            orderId: { $in: orderIds }
+        }).lean();
+
+        // Get dispute information
+        const disputes = await Dispute.find({
+            orderId: { $in: orderIds }
+        }).lean();
+
+        // Build comprehensive response
+        const response = {
+            product: {
+                ...product,
+                isActive: !product.isSold && !product.isDeleted && !product.isDisable
+            },
+            financialSummary: financialSummary[0] || {
+                totalSales: 0,
+                totalRevenue: 0,
+                totalOrderValue: 0,
+                totalShippingCharges: 0,
+                totalBuyerProtectionFees: 0,
+                totalTaxes: 0,
+                avgOrderValue: 0
+            },
+            sellerPayouts: {
+                totalPaidToSeller: sellerPayouts.reduce((sum, payout) => sum + (payout.netAmount || 0), 0),
+                totalServiceCharges: sellerPayouts.reduce((sum, payout) => sum + (parseFloat(payout.serviceCharge) || 0), 0),
+                totalTaxCharges: sellerPayouts.reduce((sum, payout) => sum + (parseFloat(payout.taxCharge) || 0), 0),
+                payoutCount: sellerPayouts.length
+            },
+            withdrawals: {
+                totalWithdrawn: withdrawals.reduce((sum, w) => sum + (w.amount || 0), 0),
+                totalWithdrawalFees: withdrawals.reduce((sum, w) => sum + (w.withdrawfee || 0), 0),
+                withdrawalCount: withdrawals.length
+            },
+            platformRevenue: {
+                total: platformRevenueFromProduct.reduce((sum, rev) => sum + (rev.amount || 0), 0),
+                breakdown: platformRevenueFromProduct.reduce((acc, rev) => {
+                    acc[rev.revenueType] = (acc[rev.revenueType] || 0) + rev.amount;
+                    return acc;
+                }, {})
+            },
+            disputes: {
+                total: disputes.length,
+                resolved: disputes.filter(d => d.status === DISPUTE_STATUS.RESOLVED).length,
+                pending: disputes.filter(d => d.status === DISPUTE_STATUS.PENDING).length,
+                totalFinancialImpact: disputes
+                    .filter(d => d.adminReview?.disputeAmountPercent > 0)
+                    .reduce((sum, d) => {
+                        const order = orders.find(o => o._id.toString() === d.orderId.toString());
+                        return sum + (order ? (order.grandTotal * d.adminReview.disputeAmountPercent / 100) : 0);
+                    }, 0)
+            }
+        };
+
+        // Include detailed transaction history if requested
+        if (includeHistory === 'true') {
+            response.transactionHistory = orders.map(order => {
+                const itemInOrder = order.items.find(item => item.productId.toString() === productId);
+                const sellerPayout = sellerPayouts.find(p => p.orderId.toString() === order._id.toString());
+                const withdrawal = withdrawals.find(w => w.orderId.toString() === order._id.toString());
+                const dispute = disputes.find(d => d.orderId.toString() === order._id.toString());
+                
+                return {
+                    orderId: order._id,
+                    orderNumber: order.orderId,
+                    orderDate: order.createdAt,
+                    orderStatus: order.status,
+                    paymentStatus: order.paymentStatus,
+                    buyer: order.userId,
+                    seller: order.sellerId,
+                    itemDetails: itemInOrder,
+                    amounts: {
+                        itemPrice: itemInOrder?.priceAtPurchase || 0,
+                        totalOrderValue: order.grandTotal,
+                        shippingCharge: order.shippingCharge,
+                        buyerProtectionFee: order.BuyerProtectionFee,
+                        tax: order.Tax
+                    },
+                    sellerPayout: sellerPayout ? {
+                        netAmount: sellerPayout.netAmount,
+                        serviceCharge: sellerPayout.serviceCharge,
+                        taxCharge: sellerPayout.taxCharge,
+                        payoutDate: sellerPayout.createdAt,
+                        status: sellerPayout.tnxStatus
+                    } : null,
+                    withdrawal: withdrawal ? {
+                        amount: withdrawal.amount,
+                        withdrawalFee: withdrawal.withdrawfee,
+                        withdrawalDate: withdrawal.createdAt,
+                        status: withdrawal.tnxStatus
+                    } : null,
+                    dispute: dispute ? {
+                        disputeId: dispute.disputeId,
+                        status: dispute.status,
+                        type: dispute.disputeType,
+                        financialImpact: dispute.adminReview?.disputeAmountPercent 
+                            ? (order.grandTotal * dispute.adminReview.disputeAmountPercent / 100)
+                            : 0
+                    } : null
+                };
+            });
+        }
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Product financial details fetched successfully", response);
+
+    } catch (err) {
+        console.error("getProductFinancialDetails error:", err);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to fetch product financial details");
+    }
+};
+
+const getDetailedMoneyFlow = async (req, res) => {
+    try {
+        const { 
+            orderId, 
+            userId, 
+            dateFrom, 
+            dateTo, 
+            flowType = 'all' // 'all', 'buyer', 'seller', 'platform'
+        } = req.query;
+
+        let matchConditions = {};
+        
+        if (orderId) matchConditions._id = toObjectId(orderId);
+        if (userId) {
+            matchConditions.$or = [
+                { userId: toObjectId(userId) },
+                { sellerId: toObjectId(userId) }
+            ];
+        }
+        if (dateFrom || dateTo) {
+            matchConditions.createdAt = {};
+            if (dateFrom) matchConditions.createdAt.$gte = new Date(dateFrom);
+            if (dateTo) matchConditions.createdAt.$lte = new Date(dateTo);
+        }
+
+        // Get orders with complete financial flow (only completed payments)
+        const orders = await Order.find({ ...matchConditions, paymentStatus: PAYMENT_STATUS.COMPLETED })
+            .populate([
+                {
+                    path: 'userId',
+                    select: 'userName email'
+                },
+                {
+                    path: 'sellerId', 
+                    select: 'userName email'
+                },
+                {
+                    path: 'items.productId',
+                    select: 'title productImages'
+                }
+            ])
+            .lean();
+
+        // Get related data for each order
+        const orderIds = orders.map(order => order._id);
+        
+        const [sellerTransactions, platformRevenues, disputes, paymentTransactions] = await Promise.all([
+            WalletTnx.find({ orderId: { $in: orderIds } }).lean(),
+            PlatformRevenue.find({ orderId: { $in: orderIds } }).lean(),
+            Dispute.find({ orderId: { $in: orderIds } }).lean(),
+            Transaction.find({ orderId: { $in: orderIds } }).lean()
+        ]);
+
+        // Create lookup maps
+        const sellerTxnMap = {};
+        const platformRevenueMap = {};
+        const disputeMap = {};
+        const paymentTxnMap = {};
+
+        sellerTransactions.forEach(txn => {
+            const orderId = txn.orderId.toString();
+            if (!sellerTxnMap[orderId]) sellerTxnMap[orderId] = [];
+            sellerTxnMap[orderId].push(txn);
+        });
+
+        platformRevenues.forEach(rev => {
+            const orderId = rev.orderId.toString();
+            if (!platformRevenueMap[orderId]) platformRevenueMap[orderId] = [];
+            platformRevenueMap[orderId].push(rev);
+        });
+
+        disputes.forEach(dispute => {
+            disputeMap[dispute.orderId.toString()] = dispute;
+        });
+
+        paymentTransactions.forEach(txn => {
+            const orderId = txn.orderId.toString();
+            if (!paymentTxnMap[orderId]) paymentTxnMap[orderId] = [];
+            paymentTxnMap[orderId].push(txn);
+        });
+
+        // Build enhanced orders with money flow data
+        const enhancedOrders = orders.map(order => {
+            const orderIdStr = order._id.toString();
+            const orderSellerTxns = sellerTxnMap[orderIdStr] || [];
+            const orderPlatformRevs = platformRevenueMap[orderIdStr] || [];
+            const orderDispute = disputeMap[orderIdStr];
+            const orderPaymentTxns = paymentTxnMap[orderIdStr] || [];
+
+            // Calculate platform revenue
+            const serviceCharges = orderSellerTxns
+                .filter(txn => txn.tnxType === 'credit')
+                .reduce((sum, txn) => sum + (parseFloat(txn.serviceCharge) || 0), 0);
+            
+            const taxCharges = orderSellerTxns
+                .filter(txn => txn.tnxType === 'credit')
+                .reduce((sum, txn) => sum + (parseFloat(txn.taxCharge) || 0), 0);
+            
+            const withdrawalFees = orderSellerTxns
+                .filter(txn => txn.tnxType === 'withdrawl')
+                .reduce((sum, txn) => sum + (txn.withdrawfee || 0), 0);
+
+            const buyerProtectionFee = order.BuyerProtectionFee || 0;
+            const tax = order.Tax || 0;
+            
+            const totalPlatformRevenue = buyerProtectionFee + tax + serviceCharges + taxCharges + withdrawalFees;
+
+            // Calculate dispute impact
+            const disputeImpact = orderDispute && orderDispute.adminReview?.disputeAmountPercent > 0
+                ? (order.grandTotal * orderDispute.adminReview.disputeAmountPercent / 100)
+                : 0;
+
+            return {
+                orderId: order.orderId,
+                orderDate: order.createdAt,
+                status: order.status,
+                buyer: {
+                    id: order.userId._id,
+                    name: order.userId.userName,
+                    email: order.userId.email
+                },
+                seller: {
+                    id: order.sellerId._id,
+                    name: order.sellerId.userName,
+                    email: order.sellerId.email
+                },
+                products: order.items.map(item => ({
+                    title: item.productId?.title,
+                    images: item.productId?.productImages
+                })),
+                moneyFlow: {
+                    buyerPayment: {
+                        productAmount: order.totalAmount,
+                        shippingCharge: order.shippingCharge || 0,
+                        buyerProtectionFee: buyerProtectionFee,
+                        tax: tax,
+                        grandTotal: order.grandTotal,
+                        paymentMethod: order.paymentMethod,
+                        paymentId: order.paymentId
+                    },
+                    platformRevenue: {
+                        buyerProtectionFee: buyerProtectionFee,
+                        tax: tax,
+                        serviceCharges: serviceCharges,
+                        taxCharges: taxCharges,
+                        withdrawalFees: withdrawalFees,
+                        totalPlatformRevenue: totalPlatformRevenue
+                    },
+                    sellerPayouts: orderSellerTxns,
+                    disputeImpact: orderDispute ? [{
+                        disputeId: orderDispute.disputeId,
+                        status: orderDispute.status,
+                        financialImpact: disputeImpact
+                    }] : []
+                },
+                paymentTransactions: orderPaymentTxns,
+                rawOrder: order // Include raw order data for detailed view
+            };
+        });
+
+        // Calculate summary statistics
+        const summary = {
+            totalOrders: enhancedOrders.length,
+            totalGMV: enhancedOrders.reduce((sum, order) => sum + order.moneyFlow.buyerPayment.grandTotal, 0),
+            totalPlatformRevenue: enhancedOrders.reduce((sum, order) => sum + order.moneyFlow.platformRevenue.totalPlatformRevenue, 0),
+            totalSellerPayouts: enhancedOrders.reduce((sum, order) => {
+                return sum + order.moneyFlow.sellerPayouts
+                    .filter(txn => txn.tnxType === 'credit')
+                    .reduce((txnSum, txn) => txnSum + (txn.netAmount || 0), 0);
+            }, 0),
+            totalDisputeImpact: enhancedOrders.reduce((sum, order) => {
+                return sum + order.moneyFlow.disputeImpact.reduce((disputeSum, dispute) => disputeSum + dispute.financialImpact, 0);
+            }, 0)
+        };
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Detailed money flow fetched successfully", {
+            summary,
+            orders: enhancedOrders,
+            filters: { orderId, userId, dateFrom, dateTo, flowType }
+        });
+
+    } catch (err) {
+        console.error("getDetailedMoneyFlow error:", err);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to fetch money flow details");
+    }
+};
+
+//////////////////////////////////////////////////////////////////////////////
+/////////////////////////////******ADMIN FINANCIAL DASHBOARD******///////////////////////////////
+router.get('/admin/financial-dashboard', perApiLimiter(), upload.none(), getAdminFinancialDashboard);
+router.get('/admin/product-financial/:productId', perApiLimiter(), upload.none(), getProductFinancialDetails);
+router.get('/admin/money-flow', perApiLimiter(), upload.none(), getDetailedMoneyFlow);
 
 router.get('/admin/payoutCalculation/:orderId', perApiLimiter(), upload.none(), getSellerPayoutCalculation);
 router.post('/admin/markSellerPaid', perApiLimiter(), upload.none(), markSellerAsPaid);

@@ -2,6 +2,7 @@ module.exports = {
     user: require('./controller/controllerUser'),
     category: require('./controller/controllerCategory'),
     product: require('./controller/controllerproduct'),
+    sellProduct: require('./controller/controllerproduct'),
     thread: require('./controller/controllerThread'),
     userAddress: require("./controller/controllerAddress"),
     carrier: require("./controller/controllerCarrier"),
