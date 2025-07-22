@@ -630,50 +630,29 @@ const showNormalProducts = async (req, res) => {
             deliveryFilter,
             specifics,
             isTrending,
+            sortBy = 'createdAt',
+            orderBy = 'asc',
             includeSold,
             isSold = false,
             minPrice,   // NEW
             maxPrice    // NEW
         } = req.query;
 
+
+        const allowedSortFields = [ 'createdAt', 'fixedPrice',"commentCount"];
+
+
+        const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
+        const sortOrder = orderBy.toLowerCase() === 'desc' ? -1 : 1;
+        const sortOptions = {};
+        sortOptions[sortField] = sortOrder;
+
+
         const page = parseInt(pageNo);
         const limit = parseInt(size);
         const skip = (page - 1) * limit;
         let isAdmin = req.user.roleId == roleId?.SUPER_ADMIN || false
 
-        // Step 1: Get sold product IDs (products part of confirmed/pending orders etc.)
-
-        // const soldProductResult = await Order.aggregate([
-        //     {
-        //         $match: {
-        //             status: {
-        //                 $in: [ORDER_STATUS.PENDING,
-        //                 ORDER_STATUS.CONFIRMED,
-        //                 ORDER_STATUS.SHIPPED,
-        //                 ORDER_STATUS.DELIVERED,
-        //                 ORDER_STATUS.RETURNED]
-        //             },
-        //             isDeleted: false,
-        //         },
-        //     },
-        //     { $unwind: "$items" },
-        //     {
-        //         $group: {
-        //             _id: null,
-        //             soldProductIds: { $addToSet: "$items.productId" },
-        //         },
-        //     },
-        //     {
-        //         $project: {
-        //             _id: 0,
-        //             soldProductIds: 1,
-        //         },
-        //     },
-        // ]);
-
-        // const soldProductIds = soldProductResult[0]?.soldProductIds || [];
-
-        // Step 2: Build the query filter
         const filter = {
             saleType: SALE_TYPE.FIXED,
             isDeleted: false,
@@ -742,10 +721,125 @@ const showNormalProducts = async (req, res) => {
             filter['specifics.valueId'] = { $all: parsedSpecifics.map(id => toObjectId(id)) };
         }
 
+
+
+        // Special case: commentCount sorting requires aggregation
+if (sortBy === 'commentCount') {
+    const matchStage = { ...filter };
+
+    const aggregationPipeline = [
+        { $match: matchStage },
+        {
+            $lookup: {
+                from: "ProductComment",
+                localField: "_id",
+                foreignField: "product",
+                as: "comments"
+            }
+        },
+        {
+            $addFields: {
+                commentCount: {
+                    $size: {
+                        $filter: {
+                            input: "$comments",
+                            as: "comment",
+                            cond: {
+                                $and: [
+                                    { $eq: ["$$comment.isDeleted", false] },
+                                    { $eq: ["$$comment.isDisable", false] }
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        { $sort: { commentCount: sortOrder } },
+        { $skip: skip },
+        { $limit: limit },
+        {
+            $project: {
+                title: 1,
+                fixedPrice: 1,
+                saleType: 1,
+                shippingCharge: 1,
+                deliveryType: 1,
+                isTrending: 1,
+                isDisable: 1,
+                productImages: 1,
+                condition: 1,
+                subCategoryId: 1,
+                isSold: 1,
+                userId: 1,
+                tags: 1,
+                originPriceView: 1,
+                originPrice: 1,
+                description: 1,
+                specifics: 1,
+                categoryId: 1
+            }
+        }
+    ];
+
+    const [products, total] = await Promise.all([
+        SellProduct.aggregate(aggregationPipeline),
+        SellProduct.countDocuments(matchStage)
+    ]);
+
+    // Populate manually (same fields as .populate())
+    await SellProduct.populate(products, [
+        { path: "categoryId", select: "name" },
+        { path: "userId", select: "userName profileImage is_Id_verified isLive is_Preferred_seller" }
+    ]);
+
+    // Add subCategoryName
+    if (products.length) {
+        const categoryIds = [...new Set(products.map(p => p.categoryId?._id?.toString()))];
+
+        const categories = await Category.find({ _id: { $in: categoryIds } })
+            .select("subCategories.name subCategories._id")
+            .lean();
+
+        for (const product of products) {
+            const category = categories.find(cat => cat?._id.toString() === product?.categoryId?._id.toString());
+            const subCat = category?.subCategories?.find(sub => sub?._id.toString() === product?.subCategoryId?.toString());
+            product["subCategoryName"] = subCat ? subCat.name : null;
+        }
+    }
+
+    // Add isLiked
+    if (req.user?.userId && products.length) {
+        const productIds = products.map(p => p._id);
+
+        const likedProducts = await ProductLike.find({
+            likeBy: req.user.userId,
+            productId: { $in: productIds },
+            isDeleted: false,
+            isDisable: false
+        }).select("productId").lean();
+
+        const likedProductIds = new Set(likedProducts.map(like => like.productId.toString()));
+        for (const product of products) {
+            product.isLiked = likedProductIds.has(product._id.toString());
+        }
+    }
+
+    return apiSuccessRes(HTTP_STATUS.OK, res, "Products fetched successfully", {
+        pageNo: page,
+        size: limit,
+        total,
+        products
+    });
+}
+
+
+
+
         // Step 3: Query with pagination, sorting, projection
         const [products, total] = await Promise.all([
             SellProduct.find(filter)
-                .sort({ createdAt: -1 })
+                .sort(sortOptions)
                 .skip(skip)
                 .limit(limit)
                 .select("title fixedPrice saleType shippingCharge deliveryType isTrending isDisable productImages condition subCategoryId isSold userId  tags originPriceView originPrice description specifics")
@@ -821,7 +915,7 @@ const showAuctionProducts = async (req, res) => {
             sortBy = 'auctionSettings.biddingEndsAt',
             orderBy = 'asc'
         } = req.query;
-        const allowedSortFields = ['auctionSettings.biddingEndsAt', 'title', 'createdAt', 'isTrending']; // define valid fields
+        const allowedSortFields = ['auctionSettings.biddingEndsAt', 'createdAt',"commentCount"];
 
         const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'auctionSettings.biddingEndsAt';
         const sortOrder = orderBy.toLowerCase() === 'desc' ? -1 : 1;
@@ -889,6 +983,129 @@ const showAuctionProducts = async (req, res) => {
             const parsedSpecifics = Array.isArray(specifics) ? specifics : [specifics];
             filter['specifics.valueId'] = { $all: parsedSpecifics.map(id => toObjectId(id)) };
         }
+        if (sortBy === 'commentCount') {
+    const matchStage = { ...filter };
+
+    const aggregationPipeline = [
+        { $match: matchStage },
+        {
+            $lookup: {
+                from: "ProductComment",
+                localField: "_id",
+                foreignField: "product",
+                as: "comments"
+            }
+        },
+        {
+            $addFields: {
+                commentCount: {
+                    $size: {
+                        $filter: {
+                            input: "$comments",
+                            as: "comment",
+                            cond: {
+                                $and: [
+                                    { $eq: ["$$comment.isDeleted", false] },
+                                    { $eq: ["$$comment.isDisable", false] }
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        { $sort: { commentCount: sortOrder } },
+        { $skip: skip },
+        { $limit: limit },
+        {
+            $project: {
+                title: 1,
+                productImages: 1,
+                condition: 1,
+                isDisable: 1,
+                subCategoryId: 1,
+                auctionSettings: 1,
+                tags: 1,
+                description: 1,
+                specifics: 1,
+                categoryId: 1,
+                userId: 1
+            }
+        }
+    ];
+
+    const [products, total] = await Promise.all([
+        SellProduct.aggregate(aggregationPipeline),
+        SellProduct.countDocuments(matchStage)
+    ]);
+
+    await SellProduct.populate(products, [
+        { path: "categoryId", select: "name" },
+        { path: "userId", select: "userName profileImage is_Id_verified isLive is_Preferred_seller" }
+    ]);
+
+    // Add subCategoryName
+    if (products.length) {
+        const categoryIds = [...new Set(products.map(p => p.categoryId?._id?.toString()))];
+        const categories = await Category.find({ _id: { $in: categoryIds } }).select("subCategories.name subCategories._id").lean();
+
+        for (const product of products) {
+            const category = categories.find(cat => cat?._id.toString() === product?.categoryId?._id.toString());
+            const subCat = category?.subCategories?.find(sub => sub?._id.toString() === product?.subCategoryId?.toString());
+            product["subCategoryName"] = subCat ? subCat.name : null;
+        }
+    }
+
+    // Add bid counts
+    const productIds = products.map(p => toObjectId(p._id));
+    const bidsCounts = await Bid.aggregate([
+        { $match: { productId: { $in: productIds } } },
+        { $group: { _id: "$productId", totalBidsPlaced: { $sum: 1 } } }
+    ]);
+    const bidsCountMap = bidsCounts.reduce((acc, curr) => {
+        acc[curr._id.toString()] = curr.totalBidsPlaced;
+        return acc;
+    }, {});
+
+    // Add timeRemaining & bids count
+    for (const product of products) {
+        const utcEnd = DateTime.fromJSDate(product.auctionSettings.biddingEndsAt, { zone: 'utc' });
+        const utcDate = DateTime.fromJSDate(product.auctionSettings.biddingEndsAt, { zone: 'utc' });
+        const localDate = utcDate.setZone(product.auctionSettings.timeZone || 'Asia/Kolkata');
+        const utcNow = DateTime.utc();
+        const timeLeftMs = utcEnd.diff(utcNow).toMillis();
+        product.totalBidsPlaced = bidsCountMap[product._id.toString()] || 0;
+        const nowTimestamp = new Date()
+        const offsetMinutes = nowTimestamp.getTimezoneOffset();
+        const localNow = new Date(nowTimestamp.getTime() - offsetMinutes * 60 * 1000);
+        const endTime = new Date(product.auctionSettings.biddingEndsAt).getTime();
+        product.timeRemaining = timeLeftMs > 0 ? formatTimeRemaining(timeLeftMs) : 0;
+        product.auctionSettings.biddingEndsAt = localDate.toISO();
+    }
+
+    // Add isLiked
+    let likedProductIds = new Set();
+    if (req.user && req.user.userId) {
+        const likes = await ProductLike.find({
+            likeBy: req.user.userId,
+            productId: { $in: productIds },
+            isDisable: false,
+            isDeleted: false,
+        }).select("productId").lean();
+        likedProductIds = new Set(likes.map(like => like.productId.toString()));
+    }
+    products.forEach(product => {
+        product.isLiked = likedProductIds.has(product._id.toString());
+    });
+
+    return apiSuccessRes(HTTP_STATUS.OK, res, "Auction products fetched successfully", {
+        pageNo: page,
+        size: limit,
+        total,
+        products
+    });
+}
+
 
         // Step 2: Query and paginate
         const [products, total] = await Promise.all([

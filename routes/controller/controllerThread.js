@@ -627,15 +627,24 @@ const getThreads = async (req, res) => {
             userId,
             isTrending = false,
             sortBy = 'createdAt', // 'createdAt' | 'budget' | 'comments'
-            sortOrder = 'desc',   // 'asc' | 'desc',
+            orderBy = 'desc',   // 'asc' | 'desc',
             minBudget,
             maxBudget,
-            isDraft = 'false'
+            isDraft = 'false',
+            minAverageRatting,
+            provinceId,
+            districtId
         } = req.query;
+
+
+        const allowedSortFields = ['createdAt', 'commentCount'];
+        const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
+        const sortOrder = orderBy.toLowerCase() === 'desc' ? -1 : 1;
+        const sortOptions = {};
+        sortOptions[sortField] = sortOrder;
 
         let page = parseInt(pageNo);
         let limit = parseInt(size);
-        const sortDir = sortOrder === 'asc' ? 1 : -1;
 
 
         const filters = { isDeleted: false };
@@ -670,19 +679,50 @@ const getThreads = async (req, res) => {
             filters.title = { $regex: keyWord.trim(), $options: 'i' };
         }
 
-        let sortStage = {};
-        if (sortBy === 'budget') {
-            sortStage = { 'budgetRange.min': sortDir };
-        } else {
-            sortStage = { createdAt: sortDir }; // default
+
+        let userFilter = {};
+        if (provinceId &&  mongoose.Types.ObjectId.isValid(provinceId)) {
+            userFilter.provinceId = provinceId;
         }
+        if (districtId &&  mongoose.Types.ObjectId.isValid(districtId)) {
+            userFilter.districtId = districtId;
+        }
+
+
+        if (Object.keys(userFilter).length > 0) {
+            // find users matching location filter
+            const matchedUsers = await User.find(userFilter).select('_id').lean();
+            const matchedUserIds = matchedUsers.map(u => u._id.toString());
+            // if userId filter already exists, intersect userIds; else assign
+            if (filters.userId) {
+                // intersect existing userId filter with matchedUserIds
+                if (Array.isArray(filters.userId)) {
+                    filters.userId = filters.userId.filter(id => matchedUserIds.includes(id.toString()));
+                } else {
+                    filters.userId = matchedUserIds.includes(filters.userId.toString()) ? filters.userId : null;
+                }
+            } else {
+                filters.userId = { $in: matchedUserIds };
+            }
+            // if no matched users, no threads should be returned
+            if (!filters.userId || (Array.isArray(filters.userId) && filters.userId.length === 0)) {
+                return apiSuccessRes(HTTP_STATUS.OK, res, "Products fetched successfully", {
+                    pageNo: parseInt(pageNo),
+                    size: parseInt(size),
+                    total: 0,
+                    products: [],
+                });
+            }
+        }
+
 
         const ThreadModel = isDraft === 'true' ? ThreadDraft : Thread;
 
         const threads = await ThreadModel.find(filters)
-            .populate('userId', 'userName profileImage isLive is_Id_verified is_Preferred_seller')
+            .populate('userId', 'userName profileImage isLive is_Id_verified is_Preferred_seller averageRatting')
             .populate('categoryId', 'name subCategoryId image') // populate but remove later
-            .sort(sortStage)
+            // .sort(sortOptions)
+            .sort(sortField === 'createdAt' ? sortOptions : {}) // Apply sort only if createdAt
             .skip((page - 1) * limit)
             .limit(limit)
             .select(' -__v')
@@ -760,7 +800,15 @@ const getThreads = async (req, res) => {
         });
 
 
-        const enrichedThreads = threads.map(thread => {
+        let filteredThreads = threads;
+        if (minAverageRatting) {
+            filteredThreads = filteredThreads.filter(thread => {
+                const rating = parseFloat(thread?.userId?.averageRatting) || 0;
+                return rating >= parseFloat(minAverageRatting);
+            });
+        }
+
+        const enrichedThreads = filteredThreads.map(thread => {
             const tid = thread?._id.toString();
             const uid = thread.userId?._id?.toString() || '';
             const { subCategoryId, photos, ...rest } = thread;
@@ -779,9 +827,16 @@ const getThreads = async (req, res) => {
                 },
             };
         });
+        if (sortField === 'commentCount') {
+            enrichedThreads.sort((a, b) => {
+                const countA = a.totalComments || 0;
+                const countB = b.totalComments || 0;
+                return sortOrder === -1 ? countB - countA : countA - countB;
+            });
+        }
 
 
-        const total = await ThreadModel.countDocuments(filters);
+        const total = filteredThreads.length;
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Products fetched successfully", {
             pageNo: page,
