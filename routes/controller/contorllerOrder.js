@@ -9,7 +9,7 @@ const { saveNotification } = require('../services/serviceNotification');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const HTTP_STATUS = require('../../utils/statusCode');
 const { toObjectId, apiSuccessRes, apiErrorRes, parseItems } = require('../../utils/globalFunction');
-const { SALE_TYPE, DEFAULT_AMOUNT, PAYMENT_METHOD, ORDER_STATUS, PAYMENT_STATUS, CHARGE_TYPE, PRICING_TYPE, SHIPPING_STATUS, TNX_TYPE, NOTIFICATION_TYPES, createStandardizedChatMeta, createStandardizedNotificationMeta, DISPUTE_STATUS } = require('../../utils/Role');
+const { SALE_TYPE, DEFAULT_AMOUNT, PAYMENT_METHOD, ORDER_STATUS, PAYMENT_STATUS, CHARGE_TYPE, PRICING_TYPE, SHIPPING_STATUS, TNX_TYPE, NOTIFICATION_TYPES, createStandardizedChatMeta, createStandardizedNotificationMeta, DISPUTE_STATUS, DISPUTE_DECISION } = require('../../utils/Role');
 const { default: mongoose } = require('mongoose');
 const Joi = require('joi');
 
@@ -3440,6 +3440,29 @@ const getSellerPayoutCalculation = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Order not found");
         }
 
+        // Check for dispute information
+        let disputeInfo = null;
+        const dispute = await Dispute.findOne({
+            orderId: order._id,
+            isDeleted: false,
+            isDisable: false
+        }).lean();
+
+        if (dispute) {
+            disputeInfo = {
+                disputeId: dispute.disputeId,
+                status: dispute.status,
+                disputeReason: dispute.disputeReason,
+                createdAt: dispute.createdAt,
+                hasResolution: !!dispute.adminReview,
+                decision: dispute.adminReview?.decision || null,
+                disputeAmountPercent: dispute.adminReview?.disputeAmountPercent || 0,
+                decisionNote: dispute.adminReview?.decisionNote || '',
+                resolvedAt: dispute.adminReview?.resolvedAt || null,
+                reviewedBy: dispute.adminReview?.reviewedBy || null
+            };
+        }
+
         // Find the credit wallet transaction for this order
         const creditTnx = await WalletTnx.findOne({
             orderId: order._id,
@@ -3447,8 +3470,103 @@ const getSellerPayoutCalculation = async (req, res) => {
             tnxStatus: PAYMENT_STATUS.COMPLETED
         }).lean();
 
-        if (!creditTnx) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "No credit transaction found for this order");
+        // Calculate original amounts from order (before any dispute adjustments)
+        const originalProductCost = Number(order.totalAmount) || 0;
+        let calculatedProductCost = originalProductCost;
+        let calculatedServiceCharge = 0;
+        let calculatedTaxCharge = 0;
+        let calculatedNetAmount = 0;
+        let disputeAdjustmentDetails = null;
+
+        // Get fee settings for calculation
+        const feeSettings = await FeeSetting.find({
+            name: { $in: ["SERVICE_CHARGE", "TAX"] },
+            isActive: true,
+            isDisable: false,
+            isDeleted: false
+        }).lean();
+
+        const serviceChargeSetting = feeSettings.find(f => f.name === "SERVICE_CHARGE");
+        const taxSetting = feeSettings.find(f => f.name === "TAX");
+
+        // Apply dispute adjustments if dispute is resolved
+        if (disputeInfo && disputeInfo.hasResolution && disputeInfo.status === DISPUTE_STATUS.RESOLVED) {
+            const { decision, disputeAmountPercent = 0 } = disputeInfo;
+
+            if (decision === DISPUTE_DECISION.SELLER) {
+                // Seller wins - gets full amount
+                calculatedProductCost = originalProductCost;
+                disputeAdjustmentDetails = {
+                    type: 'SELLER_FAVOR',
+                    description: 'Dispute resolved in seller favor - full payment',
+                    originalAmount: originalProductCost,
+                    adjustedAmount: calculatedProductCost,
+                    sellerReceivePercent: 100,
+                    buyerRefundPercent: 0,
+                    adjustmentAmount: 0
+                };
+            } else if (decision === DISPUTE_DECISION.BUYER) {
+                // Buyer wins - seller gets reduced amount
+                const sellerReceivePercent = 100 - disputeAmountPercent;
+                calculatedProductCost = originalProductCost * (sellerReceivePercent / 100);
+                const refundAmount = originalProductCost * (disputeAmountPercent / 100);
+                
+                disputeAdjustmentDetails = {
+                    type: 'BUYER_FAVOR',
+                    description: `Dispute resolved in buyer favor - ${sellerReceivePercent}% to seller, ${disputeAmountPercent}% refund to buyer`,
+                    originalAmount: originalProductCost,
+                    adjustedAmount: calculatedProductCost,
+                    sellerReceivePercent: sellerReceivePercent,
+                    buyerRefundPercent: disputeAmountPercent,
+                    adjustmentAmount: refundAmount
+                };
+            }
+        } else {
+            // No dispute or unresolved dispute - use original amount
+            calculatedProductCost = originalProductCost;
+        }
+
+        // Calculate fees on the (potentially adjusted) product cost
+        if (serviceChargeSetting) {
+            if (serviceChargeSetting.type === PRICING_TYPE.PERCENTAGE) {
+                calculatedServiceCharge = (calculatedProductCost * serviceChargeSetting.value) / 100;
+            } else {
+                calculatedServiceCharge = serviceChargeSetting.value;
+            }
+        }
+
+        if (taxSetting) {
+            if (taxSetting.type === PRICING_TYPE.PERCENTAGE) {
+                calculatedTaxCharge = (calculatedProductCost * taxSetting.value) / 100;
+            } else {
+                calculatedTaxCharge = taxSetting.value;
+            }
+        }
+
+        calculatedNetAmount = calculatedProductCost - calculatedServiceCharge - calculatedTaxCharge;
+
+        // Use actual transaction amounts if order is completed and payment processed
+        let finalAmounts = {
+            productCost: calculatedProductCost,
+            serviceCharge: calculatedServiceCharge,
+            taxCharge: calculatedTaxCharge,
+            netAmount: calculatedNetAmount,
+            serviceChargeType: serviceChargeSetting?.type || 'FIXED',
+            taxChargeType: taxSetting?.type || 'FIXED',
+            isEstimated: true
+        };
+
+        if (creditTnx) {
+            // Use actual processed amounts
+            finalAmounts = {
+                productCost: Number(creditTnx.amount) || 0,
+                serviceCharge: Number(creditTnx.serviceCharge) || 0,
+                taxCharge: Number(creditTnx.taxCharge) || 0,
+                netAmount: Number(creditTnx.netAmount) || 0,
+                serviceChargeType: creditTnx.serviceType || 'FIXED',
+                taxChargeType: creditTnx.taxType || 'FIXED',
+                isEstimated: false
+            };
         }
 
         // Check if payout (withdrawal) is already completed
@@ -3459,7 +3577,7 @@ const getSellerPayoutCalculation = async (req, res) => {
         }).lean();
         const isPayoutCompleted = !!withdrawalTnx;
 
-        // Get withdrawal fee setting
+        // Get withdrawal fee setting and calculate withdrawal fee
         const withdrawalFeeSetting = await FeeSetting.findOne({
             name: "WITHDRAWAL_FEE",
             isActive: true,
@@ -3469,11 +3587,10 @@ const getSellerPayoutCalculation = async (req, res) => {
 
         let withdrawalFee = 0;
         let withdrawalFeeType = '';
-        const netAmount = Number(creditTnx.netAmount) || 0;
 
         if (withdrawalFeeSetting) {
             if (withdrawalFeeSetting.type === PRICING_TYPE.PERCENTAGE) {
-                withdrawalFee = (netAmount * withdrawalFeeSetting.value) / 100;
+                withdrawalFee = (finalAmounts.netAmount * withdrawalFeeSetting.value) / 100;
                 withdrawalFeeType = PRICING_TYPE.PERCENTAGE;
             } else {
                 withdrawalFee = withdrawalFeeSetting.value;
@@ -3481,7 +3598,7 @@ const getSellerPayoutCalculation = async (req, res) => {
             }
         }
 
-        const netAmountAfterWithdrawalFee = netAmount - withdrawalFee;
+        const netAmountAfterWithdrawalFee = finalAmounts.netAmount - withdrawalFee;
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Payout calculation fetched successfully", {
             orderId: order._id,
@@ -3502,17 +3619,37 @@ const getSellerPayoutCalculation = async (req, res) => {
                 price: item.priceAtPurchase,
                 quantity: item.quantity
             })),
+            disputeInfo: disputeInfo,
+            disputeAdjustment: disputeAdjustmentDetails,
             payoutCalculation: {
-                productCost: Number(creditTnx.amount) || 0,
-                serviceCharge: Number(creditTnx.serviceCharge) || 0,
-                taxCharge: Number(creditTnx.taxCharge) || 0,
-                netAmount: netAmount,
+                originalProductCost: originalProductCost,
+                productCost: finalAmounts.productCost,
+                serviceCharge: finalAmounts.serviceCharge,
+                taxCharge: finalAmounts.taxCharge,
+                netAmount: finalAmounts.netAmount,
                 withdrawalFee: withdrawalFee,
                 withdrawalFeeType: withdrawalFeeType,
                 netAmountAfterWithdrawalFee: netAmountAfterWithdrawalFee,
-                serviceChargeType: creditTnx.serviceType || 'FIXED',
-                taxChargeType: creditTnx.taxType || 'FIXED',
-                withdrawalFeeSettingValue: withdrawalFeeSetting?.value || 0
+                serviceChargeType: finalAmounts.serviceChargeType,
+                taxChargeType: finalAmounts.taxChargeType,
+                withdrawalFeeSettingValue: withdrawalFeeSetting?.value || 0,
+                isEstimated: finalAmounts.isEstimated,
+                hasDispute: !!disputeInfo,
+                isDisputeResolved: disputeInfo?.status === DISPUTE_STATUS.RESOLVED,
+                feeSettings: {
+                    serviceCharge: serviceChargeSetting ? {
+                        value: serviceChargeSetting.value,
+                        type: serviceChargeSetting.type
+                    } : null,
+                    tax: taxSetting ? {
+                        value: taxSetting.value,
+                        type: taxSetting.type
+                    } : null,
+                    withdrawalFee: withdrawalFeeSetting ? {
+                        value: withdrawalFeeSetting.value,
+                        type: withdrawalFeeSetting.type
+                    } : null
+                }
             }
         });
     } catch (err) {

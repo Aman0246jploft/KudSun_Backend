@@ -109,8 +109,15 @@ mongoose.connect(process.env.DB_STRING, {
             processedStats.disputesHandled += confirmReceiptStats.disputesHandled;
             processedStats.errors.push(...confirmReceiptStats.errors);
 
+            // STEP 4: Update DISPUTE to COMPLETED (if dispute is resolved)
+            const disputedStats = await updateDisputedToCompleted(session);
+            processedStats.disputedToCompleted = disputedStats.updated;
+            processedStats.paymentsProcessed += disputedStats.paymentsProcessed;
+            processedStats.disputesHandled += disputedStats.disputesHandled;
+            processedStats.errors.push(...disputedStats.errors);
+
             // Update global stats
-            cronStats.ordersProcessed += (processedStats.shippedToDelivered + processedStats.deliveredToCompleted + processedStats.confirmReceiptToCompleted);
+            cronStats.ordersProcessed += (processedStats.shippedToDelivered + processedStats.deliveredToCompleted + processedStats.confirmReceiptToCompleted + processedStats.disputedToCompleted);
             cronStats.paymentsProcessed += processedStats.paymentsProcessed;
             cronStats.disputesHandled += processedStats.disputesHandled;
 
@@ -127,6 +134,8 @@ mongoose.connect(process.env.DB_STRING, {
             - Duration: ${duration}ms
             - Shipped → Delivered: ${processedStats.shippedToDelivered}
             - Delivered → Completed: ${processedStats.deliveredToCompleted}
+            - Confirm Receipt → Completed: ${processedStats.confirmReceiptToCompleted}
+            - Disputed → Completed: ${processedStats.disputedToCompleted}
             - Payments Processed: ${processedStats.paymentsProcessed}
             - Disputes Handled: ${processedStats.disputesHandled}
             - Errors: ${processedStats.errors.length}`);
@@ -552,6 +561,141 @@ async function updateConfirmReceiptToCompleted(cutoffDate, session) {
 }
 
 /**
+ * Update orders from DISPUTE to COMPLETED if dispute is resolved
+ */
+async function updateDisputedToCompleted(session) {
+    try {
+        console.log('⚖️ Processing DISPUTE → COMPLETED updates...');
+
+        let stats = { updated: 0, paymentsProcessed: 0, disputesHandled: 0, errors: [] };
+
+        // Find orders that are currently DISPUTE with proper validation
+        const disputedOrders = await Order.find({
+            status: ORDER_STATUS.DISPUTE,
+            paymentStatus: PAYMENT_STATUS.COMPLETED,
+            isDeleted: false,
+            isDisable: false,
+        }).populate('sellerId userId', 'userName email').session(session);
+
+        console.log(`⚖️ Found ${disputedOrders.length} disputed orders to check`);
+
+        for (const order of disputedOrders) {
+            try {
+                console.log(`🔍 Checking dispute status for order ${order._id}...`);
+
+                // Find the associated dispute and validate its resolution
+                const dispute = await Dispute.findOne({
+                    orderId: order._id,
+                    isDeleted: false,
+                    isDisable: false
+                }).session(session);
+
+                if (!dispute) {
+                    stats.errors.push(`Order ${order._id} is DISPUTE but no dispute record found`);
+                    continue;
+                }
+
+                // Check if dispute is resolved
+                if (dispute.status !== DISPUTE_STATUS.RESOLVED) {
+                    console.log(`⏳ Order ${order._id} dispute still ${dispute.status}, skipping...`);
+                    continue;
+                }
+
+                // Validate dispute resolution details
+                if (!dispute.adminReview || !dispute.adminReview.decision) {
+                    stats.errors.push(`Order ${order._id} dispute resolved but missing admin review decision`);
+                    continue;
+                }
+
+                const { decision, disputeAmountPercent = 0 } = dispute.adminReview;
+
+                // Validate dispute amount percentage
+                if (decision === DISPUTE_DECISION.BUYER && (disputeAmountPercent < 0 || disputeAmountPercent > 100)) {
+                    stats.errors.push(`Order ${order._id} has invalid dispute amount percentage: ${disputeAmountPercent}%`);
+                    continue;
+                }
+
+                console.log(`✅ Order ${order._id} dispute resolved - Decision: ${decision}, Amount%: ${disputeAmountPercent}%`);
+
+                // Additional validation before completion
+                const validationResult = await validateOrderForCompletion(order, session);
+                if (!validationResult.isValid) {
+                    stats.errors.push(`Order ${order._id}: ${validationResult.reason}`);
+                    continue;
+                }
+
+                // Prepare dispute info for payment processing
+                const disputeInfo = {
+                    decision: dispute.adminReview.decision,
+                    disputeAmountPercent: disputeAmountPercent,
+                    decisionNote: dispute.adminReview.decisionNote,
+                    disputeId: dispute.disputeId,
+                    resolvedAt: dispute.adminReview.resolvedAt,
+                    reviewedBy: dispute.adminReview.reviewedBy
+                };
+
+                // Proceed with completion
+                console.log(`🎉 Completing disputed order ${order._id} and processing seller payment...`);
+
+                // Update order status to COMPLETED
+                const updated = await Order.findByIdAndUpdate(
+                    order._id,
+                    {
+                        status: ORDER_STATUS.COMPLETED,
+                        updatedAt: new Date()
+                    },
+                    { session, new: true }
+                );
+
+                if (!updated || updated.status !== ORDER_STATUS.COMPLETED) {
+                    stats.errors.push(`Order ${order._id}: status update to COMPLETED failed`);
+                    continue;
+                }
+
+                // Create comprehensive status history entry
+                const statusNote = `Disputed order completed with resolved dispute (${disputeInfo.decision} favor, ${disputeInfo.disputeAmountPercent}% dispute amount) - Cron Job`;
+
+                await OrderStatusHistory.create([{
+                    orderId: order._id,
+                    oldStatus: ORDER_STATUS.DISPUTE,
+                    newStatus: ORDER_STATUS.COMPLETED,
+                    note: statusNote,
+                    changedAt: new Date(),
+                    changedBy: null // System update
+                }], { session });
+
+                // Process seller payment with dispute resolution
+                const paymentResult = await processSellerPaymentEnhanced(order, session, disputeInfo);
+                if (paymentResult.success) {
+                    stats.paymentsProcessed++;
+                } else {
+                    stats.errors.push(`Payment processing failed for disputed order ${order._id}: ${paymentResult.error}`);
+                }
+
+                // Send comprehensive notifications for dispute resolution completion
+                await sendDisputeResolutionCompletionNotifications(order, disputeInfo);
+
+                stats.disputesHandled++;
+                stats.updated++;
+                console.log(`✅ Disputed order ${order._id} completed with ${disputeInfo.decision} favor resolution`);
+
+            } catch (orderError) {
+                const errorMsg = `Error processing disputed order ${order._id}: ${orderError.message}`;
+                stats.errors.push(errorMsg);
+                console.error(`❌ ${errorMsg}`);
+            }
+        }
+
+        console.log(`✅ DISPUTE → COMPLETED: ${stats.updated} orders completed, ${stats.paymentsProcessed} payments processed, ${stats.disputesHandled} disputes handled, ${stats.errors.length} errors`);
+        return stats;
+
+    } catch (error) {
+        console.error('❌ Error in updateDisputedToCompleted:', error);
+        throw error;
+    }
+}
+
+/**
  * Validate and process dispute information for order completion
  */
 async function validateAndProcessDispute(orderId, session) {
@@ -744,24 +888,28 @@ async function processSellerPaymentEnhanced(order, session, disputeInfo = null) 
         // Calculate fees with validation
         let serviceCharge = 0;
         let serviceType = PRICING_TYPE.FIXED;
+        let serviceChargeValue = 0;
         let taxAmount = 0;
         let taxType = PRICING_TYPE.FIXED;
+        let taxValue = 0;
 
         if (serviceChargeSetting) {
             serviceType = serviceChargeSetting.type;
+            serviceChargeValue = Number(serviceChargeSetting.value);
             if (serviceChargeSetting.type === PRICING_TYPE.PERCENTAGE) {
-                serviceCharge = (adjustedProductCost * Number(serviceChargeSetting.value)) / 100;
+                serviceCharge = (adjustedProductCost * serviceChargeValue) / 100;
             } else {
-                serviceCharge = Number(serviceChargeSetting.value);
+                serviceCharge = serviceChargeValue;
             }
         }
 
         if (taxSetting) {
             taxType = taxSetting.type;
+            taxValue = Number(taxSetting.value);
             if (taxSetting.type === PRICING_TYPE.PERCENTAGE) {
-                taxAmount = (adjustedProductCost * Number(taxSetting.value)) / 100;
+                taxAmount = (adjustedProductCost * taxValue) / 100;
             } else {
-                taxAmount = Number(taxSetting.value);
+                taxAmount = taxValue;
             }
         }
 
@@ -820,7 +968,7 @@ async function processSellerPaymentEnhanced(order, session, disputeInfo = null) 
         );
 
         // Track platform revenue
-        await trackCompletionRevenue(order, serviceCharge, taxAmount, serviceType, taxType, session);
+        await trackCompletionRevenue(order, serviceCharge, taxAmount, serviceType, taxType, session, serviceChargeValue, taxValue);
 
         console.log(`✅ Seller payment processed: ฿${netAmount.toFixed(2)} credited to wallet${disputeInfo ? ' (dispute-adjusted)' : ''}`);
 
@@ -835,7 +983,7 @@ async function processSellerPaymentEnhanced(order, session, disputeInfo = null) 
 /**
  * Track platform revenue when order is completed
  */
-async function trackCompletionRevenue(order, serviceCharge, taxAmount, serviceType, taxType, session) {
+async function trackCompletionRevenue(order, serviceCharge, taxAmount, serviceType, taxType, session, serviceChargeValue = 0, taxValue = 0) {
     try {
         const revenueEntries = [];
 
@@ -846,6 +994,7 @@ async function trackCompletionRevenue(order, serviceCharge, taxAmount, serviceTy
                 revenueType: 'SERVICE_CHARGE',
                 amount: serviceCharge,
                 calculationType: serviceType,
+                calculationValue: serviceChargeValue, // The actual percentage or fixed value used
                 baseAmount: order.totalAmount,
                 status: 'COMPLETED',
                 completedAt: new Date(),
@@ -865,7 +1014,7 @@ async function trackCompletionRevenue(order, serviceCharge, taxAmount, serviceTy
                 revenueType: 'TAX',
                 amount: taxAmount,
                 calculationType: taxType,
-                calculationValue: taxAmount,
+                calculationValue: taxValue, // The actual percentage or fixed value used
                 baseAmount: order.totalAmount,
                 status: 'COMPLETED',
                 completedAt: new Date(),
@@ -1047,6 +1196,132 @@ async function sendCompletionNotifications(order, disputeInfo = null) {
 }
 
 /**
+ * Send notifications when a disputed order is completed after dispute resolution
+ */
+async function sendDisputeResolutionCompletionNotifications(order, disputeInfo) {
+    try {
+        console.log(`📧 Sending dispute resolution completion notifications for order ${order._id}`);
+
+        // Buyer notification based on dispute decision
+        let buyerTitle = "Disputed Order Completed";
+        let buyerMessage = "";
+
+        if (disputeInfo.decision === DISPUTE_DECISION.BUYER) {
+            buyerTitle = "Dispute Resolved in Your Favor - Order Completed";
+            buyerMessage = `Your disputed order has been completed with the dispute resolved in your favor. You received a ${disputeInfo.disputeAmountPercent}% refund of the order value. ${disputeInfo.decisionNote || ''}`;
+        } else {
+            buyerTitle = "Dispute Resolved - Order Completed";
+            buyerMessage = `Your disputed order has been completed with the dispute resolved in the seller's favor. The full payment has been released to the seller. ${disputeInfo.decisionNote || ''}`;
+        }
+
+        // Seller notification based on dispute decision
+        let sellerTitle = "Disputed Order Completed";
+        let sellerMessage = "";
+        let netAmountPaid = 0;
+
+        if (disputeInfo.decision === DISPUTE_DECISION.SELLER) {
+            sellerTitle = "Dispute Resolved in Your Favor - Payment Received!";
+            sellerMessage = `Your disputed order has been completed with the dispute resolved in your favor. Full payment has been credited to your wallet. ${disputeInfo.decisionNote || ''}`;
+            netAmountPaid = order.totalAmount;
+        } else {
+            sellerTitle = "Disputed Order Completed - Partial Payment";
+            const sellerPercentage = 100 - disputeInfo.disputeAmountPercent;
+            sellerMessage = `Your disputed order has been completed with the dispute resolved in the buyer's favor. ${sellerPercentage}% of the order value (₿${(order.totalAmount * sellerPercentage / 100).toFixed(2)}) has been credited to your wallet. ${disputeInfo.decisionNote || ''}`;
+            netAmountPaid = order.totalAmount * sellerPercentage / 100;
+        }
+
+        const notifications = [
+            // Notification to buyer
+            {
+                recipientId: order.userId,
+                userId: order.sellerId,
+                orderId: order._id,
+                productId: order.items[0]?.productId,
+                type: NOTIFICATION_TYPES.ORDER,
+                title: buyerTitle,
+                message: buyerMessage,
+                meta: createStandardizedNotificationMeta({
+                    orderNumber: order._id.toString(),
+                    orderId: order._id.toString(),
+                    itemCount: order.items?.length || 0,
+                    totalAmount: order.totalAmount,
+                    amount: order.grandTotal,
+                    oldStatus: ORDER_STATUS.DISPUTE,
+                    newStatus: ORDER_STATUS.COMPLETED,
+                    paymentMethod: order.paymentMethod,
+                    paymentId: order.paymentId,
+                    productId: order.items[0]?.productId,
+                    productTitle: order.items[0]?.productTitle,
+                    sellerId: order.sellerId,
+                    buyerId: order.userId,
+                    status: ORDER_STATUS.COMPLETED,
+                    actionBy: 'system',
+                    processedBy: 'dispute-resolution-auto-completion',
+                    autoCompleted: true,
+                    cronProcessed: true,
+                    disputeId: disputeInfo.disputeId,
+                    disputeStatus: 'RESOLVED',
+                    disputeDecision: disputeInfo.decision,
+                    disputeAmountPercent: disputeInfo.disputeAmountPercent,
+                    refundAmount: disputeInfo.decision === DISPUTE_DECISION.BUYER ?
+                        (order.grandTotal * disputeInfo.disputeAmountPercent / 100) : 0,
+                    resolvedAt: disputeInfo.resolvedAt,
+                    reviewedBy: disputeInfo.reviewedBy,
+                    decisionNote: disputeInfo.decisionNote
+                }),
+                redirectUrl: `/order/${order._id}`
+            },
+            // Notification to seller
+            {
+                recipientId: order.sellerId,
+                userId: order.userId,
+                orderId: order._id,
+                productId: order.items[0]?.productId,
+                type: NOTIFICATION_TYPES.ORDER,
+                title: sellerTitle,
+                message: sellerMessage,
+                meta: createStandardizedNotificationMeta({
+                    orderNumber: order._id.toString(),
+                    orderId: order._id.toString(),
+                    itemCount: order.items?.length || 0,
+                    totalAmount: order.totalAmount,
+                    amount: order.grandTotal,
+                    oldStatus: ORDER_STATUS.DISPUTE,
+                    newStatus: ORDER_STATUS.COMPLETED,
+                    paymentMethod: order.paymentMethod,
+                    paymentId: order.paymentId,
+                    productId: order.items[0]?.productId,
+                    productTitle: order.items[0]?.productTitle,
+                    sellerId: order.sellerId,
+                    buyerId: order.userId,
+                    status: ORDER_STATUS.COMPLETED,
+                    actionBy: 'system',
+                    processedBy: 'dispute-resolution-auto-completion',
+                    paymentProcessed: true,
+                    cronProcessed: true,
+                    disputeId: disputeInfo.disputeId,
+                    disputeStatus: 'RESOLVED',
+                    disputeDecision: disputeInfo.decision,
+                    disputeAmountPercent: disputeInfo.disputeAmountPercent,
+                    netAmountPaid: netAmountPaid,
+                    refundAmount: disputeInfo.decision === DISPUTE_DECISION.BUYER ?
+                        (order.grandTotal * disputeInfo.disputeAmountPercent / 100) : 0,
+                    resolvedAt: disputeInfo.resolvedAt,
+                    reviewedBy: disputeInfo.reviewedBy,
+                    decisionNote: disputeInfo.decisionNote
+                }),
+                redirectUrl: `/wallet/transactions`
+            }
+        ];
+
+        await saveNotification(notifications);
+        console.log(`✅ Dispute resolution completion notifications sent for order ${order._id}`);
+    } catch (error) {
+        console.error('❌ Error sending dispute resolution completion notifications:', error);
+    }
+}
+
+/**
  * Send cron job summary notification to admin
  */
 async function sendCronSummaryNotification(stats, duration) {
@@ -1125,6 +1400,7 @@ if (typeof global.app !== 'undefined') {
                 const shippedStats = await updateShippedToDelivered(cutoffDate, session);
                 const completedStats = await updateDeliveredToCompleted(cutoffDate, session);
                 const confirmReceiptStats = await updateConfirmReceiptToCompleted(now.clone().subtract(CONFIRM_RECEIPT_TO_COMPLETED_DAY_LIMIT, 'days'), session);
+                const disputedStats = await updateDisputedToCompleted(session);
 
                 await session.commitTransaction();
 
@@ -1134,9 +1410,11 @@ if (typeof global.app !== 'undefined') {
                     stats: {
                         shippedToDelivered: shippedStats.updated,
                         deliveredToCompleted: completedStats.updated,
-                        paymentsProcessed: completedStats.paymentsProcessed,
-                        disputesHandled: completedStats.disputesHandled,
-                        errors: [...shippedStats.errors, ...completedStats.errors]
+                        confirmReceiptToCompleted: confirmReceiptStats.updated,
+                        disputedToCompleted: disputedStats.updated,
+                        paymentsProcessed: completedStats.paymentsProcessed + confirmReceiptStats.paymentsProcessed + disputedStats.paymentsProcessed,
+                        disputesHandled: completedStats.disputesHandled + confirmReceiptStats.disputesHandled + disputedStats.disputesHandled,
+                        errors: [...shippedStats.errors, ...completedStats.errors, ...confirmReceiptStats.errors, ...disputedStats.errors]
                     }
                 });
 
