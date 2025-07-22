@@ -128,6 +128,8 @@ const globalCrudController = {
         populate: parsePopulate(req.query.populate)
       };
 
+
+
       const modelData = await getAllDocuments(model, options);
       if (modelData.statusCode === CONSTANTS.SUCCESS)
         return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, modelData.data);
