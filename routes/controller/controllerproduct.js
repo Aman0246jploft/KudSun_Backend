@@ -665,16 +665,26 @@ const showNormalProducts = async (req, res) => {
             filter.isDisable = false
         }
 
+
         // Price range filter:
-        if (minPrice != null || maxPrice != null) {
-            filter.fixedPrice = {};
-            if (minPrice != null) {
-                filter.fixedPrice.$gte = parseFloat(minPrice);
-            }
-            if (maxPrice != null) {
-                filter.fixedPrice.$lte = parseFloat(maxPrice);
-            }
+        const hasMinPrice = minPrice !== null && minPrice !== undefined && minPrice !== "";
+        const hasMaxPrice = maxPrice !== null && maxPrice !== undefined && maxPrice !== "";
+
+        if (hasMinPrice && hasMaxPrice) {
+            filter.fixedPrice = {
+                $gte: parseFloat(minPrice),
+                $lte: parseFloat(maxPrice),
+            };
+        } else if (hasMinPrice) {
+            filter.fixedPrice = {
+                $gte: parseFloat(minPrice),
+            };
+        } else if (hasMaxPrice) {
+            filter.fixedPrice = {
+                $lte: parseFloat(maxPrice),
+            };
         }
+
 
         if (includeSold == true || includeSold == "true") {
             // Do not filter isSold — return both sold and unsold
