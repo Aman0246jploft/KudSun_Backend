@@ -563,7 +563,7 @@ async function updateConfirmReceiptToCompleted(cutoffDate, session) {
 /**
  * Update orders from DISPUTE to COMPLETED if dispute is resolved
  */
-async function updateDisputedToCompleted(session) {
+async function updateDisputedToCompleted(session) { 
     try {
         console.log('⚖️ Processing DISPUTE → COMPLETED updates...');
 
