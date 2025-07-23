@@ -13,7 +13,7 @@ const TRENDING_THRESHOLDS = {
 
 
 
-    VIEW_COUNT: 5,        // Minimum views to be considered trending
+    VIEW_COUNT:10,        // Minimum views to be considered trending
     TIME_WINDOW_DAYS: 7,    // Views within last 7 days
     MAX_TRENDING_PRODUCTS: 5000000000000 // Maximum products to mark as trending
 
@@ -34,7 +34,6 @@ const addTrendingUpdateJob = async (productId) => {
                 delay: 2000
             }
         });
-        console.log(`Trending update job added for product: ${productId}`);
     } catch (error) {
         console.error('Error adding trending update job:', error);
     }
@@ -48,7 +47,6 @@ const processTrendingUpdate = async (job) => {
         // Get product with current view count
         const product = await SellProduct.findById(productId);
         if (!product) {
-            console.log(`Product ${productId} not found for trending update`);
             return;
         }
 
@@ -60,7 +58,7 @@ const processTrendingUpdate = async (job) => {
             await SellProduct.findByIdAndUpdate(productId, {
                 isTrending: shouldBeTrending
             });
-            console.log(`Product ${productId} trending status updated to: ${shouldBeTrending}`);
+
         }
 
     } catch (error) {
@@ -112,7 +110,7 @@ const checkTrendingCriteria = async (product) => {
 // Manual trending update for all products
 const updateAllTrendingStatus = async () => {
     try {
-        console.log('Starting bulk trending status update...');
+
 
         // Get all active products
         const products = await SellProduct.find({
@@ -126,6 +124,7 @@ const updateAllTrendingStatus = async () => {
 
         for (const product of products) {
             const shouldBeTrending = await checkTrendingCriteria(product);
+     
 
             if (product.isTrending !== shouldBeTrending) {
                 await SellProduct.findByIdAndUpdate(product._id, {
@@ -139,7 +138,6 @@ const updateAllTrendingStatus = async () => {
             }
         }
 
-        console.log(`Bulk trending update completed: ${updatedCount} products updated, ${trendingCount} currently trending`);
         return { updatedCount, trendingCount };
     } catch (error) {
         console.error('Error in bulk trending update:', error);

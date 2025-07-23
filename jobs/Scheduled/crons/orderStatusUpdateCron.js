@@ -63,8 +63,6 @@ mongoose.connect(process.env.DB_STRING, {
     // Run the cron job
     cron.schedule(CRON_SCHEDULE, async () => {
         const runStartTime = new Date();
-        console.log('🔄 Starting Order Status Update Cron Job at:', runStartTime.toISOString());
-
         cronStats.lastRun = runStartTime;
         cronStats.totalRuns++;
 
@@ -79,7 +77,6 @@ mongoose.connect(process.env.DB_STRING, {
             const now = moment();
             const cutoffDate = now.clone().subtract(PROCESSING_DAY_LIMIT, 'days');
 
-            console.log('📅 Processing orders older than:', cutoffDate.format('YYYY-MM-DD HH:mm:ss'));
 
             // Track processing stats
             let processedStats = {
@@ -129,16 +126,7 @@ mongoose.connect(process.env.DB_STRING, {
             cronStats.lastSuccessfulRun = runEndTime;
             cronStats.successfulRuns++;
 
-            console.log('✅ Order Status Update Cron Job completed successfully');
-            console.log(`📊 Processing Summary:
-            - Duration: ${duration}ms
-            - Shipped → Delivered: ${processedStats.shippedToDelivered}
-            - Delivered → Completed: ${processedStats.deliveredToCompleted}
-            - Confirm Receipt → Completed: ${processedStats.confirmReceiptToCompleted}
-            - Disputed → Completed: ${processedStats.disputedToCompleted}
-            - Payments Processed: ${processedStats.paymentsProcessed}
-            - Disputes Handled: ${processedStats.disputesHandled}
-            - Errors: ${processedStats.errors.length}`);
+
 
             if (processedStats.errors.length > 0) {
                 console.log('⚠️ Errors during processing:', processedStats.errors);
@@ -185,7 +173,6 @@ mongoose.connect(process.env.DB_STRING, {
  * Validate system state before processing orders
  */
 async function validateSystemState() {
-    console.log('🔍 Validating system state...');
 
     // Check if required fee settings exist
     const requiredFeeSettings = ['SERVICE_CHARGE', 'WITHDRAWAL_FEE'];
@@ -211,7 +198,7 @@ async function validateSystemState() {
         throw new Error('Database not connected');
     }
 
-    console.log('✅ System state validation passed');
+    
 }
 
 /**
@@ -219,7 +206,7 @@ async function validateSystemState() {
  */
 async function updateShippedToDelivered(cutoffDate, session) {
     try {
-        console.log('🚛 Processing SHIPPED → DELIVERED updates...');
+
 
         let stats = { updated: 0, errors: [] };
 

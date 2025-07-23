@@ -28,7 +28,7 @@ mongoose.connect(process.env.DB_STRING, {
     // Run the cron job
     cron.schedule(CRON_SCHEDULE, async () => {
         const runStartTime = new Date();
-        console.log('🔄 Starting Trending Update Cron Job at:', runStartTime.toISOString());
+   
 
         cronStats.lastRun = runStartTime;
         cronStats.totalRuns++;
@@ -45,11 +45,7 @@ mongoose.connect(process.env.DB_STRING, {
             const runEndTime = new Date();
             const duration = runEndTime - runStartTime;
 
-            console.log('✅ Trending Update Cron Job completed successfully');
-            console.log(`📊 Processing Summary:
-            - Duration: ${duration}ms
-            - Products Updated: ${result.updatedCount}
-            - Currently Trending: ${result.trendingCount}`);
+
 
         } catch (error) {
             cronStats.failedRuns++;
