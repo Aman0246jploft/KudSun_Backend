@@ -255,7 +255,8 @@ const createOrder = async (req, res) => {
             systemMeta: {
                 statusType: 'ORDER',
                 status: ORDER_STATUS.PENDING,
-                orderId: order._id,
+                title: "Order Created",
+                orderId: order.orderId,
                 productId: orderItems[0].productId, // First product in order
                 meta: createStandardizedChatMeta({
                     orderNumber: order._id.toString(),
@@ -264,7 +265,7 @@ const createOrder = async (req, res) => {
                     itemCount: orderItems.length,
                     sellerId: sellerId,
                     buyerId: userId,
-                    orderStatus: ORDER_STATUS.PENDING,
+                    orderStatus:  ORDER_STATUS.PENDING,
                     paymentStatus: order.paymentStatus,
                     paymentMethod: order.paymentMethod
                 }),
@@ -329,6 +330,50 @@ const createOrder = async (req, res) => {
             }
         ];
         await saveNotification(notifications);
+
+        // Send payment pending message if payment is not completed
+        if (order.paymentStatus !== PAYMENT_STATUS.COMPLETED) {
+            const payNowMessage = new ChatMessage({
+                chatRoom: room._id,
+                messageType: 'PAYMENT_STATUS',
+                systemMeta: {
+                    statusType: 'PAYMENT',
+                    status: PAYMENT_STATUS.PENDING,
+                    orderId: order._id,
+                    productId: orderItems[0].productId,
+                    title: 'Payment Pending',
+                    meta: createStandardizedChatMeta({
+                        orderNumber: order._id.toString(),
+                        totalAmount: order.grandTotal,
+                        amount: order.grandTotal,
+                        itemCount: orderItems.length,
+                        sellerId: sellerId,
+                        buyerId: userId,
+                        orderStatus: order.status,
+                        paymentStatus: order.paymentStatus,
+                        paymentMethod: order.paymentMethod
+                    }),
+                    actions: [
+                        {
+                            label: 'Pay Now',
+                            url: `/payment/retry/${order._id}`,
+                            type: 'primary'
+                        }
+                    ],
+                    theme: 'warning',
+                    content: 'Payment Pending. Pay now. Unpaid orders will be cancelled within 24 hours.'
+                }
+            });
+            await payNowMessage.save();
+            await ChatRoom.findByIdAndUpdate(
+                room._id,
+                {
+                    lastMessage: payNowMessage._id,
+                    updatedAt: new Date()
+                }
+            );
+            await emitSystemMessage(io, payNowMessage, room, userId, sellerId);
+        }
 
         return apiSuccessRes(HTTP_STATUS.CREATED, res, "Order placed successfully", order);
     } catch (err) {
@@ -405,7 +450,7 @@ const paymentCallback = async (req, res) => {
     }
 
 
-    console.log("value",value)
+    console.log("value", value)
 
 
     const { orderId, paymentStatus, paymentId, cardType, cardLast4 } = value;
@@ -539,6 +584,62 @@ const paymentCallback = async (req, res) => {
 
         const io = req.app.get('io');
         await emitSystemMessage(io, systemMessage, room, order.userId, order.sellerId);
+
+        // Send shipping pending message if payment is completed and products require shipping
+        if (paymentStatus === PAYMENT_STATUS.COMPLETED) {
+            // Populate order with product details to check deliveryType
+            const populatedOrder = await Order.findById(order._id)
+                .populate('items.productId', 'deliveryType title');
+            
+            // Check if any products require shipping (not local pickup)
+            const hasShippingProducts = populatedOrder.items.some(
+                item => item.productId?.deliveryType !== 'local pickup'
+            );
+
+            if (hasShippingProducts) {
+                const shippingPendingMessage = new ChatMessage({
+                    chatRoom: room._id,
+                    messageType: 'ORDER_STATUS',
+                    systemMeta: {
+                        statusType: 'SHIPPING',
+                        status: 'PENDING',
+                        orderId: order._id,
+                        productId: order.items[0].productId,
+                        title: 'Shipping Pending',
+                        meta: createStandardizedChatMeta({
+                            orderNumber: order._id.toString(),
+                            totalAmount: order.grandTotal,
+                            amount: order.grandTotal,
+                            itemCount: order.items.length,
+                            sellerId: order.sellerId,
+                            buyerId: order.userId,
+                            orderStatus: order.status,
+                            paymentStatus: order.paymentStatus,
+                            paymentMethod: order.paymentMethod
+                        }),
+                        actions: [
+                            {
+                                label: "View Order",
+                                url: `/order/${order._id}`,
+                                type: "primary"
+                            }
+                        ],
+                        theme: 'info',
+                        content: 'Shipping is pending. The seller will ship your items soon.'
+                    }
+                });
+
+                await shippingPendingMessage.save();
+                await ChatRoom.findByIdAndUpdate(
+                    room._id,
+                    {
+                        lastMessage: shippingPendingMessage._id,
+                        updatedAt: new Date()
+                    }
+                );
+                await emitSystemMessage(io, shippingPendingMessage, room, order.userId, order.sellerId);
+            }
+        }
 
         // Send notifications for payment status
         const paymentNotifications = [];
@@ -1764,6 +1865,56 @@ const updateOrderStatusBySeller = async (req, res) => {
             const io = req.app.get('io');
             await emitSystemMessage(io, systemMessage, room, order.userId, sellerId);
 
+            // Send review pending message if order is delivered
+            if (newStatus === ORDER_STATUS.DELIVERED) {
+                const reviewPendingMessage = new ChatMessage({
+                    chatRoom: room._id,
+                    messageType: 'REVIEW_STATUS',
+                    systemMeta: {
+                        statusType: 'REVIEW',
+                        status: 'PENDING',
+                        orderId: order._id,
+                        productId: order.items[0].productId,
+                        title: 'Review Pending',
+                        meta: createStandardizedChatMeta({
+                            orderNumber: order._id.toString(),
+                            totalAmount: order.grandTotal,
+                            amount: order.grandTotal,
+                            itemCount: order.items.length,
+                            sellerId: sellerId,
+                            buyerId: order.userId,
+                            orderStatus: newStatus,
+                            paymentStatus: order.paymentStatus,
+                            paymentMethod: order.paymentMethod
+                        }),
+                        actions: [
+                            {
+                                label: "Confirm Receipt",
+                                url: `/order/${order._id}/confirm-receipt`,
+                                type: "primary"
+                            },
+                            {
+                                label: "View Order",
+                                url: `/order/${order._id}`,
+                                type: "secondary"
+                            }
+                        ],
+                        theme: 'info',
+                        content: 'Review is pending. Please confirm receipt and leave a review for this order.'
+                    }
+                });
+
+                await reviewPendingMessage.save();
+                await ChatRoom.findByIdAndUpdate(
+                    room._id,
+                    {
+                        lastMessage: reviewPendingMessage._id,
+                        updatedAt: new Date()
+                    }
+                );
+                await emitSystemMessage(io, reviewPendingMessage, room, order.userId, sellerId);
+            }
+
             // Send notification to buyer about status change
             let notificationTitle = '';
             let notificationMessage = '';
@@ -2070,6 +2221,56 @@ const updateOrderStatusByBuyer = async (req, res) => {
             // Emit socket events for final status
             const io = req.app.get('io');
             await emitSystemMessage(io, systemMessage, room, order.sellerId, buyerId);
+
+            // Send review pending message for both buyer and seller if order is confirmed receipt
+            if (newStatus === ORDER_STATUS.CONFIRM_RECEIPT) {
+                const reviewPendingMessage = new ChatMessage({
+                    chatRoom: room._id,
+                    messageType: 'REVIEW_STATUS',
+                    systemMeta: {
+                        statusType: 'REVIEW',
+                        status: 'PENDING',
+                        orderId: order._id,
+                        productId: order.items[0].productId,
+                        title: 'Reviews Pending',
+                        meta: createStandardizedChatMeta({
+                            orderNumber: order._id.toString(),
+                            totalAmount: order.grandTotal,
+                            amount: order.grandTotal,
+                            itemCount: order.items.length,
+                            sellerId: order.sellerId,
+                            buyerId: buyerId,
+                            orderStatus: newStatus,
+                            paymentStatus: order.paymentStatus,
+                            paymentMethod: order.paymentMethod
+                        }),
+                        actions: [
+                            {
+                                label: "Leave Review",
+                                url: `/order/${order._id}/review`,
+                                type: "primary"
+                            },
+                            {
+                                label: "View Order",
+                                url: `/order/${order._id}`,
+                                type: "secondary"
+                            }
+                        ],
+                        theme: 'info',
+                        content: 'Reviews are pending. Both buyer and seller can now leave reviews for this completed transaction.'
+                    }
+                });
+
+                await reviewPendingMessage.save();
+                await ChatRoom.findByIdAndUpdate(
+                    room._id,
+                    {
+                        lastMessage: reviewPendingMessage._id,
+                        updatedAt: new Date()
+                    }
+                );
+                await emitSystemMessage(io, reviewPendingMessage, room, order.sellerId, buyerId);
+            }
 
             // Send notification to seller about buyer action
             let notificationTitle = '';
@@ -2936,7 +3137,7 @@ const getAllTransactionsForAdmin = async (req, res) => {
 
             const orderData = {
                 orderId: order._id,
-                orderIdFor:order.orderId,
+                orderIdFor: order.orderId,
                 orderNumber: order._id.toString(),
                 orderDate: order.createdAt,
                 status: order.status,
@@ -3035,7 +3236,7 @@ const getAllTransactionsForAdmin = async (req, res) => {
         });
 
         // Apply post-processing filters
-        
+
         // Filter by paidToSeller if specified
         if (paidToSeller !== undefined) {
             const isPaid = paidToSeller === 'true' || paidToSeller === true;
@@ -3055,7 +3256,7 @@ const getAllTransactionsForAdmin = async (req, res) => {
 
         // Filter by dispute status
         if (disputeStatus) {
-            formattedOrders = formattedOrders.filter(order => 
+            formattedOrders = formattedOrders.filter(order =>
                 order.dispute?.status === disputeStatus
             );
         }
@@ -3510,7 +3711,7 @@ const getSellerPayoutCalculation = async (req, res) => {
                 const sellerReceivePercent = 100 - disputeAmountPercent;
                 calculatedProductCost = originalProductCost * (sellerReceivePercent / 100);
                 const refundAmount = originalProductCost * (disputeAmountPercent / 100);
-                
+
                 disputeAdjustmentDetails = {
                     type: 'BUYER_FAVOR',
                     description: `Dispute resolved in buyer favor - ${sellerReceivePercent}% to seller, ${disputeAmountPercent}% refund to buyer`,
@@ -3664,7 +3865,7 @@ const getSellerPayoutCalculation = async (req, res) => {
 router.post('/previewOrder', perApiLimiter(), upload.none(), previewOrder);
 router.post('/placeOrder', perApiLimiter(), upload.none(), createOrder);
 
-router.post('/paymentCallback', upload.none() ,paymentCallback);
+router.post('/paymentCallback', upload.none(), paymentCallback);
 
 router.post('/updateOrderStatusBySeller/:orderId', perApiLimiter(), upload.none(), updateOrderStatusBySeller);
 
@@ -3788,8 +3989,8 @@ const getAdminFinancialDashboard = async (req, res) => {
 
         // Daily transaction trends (last 30 days)
         const dailyTrends = await Order.aggregate([
-            { 
-                $match: { 
+            {
+                $match: {
                     paymentStatus: PAYMENT_STATUS.COMPLETED,
                     createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
                 }
@@ -3858,11 +4059,11 @@ const getProductFinancialDetails = async (req, res) => {
             'items.productId': toObjectId(productId),
             paymentStatus: { $ne: PAYMENT_STATUS.PENDING }
         })
-        .populate('userId', 'userName email phone')
-        .populate('sellerId', 'userName email phone')
-        .populate('disputeId')
-        .sort({ createdAt: -1 })
-        .lean();
+            .populate('userId', 'userName email phone')
+            .populate('sellerId', 'userName email phone')
+            .populate('disputeId')
+            .sort({ createdAt: -1 })
+            .lean();
 
         // Get financial summary for this product
         const financialSummary = await Order.aggregate([
@@ -3960,7 +4161,7 @@ const getProductFinancialDetails = async (req, res) => {
                 const sellerPayout = sellerPayouts.find(p => p.orderId.toString() === order._id.toString());
                 const withdrawal = withdrawals.find(w => w.orderId.toString() === order._id.toString());
                 const dispute = disputes.find(d => d.orderId.toString() === order._id.toString());
-                
+
                 return {
                     orderId: order._id,
                     orderNumber: order.orderId,
@@ -3994,7 +4195,7 @@ const getProductFinancialDetails = async (req, res) => {
                         disputeId: dispute.disputeId,
                         status: dispute.status,
                         type: dispute.disputeType,
-                        financialImpact: dispute.adminReview?.disputeAmountPercent 
+                        financialImpact: dispute.adminReview?.disputeAmountPercent
                             ? (order.grandTotal * dispute.adminReview.disputeAmountPercent / 100)
                             : 0
                     } : null
@@ -4012,16 +4213,16 @@ const getProductFinancialDetails = async (req, res) => {
 
 const getDetailedMoneyFlow = async (req, res) => {
     try {
-        const { 
-            orderId, 
-            userId, 
-            dateFrom, 
-            dateTo, 
+        const {
+            orderId,
+            userId,
+            dateFrom,
+            dateTo,
             flowType = 'all' // 'all', 'buyer', 'seller', 'platform'
         } = req.query;
 
         let matchConditions = {};
-        
+
         if (orderId) matchConditions._id = toObjectId(orderId);
         if (userId) {
             matchConditions.$or = [
@@ -4043,7 +4244,7 @@ const getDetailedMoneyFlow = async (req, res) => {
                     select: 'userName email'
                 },
                 {
-                    path: 'sellerId', 
+                    path: 'sellerId',
                     select: 'userName email'
                 },
                 {
@@ -4055,7 +4256,7 @@ const getDetailedMoneyFlow = async (req, res) => {
 
         // Get related data for each order
         const orderIds = orders.map(order => order._id);
-        
+
         const [sellerTransactions, platformRevenues, disputes, paymentTransactions] = await Promise.all([
             WalletTnx.find({ orderId: { $in: orderIds } }).lean(),
             PlatformRevenue.find({ orderId: { $in: orderIds } }).lean(),
@@ -4103,18 +4304,18 @@ const getDetailedMoneyFlow = async (req, res) => {
             const serviceCharges = orderSellerTxns
                 .filter(txn => txn.tnxType === 'credit')
                 .reduce((sum, txn) => sum + (parseFloat(txn.serviceCharge) || 0), 0);
-            
+
             const taxCharges = orderSellerTxns
                 .filter(txn => txn.tnxType === 'credit')
                 .reduce((sum, txn) => sum + (parseFloat(txn.taxCharge) || 0), 0);
-            
+
             const withdrawalFees = orderSellerTxns
                 .filter(txn => txn.tnxType === 'withdrawl')
                 .reduce((sum, txn) => sum + (txn.withdrawfee || 0), 0);
 
             const buyerProtectionFee = order.BuyerProtectionFee || 0;
             const tax = order.Tax || 0;
-            
+
             const totalPlatformRevenue = buyerProtectionFee + tax + serviceCharges + taxCharges + withdrawalFees;
 
             // Calculate dispute impact

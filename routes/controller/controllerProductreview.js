@@ -2,14 +2,56 @@ const express = require('express');
 const multer = require('multer');
 const upload = multer();
 const router = express.Router();
-const { ProductReview, Order, SellProduct, User } = require('../../db');
+const { ProductReview, Order, SellProduct, User, ChatRoom, ChatMessage } = require('../../db');
 const validateRequest = require('../../middlewares/validateRequest');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const { createReviewValidation } = require('../services/validations/moduleProductReview');
 const { apiSuccessRes, apiErrorRes, toObjectId } = require('../../utils/globalFunction');
 const HTTP_STATUS = require('../../utils/statusCode');
 const { uploadImageCloudinary } = require('../../utils/cloudinary');
-const { ORDER_STATUS } = require('../../utils/Role');
+const { ORDER_STATUS, NOTIFICATION_TYPES, createStandardizedChatMeta, createStandardizedNotificationMeta } = require('../../utils/Role');
+const { findOrCreateOneOnOneRoom } = require('../services/serviceChat');
+const { saveNotification } = require('../services/serviceNotification');
+
+const emitSystemMessage = async (io, systemMessage, room, buyerId, sellerId) => {
+    if (!io) return;
+
+    // Emit the new message to the room
+    const messageWithRoom = {
+        ...systemMessage.toObject(),
+        chatRoom: room._id
+    };
+    io.to(room._id.toString()).emit('newMessage', messageWithRoom);
+
+    // Update chat room for both users
+    const roomObj = await ChatRoom.findById(room._id)
+        .populate('participants', 'userName profileImage')
+        .populate('lastMessage');
+
+    // For buyer
+    io.to(`user_${buyerId}`).emit('roomUpdated', {
+        ...roomObj.toObject(),
+        participants: roomObj.participants.filter(p => p._id.toString() !== buyerId.toString()),
+        unreadCount: 0
+    });
+
+    // For seller
+    io.to(`user_${sellerId}`).emit('roomUpdated', {
+        ...roomObj.toObject(),
+        participants: roomObj.participants.filter(p => p._id.toString() !== sellerId.toString()),
+        unreadCount: 1
+    });
+
+    // Also emit a specific system notification event
+    io.to(`user_${buyerId}`).emit('systemNotification', {
+        type: systemMessage.messageType,
+        meta: systemMessage.systemMeta
+    });
+    io.to(`user_${sellerId}`).emit('systemNotification', {
+        type: systemMessage.messageType,
+        meta: systemMessage.systemMeta
+    });
+};
 
 
 const createOrUpdateReview = async (req, res) => {
@@ -115,6 +157,134 @@ const createOrUpdateReview = async (req, res) => {
             await buyer.save();
         }
 
+        // 7. Create chat room and system message for review submission
+        const { room } = await findOrCreateOneOnOneRoom(order.userId, order.sellerId);
+
+        // Determine message content based on who submitted the review
+        let messageTitle = '';
+        let messageContent = '';
+        let raterName = '';
+
+        if (raterRole === 'buyer') {
+            messageTitle = 'Buyer Review Submitted';
+            messageContent = `The buyer has ${isNewReview ? 'submitted' : 'updated'} a review for this order. Rating: ${rating}/5 stars.`;
+            raterName = 'buyer';
+        } else {
+            messageTitle = 'Seller Review Submitted';
+            messageContent = `The seller has ${isNewReview ? 'submitted' : 'updated'} a review for this order. Rating: ${rating}/5 stars.`;
+            raterName = 'seller';
+        }
+
+        // Create system message for review submission
+        const reviewMessage = new ChatMessage({
+            chatRoom: room._id,
+            messageType: 'REVIEW_STATUS',
+            systemMeta: {
+                statusType: 'REVIEW',
+                status: 'SUBMITTED',
+                orderId: order._id,
+                reviewId: review._id,
+                productId: productId,
+                title: messageTitle,
+                meta: createStandardizedChatMeta({
+                    orderNumber: order._id.toString(),
+                    reviewId: review._id.toString(),
+                    rating: rating,
+                    ratingText: ratingText,
+                    reviewText: reviewText,
+                    raterRole: raterRole,
+                    raterName: raterName,
+                    isNewReview: isNewReview,
+                    sellerId: order.sellerId,
+                    buyerId: order.userId,
+                    orderStatus: order.status
+                }),
+                actions: [
+                    {
+                        label: "View Review",
+                        url: `/review/${review._id}`,
+                        type: "primary"
+                    },
+                    {
+                        label: "View Order",
+                        url: `/order/${order._id}`,
+                        type: "secondary"
+                    }
+                ],
+                theme: 'success',
+                content: messageContent
+            }
+        });
+
+        await reviewMessage.save();
+
+        // Update chat room's last message
+        await ChatRoom.findByIdAndUpdate(
+            room._id,
+            {
+                lastMessage: reviewMessage._id,
+                updatedAt: new Date()
+            }
+        );
+
+        // Emit system message
+        const io = req.app.get('io');
+        await emitSystemMessage(io, reviewMessage, room, order.userId, order.sellerId);
+
+        // Send notifications about review submission
+        const reviewNotifications = [];
+
+        if (raterRole === 'buyer') {
+            // Notify seller about buyer's review
+            reviewNotifications.push({
+                recipientId: order.sellerId,
+                userId: order.userId,
+                orderId: order._id,
+                reviewId: review._id,
+                productId: productId,
+                type: NOTIFICATION_TYPES.REVIEW,
+                title: "New Review Received!",
+                message: `You received a ${rating}-star review from a buyer: "${reviewText || ratingText || 'No comment'}"`,
+                meta: createStandardizedNotificationMeta({
+                    orderNumber: order._id.toString(),
+                    reviewId: review._id.toString(),
+                    rating: rating,
+                    reviewText: reviewText,
+                    raterRole: raterRole,
+                    isNewReview: isNewReview,
+                    sellerId: order.sellerId,
+                    buyerId: order.userId
+                }),
+                redirectUrl: `/review/${review._id}`
+            });
+        } else {
+            // Notify buyer about seller's review
+            reviewNotifications.push({
+                recipientId: order.userId,
+                userId: order.sellerId,
+                orderId: order._id,
+                reviewId: review._id,
+                productId: productId,
+                type: NOTIFICATION_TYPES.REVIEW,
+                title: "Seller Review Received!",
+                message: `The seller has left you a ${rating}-star review: "${reviewText || ratingText || 'No comment'}"`,
+                meta: createStandardizedNotificationMeta({
+                    orderNumber: order._id.toString(),
+                    reviewId: review._id.toString(),
+                    rating: rating,
+                    reviewText: reviewText,
+                    raterRole: raterRole,
+                    isNewReview: isNewReview,
+                    sellerId: order.sellerId,
+                    buyerId: order.userId
+                }),
+                redirectUrl: `/review/${review._id}`
+            });
+        }
+
+        if (reviewNotifications.length > 0) {
+            await saveNotification(reviewNotifications);
+        }
 
         return apiSuccessRes(HTTP_STATUS.OK, res, 'Review saved successfully', { review });
 
