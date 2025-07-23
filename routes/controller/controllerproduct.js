@@ -2024,7 +2024,7 @@ const fetchUserProducts = async (req, res) => {
             userId,
             saleType = 'fixed',
             sortBy = 'createdAt',
-            sortOrder = 'desc',
+            orderBy = 'desc',
         } = req.query;
 
         const page = parseInt(pageNo);
@@ -2053,10 +2053,10 @@ const fetchUserProducts = async (req, res) => {
         }
 
         let sortConfig = {};
-        if (sortBy === 'price') {
-            sortConfig = { fixedPrice: sortOrder === 'desc' ? -1 : 1 };
+        if (sortBy === 'fixedPrice') {
+            sortConfig = { fixedPrice: orderBy === 'desc' ? -1 : 1 };
         } else {
-            sortConfig = { createdAt: sortOrder === 'desc' ? -1 : 1 };
+            sortConfig = { createdAt: orderBy === 'desc' ? -1 : 1 };
         }
 
         // Fetch products and total count

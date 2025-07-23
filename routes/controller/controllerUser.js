@@ -686,8 +686,9 @@ const getLikedProducts = async (req, res) => {
         const limit = parseInt(req.query.size) || 10;
         const skip = (page - 1) * limit;
 
-        const sortBy = req.query.sortBy === "fixedPrice" ? "fixedPrice" : "createdAt";
-        const sortOrder = req.query.sortOrder === "asc" ? 1 : -1;
+
+        const sortBy = ["fixedPrice", "commentCount"].includes(req.query.sortBy) ? req.query.sortBy : "createdAt";
+        const sortOrder = req.query.orderBy === "asc" ? 1 : -1;
 
         // Step 1: Get liked product IDs for the user
         const likedDocs = await ProductLike.find({
@@ -718,7 +719,6 @@ const getLikedProducts = async (req, res) => {
         // Step 2: Aggregate product data with comment stats and user info
         const products = await SellProduct.aggregate([
             { $match: query },
-            { $sort: { [sortBy]: sortOrder } },
             { $skip: skip },
             { $limit: limit },
 
@@ -792,7 +792,8 @@ const getLikedProducts = async (req, res) => {
                     }
                 }
             },
-            { $unset: "commentStats" }
+            { $unset: "commentStats" },
+            { $sort: { [sortBy]: sortOrder } },
         ]);
 
         // Step 3: Add totalBids per product (if auction type)
@@ -826,8 +827,8 @@ const getLikedThreads = async (req, res) => {
         const limit = parseInt(req.query.limit) || 10;
         const skip = (page - 1) * limit;
 
-        const sortBy = req.query.sortBy === "commentCount" ? "commentCount" : "date";
-        const sortOrder = req.query.sortOrder === "asc" ? 1 : -1;
+        const sortBy = req.query.sortBy === "commentCount" ? "commentCount" : "createdAt";
+        const sortOrder = req.query.orderBy === "asc" ? 1 : -1;
 
         // 1. Find liked thread IDs
         const likedThreadDocs = await ThreadLike.find({
@@ -1721,7 +1722,7 @@ const userList = async (req, res) => {
 
         if (keyWord) {
             const regex = new RegExp(keyWord, "i");
-            query.$or = [   
+            query.$or = [
                 { userName: regex },
                 { email: regex },
                 { phoneNumber: regex },
@@ -1781,32 +1782,32 @@ const userList = async (req, res) => {
             },
 
 
-{
-    $lookup: {
-        from: "Location",
-        localField: "provinceId",
-        foreignField: "_id",
-        as: "province",
-    },
-},
-{
-    $addFields: {
-        "userAddress.province": { $arrayElemAt: ["$province", 0] },
-    },
-},
-{
-    $lookup: {
-        from: "Location",
-        localField: "districtId",
-        foreignField: "_id",
-        as: "district",
-    },
-},
-{
-    $addFields: {
-        "userAddress.district": { $arrayElemAt: ["$district", 0] },
-    },
-},
+            {
+                $lookup: {
+                    from: "Location",
+                    localField: "provinceId",
+                    foreignField: "_id",
+                    as: "province",
+                },
+            },
+            {
+                $addFields: {
+                    "userAddress.province": { $arrayElemAt: ["$province", 0] },
+                },
+            },
+            {
+                $lookup: {
+                    from: "Location",
+                    localField: "districtId",
+                    foreignField: "_id",
+                    as: "district",
+                },
+            },
+            {
+                $addFields: {
+                    "userAddress.district": { $arrayElemAt: ["$district", 0] },
+                },
+            },
 
 
             {
@@ -1849,7 +1850,7 @@ const userList = async (req, res) => {
                 },
             });
         }
-        
+
 
         aggregation.push({
             $project: {
@@ -1863,8 +1864,8 @@ const userList = async (req, res) => {
                 gender: 1,
                 dob: 1,
                 isDisable: 1,
-                is_Verified_Seller:1,
-                is_Id_verified:1,
+                is_Verified_Seller: 1,
+                is_Id_verified: 1,
                 createdAt: 1,
                 sellerVerificationStatus: 1,
                 sellerVerification: 1,
