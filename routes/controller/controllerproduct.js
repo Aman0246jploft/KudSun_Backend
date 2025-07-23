@@ -1251,7 +1251,7 @@ const showAuctionProducts = async (req, res) => {
                 { $match: matchStage },
                 {
                     $lookup: {
-                        from: "bids", // change to actual collection name if needed
+                        from: "Bid", // change to actual collection name if needed
                         localField: "_id",
                         foreignField: "productId",
                         as: "bids"
