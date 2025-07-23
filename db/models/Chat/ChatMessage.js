@@ -11,6 +11,7 @@ const ChatMessageSchema = new mongoose.Schema({
         required: true,
     },
 
+    title: { type: String },
     // For normal messages
     content: { type: String },
 

@@ -265,7 +265,7 @@ const createOrder = async (req, res) => {
                     itemCount: orderItems.length,
                     sellerId: sellerId,
                     buyerId: userId,
-                    orderStatus:  ORDER_STATUS.PENDING,
+                    orderStatus: ORDER_STATUS.PENDING,
                     paymentStatus: order.paymentStatus,
                     paymentMethod: order.paymentMethod
                 }),
@@ -590,7 +590,7 @@ const paymentCallback = async (req, res) => {
             // Populate order with product details to check deliveryType
             const populatedOrder = await Order.findById(order._id)
                 .populate('items.productId', 'deliveryType title');
-            
+
             // Check if any products require shipping (not local pickup)
             const hasShippingProducts = populatedOrder.items.some(
                 item => item.productId?.deliveryType !== 'local pickup'
