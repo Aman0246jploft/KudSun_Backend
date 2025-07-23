@@ -11,17 +11,17 @@ const ChatMessageSchema = new mongoose.Schema({
         required: true,
     },
 
-    title: { type: String },
     // For normal messages
     content: { type: String },
-
+    
     // For media/file messages
     mediaUrl: { type: String },
     mediaType: { type: String }, // e.g., "image/jpeg", "audio/mpeg"
     fileName: { type: String }, // Original file name
-
+    
     // For system/order-related messages
     systemMeta: {
+        title: { type: String },
         // Type of status update
         statusType: {
             type: String,
