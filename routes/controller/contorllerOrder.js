@@ -256,10 +256,10 @@ const createOrder = async (req, res) => {
                 statusType: 'ORDER',
                 status: ORDER_STATUS.PENDING,
                 title: "Order Created",
-                orderId: order.orderId,
+                orderId: order._id,
                 productId: orderItems[0].productId, // First product in order
                 meta: createStandardizedChatMeta({
-                    orderNumber: order._id.toString(),
+                    orderNumber: order.orderId.toString(),
                     totalAmount: order.grandTotal,
                     amount: order.grandTotal,
                     itemCount: orderItems.length,
