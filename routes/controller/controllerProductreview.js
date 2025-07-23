@@ -183,12 +183,10 @@ const createOrUpdateReview = async (req, res) => {
                 statusType: 'REVIEW',
                 status: 'SUBMITTED',
                 orderId: order._id,
-                reviewId: review._id,
                 productId: productId,
                 title: messageTitle,
                 meta: createStandardizedChatMeta({
                     orderNumber: order.orderId.toString(),
-                    reviewId: review._id.toString(),
                     rating: rating,
                     ratingText: ratingText,
                     reviewText: reviewText,

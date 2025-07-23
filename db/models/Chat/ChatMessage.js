@@ -36,6 +36,7 @@ const ChatMessageSchema = new mongoose.Schema({
         },
 
         orderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order' },
+        
         productId: { type: mongoose.Schema.Types.ObjectId, ref: 'SellProduct' },
 
         // Product specific fields
