@@ -95,6 +95,10 @@ const SellProductsSchema = new Schema({
         type: Boolean,
         default: false
     },
+    viewCount: {
+        type: Number,
+        default: 0
+    },
     isSold: {
         type: Boolean,
         default: false

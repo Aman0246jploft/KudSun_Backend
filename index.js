@@ -12,6 +12,7 @@ const path = require('path');
 
 // Import cron jobs
 require('./jobs/Scheduled/crons/orderStatusUpdateCron');
+require('./jobs/Scheduled/crons/trendingUpdateCron');
 
 const server = http.createServer(app); // Add this
 setupSocket(server)

@@ -2188,6 +2188,15 @@ const getProduct = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Product not found or unavailable.");
         }
 
+        // Increment view count (only for non-draft products)
+        if (!isDraft) {
+            await SellProduct.findByIdAndUpdate(id, { $inc: { viewCount: 1 } });
+            
+            // Trigger trending update job
+            const { addTrendingUpdateJob } = require('../services/serviceTrending');
+            addTrendingUpdateJob(id);
+        }
+
         // --- Seller Info
         const user = await User.findById(product.userId)
             .select('userName profileImage is_Id_verified is_Preferred_seller isLive averageRatting ')
@@ -2729,12 +2738,22 @@ const trending = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, `Product not found.`);
         }
 
-
         existing.isTrending = !existing.isTrending;
         await existing.save();
 
         return apiSuccessRes(HTTP_STATUS.OK, res, `Product updated successfully.`);
 
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
+    }
+};
+
+const updateAllTrending = async (req, res) => {
+    try {
+        const { updateAllTrendingStatus } = require('../services/serviceTrending');
+        const result = await updateAllTrendingStatus();
+        
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Trending status updated successfully", result);
     } catch (error) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
     }
@@ -3013,6 +3032,7 @@ router.post('/toggleProductDisable/:id', perApiLimiter(), upload.none(), toggleP
 router.get('/getDraftProducts', perApiLimiter(), getDraftProducts);
 router.post('/deleteProduct/:id', perApiLimiter(), deleteProduct);
 router.post('/trending/:id', perApiLimiter(), trending);
+router.post('/update-all-trending', perApiLimiter(), updateAllTrending);
 
 
 

@@ -8,7 +8,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "cron:orders": "node jobs/startOrderStatusCron.js",
     "cron:auction": "node jobs/Scheduled/crons/auctionCloserCron.js",
-    "cron:address": "node jobs/Scheduled/crons/addressUpdateCron.js"
+    "cron:address": "node jobs/Scheduled/crons/addressUpdateCron.js",
+    "cron:trending": "node jobs/Scheduled/crons/trendingUpdateCron.js"
   },
   "author": "",
   "license": "ISC",
