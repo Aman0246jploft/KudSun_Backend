@@ -7,7 +7,7 @@ const threadTrendingQueue = createQueue(THREAD_TRENDING_UPDATE_QUEUE);
 
 // Thread trending thresholds (configurable)
 const THREAD_TRENDING_THRESHOLDS = {
-    VIEW_COUNT: 2,        // Minimum views to be considered trending
+    VIEW_COUNT: 10,        // Minimum views to be considered trending
     TIME_WINDOW_DAYS: 7,    // Views within last 7 days
     MAX_TRENDING_THREADS: 5000000000000 // Maximum threads to mark as trending
 };

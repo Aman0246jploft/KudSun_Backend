@@ -647,7 +647,7 @@ const getThreads = async (req, res) => {
         } = req.query;
 
 
-        const allowedSortFields = ['createdAt', 'commentCount'];
+        const allowedSortFields = ['createdAt', 'commentCount','viewCount'];
         const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
         const sortOrder = orderBy.toLowerCase() === 'desc' ? -1 : 1;
         const sortOptions = {};

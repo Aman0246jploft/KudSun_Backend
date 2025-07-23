@@ -640,7 +640,7 @@ const showNormalProducts = async (req, res) => {
         } = req.query;
 
 
-        const allowedSortFields = ['createdAt', 'fixedPrice', "commentCount"];
+        const allowedSortFields = ['createdAt', 'fixedPrice', "commentCount", 'viewCount'];
 
 
         const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
@@ -980,7 +980,7 @@ const showAuctionProducts = async (req, res) => {
 
 
 
-        const allowedSortFields = ['auctionSettings.biddingEndsAt', 'createdAt', "commentCount"];
+        const allowedSortFields = ['auctionSettings.biddingEndsAt', 'createdAt', "commentCount", "viewCount"];
 
         const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'auctionSettings.biddingEndsAt';
         const sortOrder = orderBy.toLowerCase() === 'desc' ? -1 : 1;
@@ -1241,6 +1241,113 @@ const showAuctionProducts = async (req, res) => {
                 products
             });
         }
+
+
+
+        if (sortBy === 'bidCount') {
+            const matchStage = { ...filter };
+
+            const aggregationPipeline = [
+                { $match: matchStage },
+                {
+                    $lookup: {
+                        from: "bids", // change to actual collection name if needed
+                        localField: "_id",
+                        foreignField: "productId",
+                        as: "bids"
+                    }
+                },
+                {
+                    $addFields: {
+                        bidCount: { $size: "$bids" }
+                    }
+                },
+                { $sort: { bidCount: sortOrder } },
+                { $skip: skip },
+                { $limit: limit },
+                {
+                    $project: {
+                        title: 1,
+                        productImages: 1,
+                        condition: 1,
+                        isDisable: 1,
+                        subCategoryId: 1,
+                        auctionSettings: 1,
+                        tags: 1,
+                        description: 1,
+                        specifics: 1,
+                        categoryId: 1,
+                        userId: 1
+                    }
+                }
+            ];
+
+            const [products, total] = await Promise.all([
+                SellProduct.aggregate(aggregationPipeline),
+                SellProduct.countDocuments(matchStage)
+            ]);
+
+            await SellProduct.populate(products, [
+                { path: "categoryId", select: "name" },
+                { path: "userId", select: "userName profileImage is_Id_verified isLive is_Preferred_seller" }
+            ]);
+
+            if (products.length) {
+                const categoryIds = [...new Set(products.map(p => p.categoryId?._id?.toString()))];
+                const categories = await Category.find({ _id: { $in: categoryIds } }).select("subCategories.name subCategories._id").lean();
+
+                for (const product of products) {
+                    const category = categories.find(cat => cat?._id.toString() === product?.categoryId?._id.toString());
+                    const subCat = category?.subCategories?.find(sub => sub._id.toString() === product?.subCategoryId?.toString());
+                    product["subCategoryName"] = subCat ? subCat.name : null;
+                }
+            }
+
+            const productIds = products.map(p => toObjectId(p._id));
+            const bidsCounts = await Bid.aggregate([
+                { $match: { productId: { $in: productIds } } },
+                { $group: { _id: "$productId", totalBidsPlaced: { $sum: 1 } } }
+            ]);
+            const bidsCountMap = bidsCounts.reduce((acc, curr) => {
+                acc[curr._id.toString()] = curr.totalBidsPlaced;
+                return acc;
+            }, {});
+
+            for (const product of products) {
+                const utcEnd = DateTime.fromJSDate(product.auctionSettings.biddingEndsAt, { zone: 'utc' });
+                const localDate = utcEnd.setZone(product.auctionSettings.timeZone || 'Asia/Kolkata');
+                const utcNow = DateTime.utc();
+                const timeLeftMs = utcEnd.diff(utcNow).toMillis();
+                product.totalBidsPlaced = bidsCountMap[product._id.toString()] || 0;
+                product.timeRemaining = timeLeftMs > 0 ? formatTimeRemaining(timeLeftMs) : 0;
+                product.auctionSettings.biddingEndsAt = localDate.toISO();
+            }
+
+            let likedProductIds = new Set();
+            if (req.user && req.user.userId) {
+                const likes = await ProductLike.find({
+                    likeBy: req.user.userId,
+                    productId: { $in: productIds },
+                    isDisable: false,
+                    isDeleted: false,
+                }).select("productId").lean();
+
+                likedProductIds = new Set(likes.map(like => like.productId.toString()));
+            }
+
+            products.forEach(product => {
+                product.isLiked = likedProductIds.has(product._id.toString());
+            });
+
+            return apiSuccessRes(HTTP_STATUS.OK, res, "Auction products fetched successfully", {
+                pageNo: page,
+                size: limit,
+                total,
+                products
+            });
+        }
+
+
 
 
         // Step 2: Query and paginate
@@ -2191,7 +2298,7 @@ const getProduct = async (req, res) => {
         // Increment view count (only for non-draft products)
         if (!isDraft) {
             await SellProduct.findByIdAndUpdate(id, { $inc: { viewCount: 1 } });
-            
+
             // Trigger trending update job
             const { addTrendingUpdateJob } = require('../services/serviceTrending');
             addTrendingUpdateJob(id);
@@ -2752,7 +2859,7 @@ const updateAllTrending = async (req, res) => {
     try {
         const { updateAllTrendingStatus } = require('../services/serviceTrending');
         const result = await updateAllTrendingStatus();
-        
+
         return apiSuccessRes(HTTP_STATUS.OK, res, "Trending status updated successfully", result);
     } catch (error) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);

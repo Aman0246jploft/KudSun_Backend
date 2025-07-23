@@ -21,8 +21,6 @@ mongoose.connect(process.env.DB_STRING, {
     useNewUrlParser: true,
     useUnifiedTopology: true
 }).then(() => {
-    console.log("🟢 MongoDB connected for Thread Trending Update Cron");
-    console.log(`📅 Thread trending cron scheduled to run: ${CRON_SCHEDULE}`);
 
     // Run the cron job
     cron.schedule(CRON_SCHEDULE, async () => {
