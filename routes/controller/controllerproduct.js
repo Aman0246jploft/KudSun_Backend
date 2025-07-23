@@ -1001,8 +1001,6 @@ const showAuctionProducts = async (req, res) => {
         };
 
 
-
-
         if (req.query.spec) {
             const specParams = Array.isArray(req.query.spec) ? req.query.spec : [req.query.spec];
             const specFilters = specParams.map((pair) => {

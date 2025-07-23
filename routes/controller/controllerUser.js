@@ -686,6 +686,7 @@ const getLikedProducts = async (req, res) => {
         const limit = parseInt(req.query.size) || 10;
         const skip = (page - 1) * limit;
 
+        const keyword = req.query.keyWord ? req.query.keyWord.trim() : null;
 
         const sortBy = ["fixedPrice", "commentCount"].includes(req.query.sortBy) ? req.query.sortBy : "createdAt";
         const sortOrder = req.query.orderBy === "asc" ? 1 : -1;
@@ -713,6 +714,13 @@ const getLikedProducts = async (req, res) => {
             isDisable: false,
             isDeleted: false,
         };
+
+        if (keyword) {
+            query.$or = [
+                { title: { $regex: keyword, $options: "i" } },
+                { description: { $regex: keyword, $options: "i" } }
+            ];
+        }
 
         const totalCount = await SellProduct.countDocuments(query);
 
@@ -830,6 +838,10 @@ const getLikedThreads = async (req, res) => {
         const sortBy = req.query.sortBy === "commentCount" ? "commentCount" : "createdAt";
         const sortOrder = req.query.orderBy === "asc" ? 1 : -1;
 
+        const keyword = req.query.keyWord ? req.query.keyWord.trim() : null;
+
+
+
         // 1. Find liked thread IDs
         const likedThreadDocs = await ThreadLike.find({
             likeBy: toObjectId(userId),
@@ -839,16 +851,31 @@ const getLikedThreads = async (req, res) => {
 
         const likedThreadIds = likedThreadDocs.map(doc => doc.threadId);
 
-        const totalCount = likedThreadIds.length;
-        if (totalCount === 0) {
+
+        if (likedThreadIds.length === 0) {
             return apiSuccessRes(HTTP_STATUS.OK, res, "No liked threads found", {
                 threads: [],
                 pagination: { total: 0, page, limit, totalPages: 0 },
             });
         }
 
+
+        // 2. Build match condition for liked threads and keyword search
+        const matchCondition = {
+            _id: { $in: likedThreadIds }
+        };
+
+        if (keyword) {
+            matchCondition.$or = [
+                { title: { $regex: keyword, $options: "i" } },
+                { content: { $regex: keyword, $options: "i" } }
+            ];
+        }
+
+
+        const totalCount = await Thread.countDocuments(matchCondition);
         const pipeline = [
-            { $match: { _id: { $in: likedThreadIds } } },
+            { $match: matchCondition },
 
             {
                 $lookup: {

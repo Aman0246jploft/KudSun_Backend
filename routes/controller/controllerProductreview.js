@@ -193,7 +193,7 @@ const createOrUpdateReview = async (req, res) => {
                     raterRole: raterRole,
                     raterName: raterName,
                     isNewReview: isNewReview,
-                    sellerId: order.sellerId,
+                    sellerId: order.sellerId,   
                     buyerId: order.userId,
                     orderStatus: order.status
                 }),
