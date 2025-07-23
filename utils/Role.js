@@ -145,6 +145,12 @@ const createStandardizedChatMeta = (data = {}) => {
         shippingStatus: data.shippingStatus || null,
         disputeId: data.disputeId || null,
         disputeStatus: data.disputeStatus || null,
+        decision:data.decision||null,
+        resolvedBy:data.resolvedBy||null,
+        decisionNote:data.decision||null,
+        disputeAmountPercent:data.disputeAmountPercent||null,
+
+
         refundAmount: data.refundAmount || null,
         processingFee: data.processingFee || null
     };

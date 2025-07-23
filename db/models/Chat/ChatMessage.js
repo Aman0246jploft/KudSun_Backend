@@ -13,21 +13,21 @@ const ChatMessageSchema = new mongoose.Schema({
 
     // For normal messages
     content: { type: String },
-    
+
     // For media/file messages
     mediaUrl: { type: String },
     mediaType: { type: String }, // e.g., "image/jpeg", "audio/mpeg"
     fileName: { type: String }, // Original file name
-    
+
     // For system/order-related messages
     systemMeta: {
         title: { type: String },
         // Type of status update
         statusType: {
             type: String,
-            enum: ['ORDER', 'PAYMENT', 'SHIPPING', 'SYSTEM', 'PRODUCT'],
+            enum: ['ORDER', 'PAYMENT', 'SHIPPING', 'SYSTEM', 'PRODUCT', 'DISPUTE'],
         },
-
+        disputeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Dispute' },
         // The actual status value
         status: {
             type: String,
@@ -37,7 +37,7 @@ const ChatMessageSchema = new mongoose.Schema({
 
         orderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order' },
         productId: { type: mongoose.Schema.Types.ObjectId, ref: 'SellProduct' },
-        
+
         // Product specific fields
         productName: { type: String },
         productImage: { type: String },
