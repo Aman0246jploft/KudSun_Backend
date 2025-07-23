@@ -20,14 +20,14 @@ const SellerVerificationSchema = new Schema({
 
     // For Bank Transfer method
     bankDetails: {
-        bankName: { type: String },         // e.g. Bangkok Bank
-        accountNumber: { type: String },
-        accountHolderName: { type: String },
+        bankName: { type: String,lowercase: true },         // e.g. Bangkok Bank
+        accountNumber: { type: String,lowercase: true },
+        accountHolderName: { type: String,lowercase: true },
         bankBookUrl: { type: String },      // URL for uploaded bank book image
     },
 
     // For PromptPay method
-    promptPayId: { type: String },        // Mobile number, Citizen ID, or Tax ID
+    promptPayId: { type: String,lowercase: true },        // Mobile number, Citizen ID, or Tax ID
     // linkedBankName: { type: String },     // e.g. Krungthai Bank
     // linkedBankLast4Digits: { type: String },  // e.g. '1234'
 
