@@ -120,6 +120,13 @@ const CHARGE_TYPE = {
 const createStandardizedChatMeta = (data = {}) => {
     return {
         orderNumber: data.orderNumber || null,
+        reviewId: data.reviewId || null,
+        rating:data.rating||null,
+        ratingText:data.ratingText||null,
+        reviewText:data.reviewText||null,
+        raterRole:data.raterRole||null,
+        raterName:data.raterName||null,
+        
         totalAmount: data.totalAmount || null,
         amount: data.amount || null,
         itemCount: data.itemCount || null,

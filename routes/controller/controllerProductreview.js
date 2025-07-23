@@ -187,7 +187,7 @@ const createOrUpdateReview = async (req, res) => {
                 productId: productId,
                 title: messageTitle,
                 meta: createStandardizedChatMeta({
-                    orderNumber: order._id.toString(),
+                    orderNumber: order.orderId.toString(),
                     reviewId: review._id.toString(),
                     rating: rating,
                     ratingText: ratingText,
