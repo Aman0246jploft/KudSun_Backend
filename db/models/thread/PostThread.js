@@ -54,7 +54,10 @@ const threadSchema = new Schema({
         type: Boolean,
         default: false
     },
-
+    viewCount: {
+        type: Number,
+        default: 0
+    },
     isDeleted: {
         type: Boolean,
         default: false

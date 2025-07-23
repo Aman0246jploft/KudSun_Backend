@@ -283,12 +283,22 @@ const trending = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, `Thread not found.`);
         }
 
-
         existing.isTrending = !existing.isTrending;
         await existing.save();
 
         return apiSuccessRes(HTTP_STATUS.OK, res, `Thread updated successfully.`);
 
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
+    }
+};
+
+const updateAllThreadTrending = async (req, res) => {
+    try {
+        const { updateAllThreadTrendingStatus } = require('../services/serviceThreadTrending');
+        const result = await updateAllThreadTrendingStatus();
+        
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Thread trending status updated successfully", result);
     } catch (error) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
     }
@@ -877,6 +887,13 @@ const getThreadById = async (req, res) => {
         if (!thread) {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Thread not found");
         }
+
+        // Increment view count
+        await Thread.findByIdAndUpdate(threadId, { $inc: { viewCount: 1 } });
+        
+        // Trigger trending update job
+        const { addThreadTrendingUpdateJob } = require('../services/serviceThreadTrending');
+        addThreadTrendingUpdateJob(threadId);
 
         const threadObjectId = toObjectId(threadId);
         const userId = thread.userId?._id?.toString();
@@ -1868,6 +1885,7 @@ router.post('/updateThread/:id', perApiLimiter(), upload.array('files', 10), upd
 router.get('/delete/:id', perApiLimiter(), deleteThread);
 router.post('/changeStatus/:id', perApiLimiter(), changeStatus);
 router.post('/trending/:id', perApiLimiter(), trending);
+router.post('/update-all-thread-trending', perApiLimiter(), updateAllThreadTrending);
 
 
 

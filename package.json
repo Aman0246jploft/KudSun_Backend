@@ -9,7 +9,8 @@
     "cron:orders": "node jobs/startOrderStatusCron.js",
     "cron:auction": "node jobs/Scheduled/crons/auctionCloserCron.js",
     "cron:address": "node jobs/Scheduled/crons/addressUpdateCron.js",
-    "cron:trending": "node jobs/Scheduled/crons/trendingUpdateCron.js"
+    "cron:trending": "node jobs/Scheduled/crons/trendingUpdateCron.js",
+    "cron:thread-trending": "node jobs/Scheduled/crons/threadTrendingUpdateCron.js"
   },
   "author": "",
   "license": "ISC",
