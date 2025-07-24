@@ -447,24 +447,39 @@ const beamPaymentWebhook = async (req, res) => {
             return res.status(400).json({ error: 'Invalid webhook payload' });
         }
 
+        // Get the redirect preference from query params
+        const shouldRedirect = req.query.redirect !== 'false';
+
         // Handle different Beam events
         switch (event) {
             case 'charge.succeeded':
             case 'payment_link.paid':
             case 'purchase.succeeded':
                 await handleBeamPaymentSuccess(data, req);
+                if (shouldRedirect) {
+                    return res.redirect(`/payment-success.html?orderId=${data.referenceId}&paymentId=${data.chargeId || data.id}&amount=${data.amount || data.total}`);
+                }
                 break;
             case 'charge.failed':
             case 'payment.failed':
                 await handleBeamPaymentFailure(data, req);
+                if (shouldRedirect) {
+                    return res.redirect(`/payment-cancel.html?orderId=${data.referenceId}&amount=${data.amount || data.total}&reason=${data.failureCode || 'payment_failed'}`);
+                }
                 break;
             default:
                 console.log(`Unhandled Beam event: ${event}`);
+                if (shouldRedirect) {
+                    return res.redirect(`/payment-cancel.html?reason=invalid_event`);
+                }
         }
 
         return res.status(200).json({ received: true });
     } catch (error) {
         console.error('Beam webhook error:', error);
+        if (shouldRedirect) {
+            return res.redirect(`/payment-cancel.html?reason=server_error`);
+        }
         return res.status(500).json({ error: 'Webhook processing failed' });
     }
 };
@@ -873,6 +888,9 @@ const originalPaymentCallback = async (req, res) => {
         return beamPaymentWebhook(req, res);
     }
 
+    // Get the redirect preference from query params
+    const shouldRedirect = req.query.redirect !== 'false';
+
     // Existing payment callback logic for other gateways
     const schema = Joi.object({
         orderId: Joi.string().required(),
@@ -884,11 +902,13 @@ const originalPaymentCallback = async (req, res) => {
 
     const { error, value } = schema.validate(req.body);
     if (error) {
+        if (shouldRedirect) {
+            return res.redirect(`/payment-cancel.html?orderId=${req.body.orderId || ''}&reason=invalid_request`);
+        }
         return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, error.details[0].message);
     }
 
     console.log("value", value)
-
 
     const { orderId, paymentStatus, paymentId, cardType, cardLast4 } = value;
 
@@ -1165,6 +1185,14 @@ const originalPaymentCallback = async (req, res) => {
             await saveNotification(paymentNotifications);
         }
 
+        if (shouldRedirect) {
+            if (paymentStatus === PAYMENT_STATUS.COMPLETED) {
+                return res.redirect(`/payment-success.html?orderId=${order._id}&paymentId=${paymentId}&amount=${order.grandTotal}`);
+            } else {
+                return res.redirect(`/payment-cancel.html?orderId=${order._id}&amount=${order.grandTotal}&reason=payment_failed`);
+            }
+        }
+
         return apiSuccessRes(HTTP_STATUS.OK, res, "Payment status updated", {
             orderId: order._id,
             paymentStatus: order.paymentStatus,
@@ -1173,6 +1201,9 @@ const originalPaymentCallback = async (req, res) => {
     } catch (err) {
         await session.abortTransaction();
         console.error("Payment callback error:", err);
+        if (shouldRedirect) {
+            return res.redirect(`/payment-cancel.html?orderId=${orderId}&reason=server_error`);
+        }
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to update payment status");
     } finally {
         session.endSession();

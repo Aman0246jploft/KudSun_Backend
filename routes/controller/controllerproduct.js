@@ -2972,6 +2972,7 @@ const getProductsWithDraft = async (req, res) => {
         const sortOrder = orderBy.toLowerCase() === 'desc' ? -1 : 1;
         const sortOptions = {};
         sortOptions[sortField] = sortOrder;
+        console.log("sortOptions", sortOptions)
 
         // Build filter object
         const filter = {
@@ -2991,10 +2992,10 @@ const getProductsWithDraft = async (req, res) => {
 
         // Category Filters
         if (categoryId) {
-            filter.categoryId =new mongoose.Types.ObjectId(categoryId);
+            filter.categoryId = new mongoose.Types.ObjectId(categoryId);
         }
         if (subCategoryId) {
-            filter.subCategoryId =new mongoose.Types.ObjectId(subCategoryId);
+            filter.subCategoryId = new mongoose.Types.ObjectId(subCategoryId);
         }
 
         // Price Range
@@ -3053,6 +3054,43 @@ const getProductsWithDraft = async (req, res) => {
             .skip(skip)
             .limit(parseInt(limit))
             .lean();
+
+        if (sortField === 'commentCount') {
+            const productIds = products.map(p => p._id);
+
+            const commentsCountMap = await ProductComment.aggregate([
+                {
+                    $match: {
+                        product: { $in: productIds },
+                        isDeleted: false,
+                        isDisable: false
+                    }
+                },
+                {
+                    $group: {
+                        _id: "$product",
+                        count: { $sum: 1 }
+                    }
+                }
+            ]);
+
+            const commentCountLookup = {};
+            commentsCountMap.forEach(item => {
+                commentCountLookup[item._id.toString()] = item.count;
+            });
+
+            for (const product of products) {
+                product._commentCount = commentCountLookup[product._id.toString()] || 0;
+            }
+
+            // In-memory sort
+            products.sort((a, b) => {
+                if (sortOrder === -1) return b._commentCount - a._commentCount;
+                else return a._commentCount - b._commentCount;
+            });
+        }
+
+
 
         // Filter out products where seller doesn't match criteria
         const filteredProducts = products.filter(product => product.userId !== null);
