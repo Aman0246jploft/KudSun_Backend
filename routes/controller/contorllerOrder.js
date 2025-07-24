@@ -826,8 +826,8 @@ const createBeamPaymentLink = async (paymentData) => {
 
 
         const apiUrl =
-            //   'https://playground.api.beamcheckout.com/api/v1/payment-links'
-            'https://api.beamcheckout.com/api/v1/payment-links'
+              'https://playground.api.beamcheckout.com/api/v1/payment-links'
+            // 'https://api.beamcheckout.com/api/v1/payment-links'
 
 
 

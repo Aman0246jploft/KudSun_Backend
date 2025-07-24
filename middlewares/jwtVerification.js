@@ -36,7 +36,6 @@ const publicRoutes = [
 
     `/api/v1/order/paymentCallback`,
 
-    // `/api/v1/order/beam/initiate`,
     `/api/v1/order/beam/webhook`,
 
 

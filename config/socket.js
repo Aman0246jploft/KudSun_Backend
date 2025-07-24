@@ -149,7 +149,7 @@ async function setupSocket(server) {
                             productId: product._id,
                             productName: product.title,
                             productImage: product.productImages?.[0] || null,
-                            price: product.fixedPrice || product.auctionSettings?.startingBid || 0,
+                            price: product.fixedPrice || product.auctionSettings?.startingPrice || 0,
                             saleType: product.saleType,
                             condition: product.condition,
                             category: product.categoryId?.name,
