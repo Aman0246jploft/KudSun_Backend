@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Cancelled - Kudsun</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .cancel-container {
+            background: white;
+            padding: 60px 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 600px;
+            width: 100%;
+            animation: slideUp 0.6s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .cancel-icon {
+            width: 100px;
+            height: 100px;
+            background: #e74c3c;
+            border-radius: 50%;
+            margin: 0 auto 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: scaleIn 0.5s ease-out 0.2s both;
+        }
+
+        @keyframes scaleIn {
+            from {
+                opacity: 0;
+                transform: scale(0.3);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .cancel-icon svg {
+            width: 50px;
+            height: 50px;
+            fill: white;
+        }
+
+        h1 {
+            color: #2c3e50;
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .subtitle {
+            color: #7f8c8d;
+            font-size: 1.2rem;
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+
+        .order-info {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 20px;
+            border-radius: 12px;
+            margin: 30px 0;
+            text-align: left;
+        }
+
+        .order-info h3 {
+            color: #856404;
+            margin-bottom: 10px;
+            font-size: 1.2rem;
+        }
+
+        .order-info p {
+            color: #856404;
+            margin-bottom: 8px;
+        }
+
+        .reasons {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 12px;
+            margin: 30px 0;
+            text-align: left;
+        }
+
+        .reasons h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+        }
+
+        .reasons ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .reasons li {
+            color: #7f8c8d;
+            margin-bottom: 8px;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .reasons li:before {
+            content: "•";
+            color: #e74c3c;
+            font-weight: bold;
+            position: absolute;
+            left: 0;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 40px;
+        }
+
+        .btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+        }
+
+        .btn-warning {
+            background: #f39c12;
+            color: white;
+        }
+
+        .btn-warning:hover {
+            background: #e67e22;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: #95a5a6;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #7f8c8d;
+            transform: translateY(-2px);
+        }
+
+        .payment-method {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #e74c3c;
+            font-weight: 600;
+            margin-top: 20px;
+            justify-content: center;
+        }
+
+        .beam-logo {
+            width: 24px;
+            height: 24px;
+            background: #667eea;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 12px;
+        }
+
+        .help-section {
+            background: #e8f4fd;
+            border: 1px solid #b3d9ff;
+            padding: 20px;
+            border-radius: 12px;
+            margin: 30px 0;
+        }
+
+        .help-section h4 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .help-section p {
+            color: #7f8c8d;
+            line-height: 1.6;
+        }
+
+        @media (max-width: 768px) {
+            .cancel-container {
+                padding: 40px 20px;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="cancel-container">
+        <div class="cancel-icon">
+            <svg viewBox="0 0 24 24">
+                <path d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        </div>
+
+        <h1>Payment Cancelled</h1>
+        <p class="subtitle">Your payment was cancelled or interrupted. Don't worry, no charges have been made to your account.</p>
+
+        <div class="payment-method">
+            <div class="beam-logo">B</div>
+            <span>Beam Payment Cancelled</span>
+        </div>
+
+        <div class="order-info">
+            <h3>Order Information</h3>
+            <p><strong>Order ID:</strong> <span id="orderId">Loading...</span></p>
+            <p><strong>Amount:</strong> <span id="amount">Loading...</span></p>
+            <p><strong>Status:</strong> Payment Pending</p>
+        </div>
+
+        <div class="reasons">
+            <h3>Common reasons for payment cancellation:</h3>
+            <ul>
+                <li>You clicked the back button or closed the payment window</li>
+                <li>Payment session expired due to inactivity</li>
+                <li>Network connection issues during payment</li>
+                <li>You chose to cancel the payment intentionally</li>
+                <li>Browser compatibility issues</li>
+            </ul>
+        </div>
+
+        <div class="help-section">
+            <h4>Need Help?</h4>
+            <p>If you're experiencing technical difficulties or need assistance with your payment, please contact our support team. We're here to help you complete your purchase successfully.</p>
+        </div>
+
+        <div class="button-group">
+            <a href="#" class="btn btn-primary" id="retryPaymentBtn">
+                <span>Try Payment Again</span>
+            </a>
+            <a href="#" class="btn btn-warning" id="viewOrderBtn">
+                <span>View Order</span>
+            </a>
+            <a href="/" class="btn btn-secondary">
+                <span>Back to Shopping</span>
+            </a>
+        </div>
+    </div>
+
+    <script>
+        // Extract parameters from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const orderId = urlParams.get('orderId');
+        const amount = urlParams.get('amount');
+        const reason = urlParams.get('reason');
+
+        // Update page content
+        document.getElementById('orderId').textContent = orderId || 'N/A';
+        document.getElementById('amount').textContent = amount ? `$${amount}` : 'N/A';
+
+        // Update button links
+        if (orderId) {
+            document.getElementById('viewOrderBtn').href = `/order/${orderId}`;
+            document.getElementById('retryPaymentBtn').href = `/payment/retry/${orderId}`;
+        } else {
+            // Hide order-specific buttons if no order ID
+            document.getElementById('viewOrderBtn').style.display = 'none';
+            document.getElementById('retryPaymentBtn').style.display = 'none';
+        }
+
+        // Show specific cancellation reason if provided
+        if (reason) {
+            const reasonMap = {
+                'user_cancelled': 'You cancelled the payment',
+                'session_expired': 'Payment session expired',
+                'network_error': 'Network connection issue',
+                'payment_declined': 'Payment was declined',
+                'insufficient_funds': 'Insufficient funds',
+                'card_expired': 'Card has expired',
+                'invalid_card': 'Invalid card details'
+            };
+
+            const reasonText = reasonMap[reason] || reason;
+            document.querySelector('.subtitle').textContent = `Payment was cancelled: ${reasonText}. No charges have been made to your account.`;
+        }
+
+        // Auto-focus on retry button after 2 seconds
+        setTimeout(() => {
+            const retryBtn = document.getElementById('retryPaymentBtn');
+            if (retryBtn && retryBtn.style.display !== 'none') {
+                retryBtn.focus();
+                retryBtn.style.boxShadow = '0 0 0 3px rgba(52, 152, 219, 0.3)';
+            }
+        }, 2000);
+    </script>
+</body>
+</html> 

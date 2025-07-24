@@ -1,0 +1,1974 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "contact": {},
+    "title": "Beam Payments API",
+    "version": "1.7.1"
+  },
+  "paths": {
+    "/api/v1/charges": {
+      "get": {
+        "description": "Returns a list of Charges you previously created.\nThe charges are returned in sorted order, with the most recent charges appearing first.",
+        "operationId": "api.ListCharges",
+        "parameters": [
+          {
+            "description": "referenceId",
+            "in": "query",
+            "name": "referenceId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "source_in",
+            "in": "query",
+            "name": "source_in",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "PAYMENT_LINK",
+                  "STORE_LINK",
+                  "QR_PROMPT_PAY_LINK",
+                  "API",
+                  "BOLT"
+                ],
+                "type": "string"
+              }
+            }
+          },
+          {
+            "description": "sourceId",
+            "in": "query",
+            "name": "sourceId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "offset",
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "description": "limit",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChargeList"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "fail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "basic_api": []
+          }
+        ],
+        "summary": "Lists the Charges",
+        "tags": [
+          "api-charges"
+        ]
+      },
+      "post": {
+        "description": "Create a Charge to attempt to pay into your Beam account by providing a valid PaymentMethod.",
+        "operationId": "api.CreateCharge",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChargeRequest"
+              }
+            }
+          },
+          "description": "CreateChargeRequest",
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateChargeResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "fail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "basic_api": []
+          }
+        ],
+        "summary": "Creates a Charge",
+        "tags": [
+          "api-charges"
+        ]
+      }
+    },
+    "/api/v1/charges/{chargeId}": {
+      "get": {
+        "description": "Retrieves a Charge by `chargeId`.",
+        "operationId": "api.GetChargeByID",
+        "parameters": [
+          {
+            "description": "chargeId",
+            "in": "path",
+            "name": "chargeId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Charge"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "fail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "basic_api": []
+          }
+        ],
+        "summary": "Gets a Charge",
+        "tags": [
+          "api-charges"
+        ]
+      }
+    },
+    "/api/v1/payment-links": {
+      "post": {
+        "description": "Creates a Payment Link that can be used to pay for merchants",
+        "operationId": "api.CreatePaymentLink",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePaymentLinkRequest"
+              }
+            }
+          },
+          "description": "CreatePaymentLinkRequest",
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatePaymentLinkResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "fail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "basic_api": []
+          }
+        ],
+        "summary": "Creates a Payment Link",
+        "tags": [
+          "api-payment-links"
+        ]
+      }
+    },
+    "/api/v1/payment-links/{paymentLinkId}": {
+      "get": {
+        "description": "Retrieves a Payment Link with the given ID",
+        "operationId": "api.GetPaymentLinkByID",
+        "parameters": [
+          {
+            "description": "paymentLinkId",
+            "in": "path",
+            "name": "paymentLinkId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentLink"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "fail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "basic_api": []
+          }
+        ],
+        "summary": "Retrieves a Payment Link with the given ID",
+        "tags": [
+          "api-payment-links"
+        ]
+      }
+    },
+    "/api/v1/payment-links/{paymentLinkId}/disable": {
+      "patch": {
+        "description": "Disable a Payment Link with the given ID",
+        "operationId": "api.DisablePaymentLinkByID",
+        "parameters": [
+          {
+            "description": "paymentLinkId",
+            "in": "path",
+            "name": "paymentLinkId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "fail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "basic_api": []
+          }
+        ],
+        "summary": "Disable a Payment Link with the given ID",
+        "tags": [
+          "api-payment-links"
+        ]
+      }
+    },
+    "/api/v1/refunds": {
+      "post": {
+        "description": "Creates a Refund for a given paid Charge to attempt to reverse the payment made.\nRefunds use your available balance, if you have insufficient balance, your request may be rejected.\nCurrently, CARD, CARD_INSTALLMENTS, ALIPAY and WECHAT_PAY payment method types support refunds.",
+        "operationId": "api.CreateRefund",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRefundRequest"
+              }
+            }
+          },
+          "description": "CreateRefundRequest",
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateRefundResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "fail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "basic_api": []
+          }
+        ],
+        "summary": "Creates a Refund",
+        "tags": [
+          "api-refunds"
+        ]
+      }
+    },
+    "/api/v1/refunds/{refundId}": {
+      "get": {
+        "description": "Gets a Refund by `refundId`",
+        "operationId": "api.GetRefundByID",
+        "parameters": [
+          {
+            "description": "refundId",
+            "in": "path",
+            "name": "refundId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refund"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "fail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "basic_api": []
+          }
+        ],
+        "summary": "Gets a Refund",
+        "tags": [
+          "api-refunds"
+        ]
+      }
+    },
+    "/api/v1/transactions": {
+      "get": {
+        "description": "Lists the Transactions",
+        "operationId": "api.ListTransactions",
+        "parameters": [
+          {
+            "description": "referenceId",
+            "in": "query",
+            "name": "referenceId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "offset",
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "description": "limit",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionList"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "fail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "basic_api": []
+          }
+        ],
+        "summary": "Lists the Transactions",
+        "tags": [
+          "api-transactions"
+        ]
+      }
+    },
+    "/api/v1/transactions/{transactionId}": {
+      "get": {
+        "description": "This could be a completed Charge or a Refund object using the same ID i.e. prefixed with `ch_` or `re_`",
+        "operationId": "api.GetTransactionByID",
+        "parameters": [
+          {
+            "description": "chargeId",
+            "in": "path",
+            "name": "transactionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Transaction"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "fail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "basic_api": []
+          }
+        ],
+        "summary": "Gets a successful transaction",
+        "tags": [
+          "api-transactions"
+        ]
+      }
+    },
+    "/client/v1/card-tokens": {
+      "post": {
+        "description": "Create a Card Token from credit card PAN to be used when creating a Charge",
+        "operationId": "client.CreateCardToken",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCardTokenRequest"
+              }
+            }
+          },
+          "description": "CreateCardTokenRequest",
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateCardTokenResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "fail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "basic_api": []
+          }
+        ],
+        "summary": "Create a Card Token",
+        "tags": [
+          "client-card-tokens"
+        ]
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "//api.beamcheckout.com"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "basic_api": {
+        "type": "http",
+        "scheme": "basic"
+      }
+    },
+    "schemas": {
+      "Address": {
+        "properties": {
+          "city": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          },
+          "postCode": {
+            "type": "string"
+          },
+          "streetAddress": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "AlipayRequest": {
+        "description": "the request for ALIPAY payment method type. currently, no child attributes are required.",
+        "type": "object"
+      },
+      "AlipayResponse": {
+        "type": "object"
+      },
+      "BNPLLinkSettings": {
+        "description": "the link settings for the BNPL payment method type.",
+        "properties": {
+          "isEnabled": {
+            "description": "Setting IsEnabled to `true` enables all bnpl providers (ATOME)",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "CardInstallmentsLinkSettings": {
+        "description": "the link settings for CARD_INSTALLMENTS payment method type. installmentMonthLinkSettings is a struct that contains a flag that enables each installment duration, overridden by isEnabled.",
+        "properties": {
+          "installments3m": {
+            "$ref": "#/components/schemas/InstallmentMonthLinkSettings"
+          },
+          "installments4m": {
+            "$ref": "#/components/schemas/InstallmentMonthLinkSettings"
+          },
+          "installments6m": {
+            "$ref": "#/components/schemas/InstallmentMonthLinkSettings"
+          },
+          "installments10m": {
+            "$ref": "#/components/schemas/InstallmentMonthLinkSettings"
+          },
+          "isEnabled": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "CardInstallmentsRequest": {
+        "description": "the request for CARD_INSTALLMENTS payment method type. installmentPeriod is the number of installments in months and is a required field",
+        "properties": {
+          "cardHolderName": {
+            "description": "CardHolderName is the name shown on the card",
+            "example": "CARDHOLDER NAME",
+            "type": "string"
+          },
+          "expiryMonth": {
+            "example": 12,
+            "type": "integer"
+          },
+          "expiryYear": {
+            "example": 30,
+            "type": "integer"
+          },
+          "installmentPeriod": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/InstallmentPeriod"
+              }
+            ],
+            "example": 10
+          },
+          "pan": {
+            "description": "PAN is the full card number",
+            "example": "4111111111111111",
+            "type": "string"
+          },
+          "securityCode": {
+            "description": "SecurityCode of the card (CVV)",
+            "example": "123",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cardHolderName",
+          "expiryMonth",
+          "expiryYear",
+          "installmentPeriod",
+          "pan",
+          "securityCode"
+        ],
+        "type": "object"
+      },
+      "CardInstallmentsResponse": {
+        "properties": {
+          "brand": {
+            "example": "VISA",
+            "type": "string"
+          },
+          "installmentPeriod": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/InstallmentPeriod"
+              }
+            ],
+            "example": 10
+          },
+          "last4": {
+            "description": "Last4 is the last four digits of the provided PAN",
+            "example": "1111",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CardLinkSettings": {
+        "description": "the link settings for CARD payment method type.",
+        "properties": {
+          "isEnabled": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "CardRequest": {
+        "description": "the request for CARD payment method type.",
+        "properties": {
+          "cardHolderName": {
+            "description": "CardHolderName is the name shown on the card",
+            "example": "CARDHOLDER NAME",
+            "type": "string"
+          },
+          "expiryMonth": {
+            "example": 12,
+            "type": "integer"
+          },
+          "expiryYear": {
+            "example": 30,
+            "type": "integer"
+          },
+          "pan": {
+            "description": "PAN is the full card number",
+            "example": "4111111111111111",
+            "type": "string"
+          },
+          "securityCode": {
+            "description": "SecurityCode of the card (CVV)",
+            "example": "123",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cardHolderName",
+          "expiryMonth",
+          "expiryYear",
+          "pan",
+          "securityCode"
+        ],
+        "type": "object"
+      },
+      "CardResponse": {
+        "properties": {
+          "brand": {
+            "example": "VISA",
+            "type": "string"
+          },
+          "last4": {
+            "description": "Last4 is the last four digits of the provided PAN",
+            "example": "1111",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CardTokenInstallmentsRequest": {
+        "description": "the request for CARD_TOKEN_INSTALLMENTS payment method type. installmentPeriod is the number of installments in months and is a required field",
+        "properties": {
+          "cardTokenId": {
+            "type": "string"
+          },
+          "installmentPeriod": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/InstallmentPeriod"
+              }
+            ],
+            "example": 10
+          },
+          "securityCode": {
+            "description": "SecurityCode of the card (CVV)",
+            "example": "123",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cardTokenId",
+          "installmentPeriod",
+          "securityCode"
+        ],
+        "type": "object"
+      },
+      "CardTokenRequest": {
+        "description": "the request for CARD_TOKEN payment method type.",
+        "properties": {
+          "cardTokenId": {
+            "type": "string"
+          },
+          "securityCode": {
+            "description": "SecurityCode of the card (CVV)",
+            "example": "123",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cardTokenId",
+          "securityCode"
+        ],
+        "type": "object"
+      },
+      "Charge": {
+        "description": "This object represents a single attempt to pay into your Beam account.",
+        "properties": {
+          "amount": {
+            "example": 10000,
+            "type": "integer"
+          },
+          "chargeId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "currency": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Currency"
+              }
+            ],
+            "example": "THB"
+          },
+          "customer": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ChargeCustomer"
+              }
+            ],
+            "description": "Customer is the structure that contains the customer information."
+          },
+          "failureCode": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ChargeFailureCode"
+              }
+            ],
+            "example": ""
+          },
+          "merchantId": {
+            "type": "string"
+          },
+          "paymentMethod": {
+            "$ref": "#/components/schemas/PaymentMethodResponse"
+          },
+          "referenceId": {
+            "example": "order_190821",
+            "type": "string"
+          },
+          "source": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ChargeSource"
+              }
+            ],
+            "example": "API"
+          },
+          "sourceId": {
+            "example": "source_123",
+            "type": "string"
+          },
+          "status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ChargeStatus"
+              }
+            ],
+            "example": "SUCCEEDED"
+          },
+          "transactionTime": {
+            "description": "TransactionTime is the time when the Charge is recorded as SUCCEEDED or FAILED.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ChargeAction": {
+        "description": "the action required to complete the payment process. For ChargeActionNone, no further action is required. For ChargeActionRedirect, redirect the paying customer to the given URL to complete the process. For ChargeActionEncodedImage, decode the encoded image and present it to the paying customer to complete the process.",
+        "enum": [
+          "NONE",
+          "REDIRECT",
+          "ENCODED_IMAGE"
+        ],
+        "type": "string",
+        "x-enum-varnames": [
+          "ChargeActionNone",
+          "ChargeActionRedirect",
+          "ChargeActionEncodedImage"
+        ]
+      },
+      "ChargeActionRedirectChargeResponse": {
+        "description": "the response for ChargeActionRedirect. Redirect your customers to the provided RedirectURL to complete the payment process.",
+        "properties": {
+          "redirectUrl": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ChargeActionResponseEncodedImage": {
+        "description": "the response for ChargeActionEncodedImage. this contains the base64 encoded image that must be decoded and displayed to the user.",
+        "properties": {
+          "expiry": {
+            "description": "Expiry is the time when the content in this image expires",
+            "format": "date-time",
+            "type": "string"
+          },
+          "imageBase64Encoded": {
+            "description": "ImageBase64Encoded represents the image that is base64 encoded. Decode this image and display it to the user.",
+            "type": "string"
+          },
+          "rawData": {
+            "description": "RawData contains the raw data which is encoded to ImageBase64Encoded.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ChargeCustomer": {
+        "properties": {
+          "deliveryAddress": {
+            "$ref": "#/components/schemas/DeliveryAddress"
+          },
+          "email": {
+            "type": "string"
+          },
+          "primaryPhone": {
+            "$ref": "#/components/schemas/Phone"
+          }
+        },
+        "type": "object"
+      },
+      "ChargeFailureCode": {
+        "description": "In the event that the ChargeStatus is ChargeStatusFailed, one of the following failure codes would be present. ChargeFailureCodeFailed denotes generic failure due to processing, please retry with a new Charge. ChargeFailureCodeInsufficientFunds denotes a failure due to insufficient funds from the customer's payment method. ChargeFailureCodeAuthenticationFailed denotes a failure due to the customer authentication.",
+        "enum": [
+          "CH_PROCESSING_FAILED",
+          "CH_INSUFFICIENT_FUNDS",
+          "CH_AUTHENTICATION_FAILED"
+        ],
+        "type": "string",
+        "x-enum-varnames": [
+          "ChargeFailureCodeFailed",
+          "ChargeFailureCodeInsufficientFunds",
+          "ChargeFailureCodeAuthenticationFailed"
+        ]
+      },
+      "ChargeList": {
+        "properties": {
+          "data": {
+            "description": "Data is the array of Charge",
+            "items": {
+              "$ref": "#/components/schemas/Charge"
+            },
+            "type": "array"
+          },
+          "totalCount": {
+            "description": "TotalCount that matches the filter criteria",
+            "example": 300,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "ChargeSource": {
+        "description": "Is the source of where the Charge was created from. For Charges created via the CreateCharge endpoint, the source is ChargeSourceAPI.",
+        "enum": [
+          "PAYMENT_LINK",
+          "STORE_LINK",
+          "QR_PROMPT_PAY_LINK",
+          "API",
+          "BOLT"
+        ],
+        "type": "string",
+        "x-enum-varnames": [
+          "ChargeSourcePaymentLink",
+          "ChargeSourceStoreLink",
+          "ChargeSourceQRPromptPayLink",
+          "ChargeSourceAPI",
+          "ChargeSourceBolt"
+        ]
+      },
+      "ChargeStatus": {
+        "enum": [
+          "PENDING",
+          "SUCCEEDED",
+          "FAILED"
+        ],
+        "type": "string",
+        "x-enum-varnames": [
+          "ChargeStatusPending",
+          "ChargeStatusSucceeded",
+          "ChargeStatusFailed"
+        ]
+      },
+      "CreateChargeRequest": {
+        "description": "the request schema to create a new Charge.",
+        "properties": {
+          "amount": {
+            "description": "Amount in the smallest units of that currency: 1 == 1 Satang == 0.01 THB. 2125 == 2125 Satang == 21.25 THB.",
+            "example": 10000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "currency": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Currency"
+              }
+            ],
+            "description": "Currency to accept payments in.\nCurrently only `THB` is supported.",
+            "example": "THB"
+          },
+          "customer": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ChargeCustomer"
+              }
+            ],
+            "description": "Customer contains the details of the customer making the payment. Optional"
+          },
+          "paymentMethod": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PaymentMethodRequest"
+              }
+            ],
+            "description": "PaymentMethod contains the details of how the merchant wishes to deduct their customers' funds."
+          },
+          "referenceId": {
+            "description": "ReferenceID is a free text field for merchants to optionally provide for reconciliation purposes.\nBeam does not provide any unique constraints for this field.\nMaximum 100 characters.",
+            "example": "order_190821",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "returnUrl": {
+            "description": "ReturnURL is the URL to redirect customers back to after they authenticate or cancel their payment on the\npayment method’s app or site.\nIf you’d prefer to redirect to a mobile app, you can supply an application URI scheme.\nRequired for charges that redirect out of Beam, such as `CARD` and `CARD_INSTALLMENT` payments.",
+            "example": "https://www.beamcheckout.com",
+            "type": "string"
+          }
+        },
+        "required": [
+          "amount",
+          "currency",
+          "paymentMethod"
+        ],
+        "type": "object"
+      },
+      "CreateChargeResponse": {
+        "description": "the response for CreateCharge API. Use the returned chargeId to query for its status and follow the actionRequired steps.",
+        "properties": {
+          "actionRequired": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ChargeAction"
+              }
+            ],
+            "description": "ActionRequired determines the next steps required to complete the payment process."
+          },
+          "chargeId": {
+            "type": "string"
+          },
+          "encodedImage": {
+            "$ref": "#/components/schemas/ChargeActionResponseEncodedImage"
+          },
+          "paymentMethodType": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PaymentMethodType"
+              }
+            ],
+            "example": "CARD"
+          },
+          "redirect": {
+            "$ref": "#/components/schemas/ChargeActionRedirectChargeResponse"
+          }
+        },
+        "type": "object"
+      },
+      "CreateOrderItem": {
+        "properties": {
+          "description": {
+            "maxLength": 511,
+            "type": "string"
+          },
+          "imageUrl": {
+            "type": "string"
+          },
+          "itemName": {
+            "maxLength": 255,
+            "type": "string"
+          },
+          "price": {
+            "description": "Price of the item.\nThe value is in the smallest currency unit (e.g. 10000 satang = 100.00 THB).\nThe currency is assumed to be the currency of the order itself.",
+            "type": "integer"
+          },
+          "productId": {
+            "type": "string"
+          },
+          "quantity": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "sku": {
+            "maxLength": 255,
+            "type": "string"
+          }
+        },
+        "required": [
+          "price"
+        ],
+        "type": "object"
+      },
+      "CreatePaymentLinkRequest": {
+        "properties": {
+          "collectDeliveryAddress": {
+            "description": "CollectDeliveryAddress is a setting to see if the checkout page will ask for\ndelivery address. False means the page will only ask for phone number.\nTrue means the page will ask for both phone number and delivery address.\nDefaults to false.",
+            "type": "boolean"
+          },
+          "expiresAt": {
+            "description": "ExpiresAt is the timestamp where after this point in time the payment link\nwill expire and will not accept payment. Optional, with null value\nmeaning no expiry for the payment link.",
+            "example": "2025-04-08T03:58:28.343Z",
+            "format": "date-time",
+            "type": "string"
+          },
+          "feeType": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FeeType"
+              }
+            ],
+            "description": "FeeType is the strategy of fee calculation for the payment link.\nDefaults to FeeTypeTransactionFee if not provided."
+          },
+          "linkSettings": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LinkSettings"
+              }
+            ],
+            "description": "LinkSettings is the settings of each payment method that is\nassociated with the payment link."
+          },
+          "order": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OrderRequest"
+              }
+            ],
+            "description": "Order is the detail of the order associated with the payment link."
+          },
+          "redirectUrl": {
+            "description": "RedirectURL is the endpoint that the customer will be directed to after\npayment has succeeded.",
+            "example": "https://www.beamcheckout.com",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreatePaymentLinkResponse": {
+        "description": "the response for CreatePaymentLink API. You can use the id returned in the response for querying related charges as 'sourceId' in the ListCharge API",
+        "properties": {
+          "id": {
+            "description": "ID is the identifier value of the payment link created",
+            "type": "string"
+          },
+          "url": {
+            "description": "URL is the endpoint of the created payment link",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateRefundRequest": {
+        "description": "the request schema to create a new Refund.",
+        "properties": {
+          "chargeId": {
+            "description": "ChargeID the ID of the charge the refund is to be associated with. The charge must be paid.",
+            "type": "string"
+          },
+          "reason": {
+            "description": "Reason of the refund. Optional.",
+            "maxLength": 500,
+            "type": "string"
+          }
+        },
+        "required": [
+          "chargeId"
+        ],
+        "type": "object"
+      },
+      "CreateRefundResponse": {
+        "properties": {
+          "refundId": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Currency": {
+        "enum": [
+          "THB"
+        ],
+        "type": "string",
+        "x-enum-varnames": [
+          "CurrencyTHB"
+        ]
+      },
+      "DeliveryAddress": {
+        "properties": {
+          "address": {
+            "$ref": "#/components/schemas/Address"
+          },
+          "contactName": {
+            "type": "string"
+          },
+          "phone": {
+            "$ref": "#/components/schemas/Phone"
+          }
+        },
+        "type": "object"
+      },
+      "EWalletsLinkSettings": {
+        "description": "the link settings for the E_WALLET payment method type.",
+        "properties": {
+          "isEnabled": {
+            "description": "Setting IsEnabled to `true` enables all e-wallet providers (LINE_PAY, TRUE_MONEY, ALIPAY, WECHAT_PAY, SHOPEE_PAY)",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "FeeStrategy": {
+        "enum": [
+          "RATE",
+          "MINIMUM_AMOUNT"
+        ],
+        "type": "string",
+        "x-enum-varnames": [
+          "FeeStrategyRate",
+          "FeeStrategyMinimumAmount"
+        ]
+      },
+      "FeeType": {
+        "enum": [
+          "TRANSACTION_FEE",
+          "SERVICE_FEE"
+        ],
+        "type": "string",
+        "x-enum-varnames": [
+          "FeeTypeTransactionFee",
+          "FeeTypeServiceFee"
+        ]
+      },
+      "InstallmentMonthLinkSettings": {
+        "properties": {
+          "isEnabled": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "InstallmentPeriod": {
+        "description": "is the number of installments in months",
+        "enum": [
+          3,
+          4,
+          6,
+          10
+        ],
+        "type": "integer",
+        "x-enum-varnames": [
+          "InstallmentPeriod3Months",
+          "InstallmentPeriod4Months",
+          "InstallmentPeriod6Months",
+          "InstallmentPeriod10Months"
+        ]
+      },
+      "LinePayRequest": {
+        "description": "the request for LINE_PAY payment method type. currently, no child attributes are required.",
+        "type": "object"
+      },
+      "LinePayResponse": {
+        "type": "object"
+      },
+      "LinkSettings": {
+        "description": "the settings of each payment method that is associated with the payment link.",
+        "properties": {
+          "buyNowPayLater": {
+            "$ref": "#/components/schemas/BNPLLinkSettings"
+          },
+          "card": {
+            "$ref": "#/components/schemas/CardLinkSettings"
+          },
+          "cardInstallments": {
+            "$ref": "#/components/schemas/CardInstallmentsLinkSettings"
+          },
+          "eWallets": {
+            "$ref": "#/components/schemas/EWalletsLinkSettings"
+          },
+          "mobileBanking": {
+            "$ref": "#/components/schemas/MobileBankingLinkSettings"
+          },
+          "qrPromptPay": {
+            "$ref": "#/components/schemas/QRPromptPayLinkSettings"
+          }
+        },
+        "type": "object"
+      },
+      "MobileBankingLinkSettings": {
+        "description": "the link settings for the INTERNET_BANKING payment method type.",
+        "properties": {
+          "isEnabled": {
+            "description": "Setting IsEnabled to `true` enables all internet banking providers (KRUNGTHAI_NEXT, KRUNGSRI_APP, SCB_EASY)",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "Order": {
+        "properties": {
+          "currency": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Currency"
+              }
+            ],
+            "description": "Currency to accept payments in."
+          },
+          "description": {
+            "description": "Description of the order to display to the customer on the checkout page. Optional.",
+            "type": "string"
+          },
+          "internalNote": {
+            "description": "InternalNote is the internal note that merchant can attach to the order. Optional.",
+            "type": "string"
+          },
+          "netAmount": {
+            "description": "NetAmount is the net amount that the customer will be charged.\nThe value is in the smallest currency unit (e.g. 10000 satang = 100.00 THB).\nRequired. Minimum is 100 for THB.",
+            "type": "integer"
+          },
+          "orderItems": {
+            "description": "OrderItems if provided Beam will attach the items of the product sold to this payment link.\nWill be displayed on the checkout page for the customer to view. Beam does not calculate the\nnet amount based on the prices and quantities given and will only use whatever amount is provided\nin the NetAmount. Optional.",
+            "items": {
+              "$ref": "#/components/schemas/OrderItem"
+            },
+            "type": "array"
+          },
+          "referenceId": {
+            "description": "ReferenceID can be used to specify the merchant's own reference ID. Optional.\nNote that Beam does not guarantee idempotency based on this ID provided so multiple payment link\ncreation with the same refId is allowed.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "OrderItem": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "imageUrl": {
+            "type": "string"
+          },
+          "itemName": {
+            "type": "string"
+          },
+          "price": {
+            "type": "integer"
+          },
+          "productId": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "integer"
+          },
+          "sku": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "OrderRequest": {
+        "properties": {
+          "currency": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Currency"
+              }
+            ],
+            "description": "Currency to accept payments in."
+          },
+          "description": {
+            "description": "Description of the order to display to the customer on the checkout page. Optional.",
+            "example": "1 Cookies Box",
+            "maxLength": 500,
+            "type": "string"
+          },
+          "internalNote": {
+            "description": "InternalNote is the internal note that merchant can attach to the order. Optional.",
+            "maxLength": 500,
+            "type": "string"
+          },
+          "netAmount": {
+            "description": "NetAmount is the net amount that the customer will be charged.\nThe value is in the smallest currency unit (e.g. 10000 satang = 100.00 THB).\nRequired. Minimum is 100 for THB.",
+            "example": 10000,
+            "minimum": 100,
+            "type": "integer"
+          },
+          "orderItems": {
+            "description": "OrderItems if provided Beam will attach the items of the product sold to this payment link.\nWill be displayed on the checkout page for the customer to view. Beam does not calculate the\nnet amount based on the prices and quantities given and will only use whatever amount is provided\nin the NetAmount. Optional.",
+            "items": {
+              "$ref": "#/components/schemas/CreateOrderItem"
+            },
+            "type": "array"
+          },
+          "referenceId": {
+            "description": "ReferenceID can be used to specify the merchant's own reference ID. Optional.\nNote that Beam does not guarantee idempotency based on this ID provided so multiple payment link\ncreation with the same refId is allowed.",
+            "example": "order#10001",
+            "maxLength": 100,
+            "type": "string"
+          }
+        },
+        "required": [
+          "currency",
+          "netAmount"
+        ],
+        "type": "object"
+      },
+      "PaymentLink": {
+        "description": "PaymentLink represents a payment link object with its settings.",
+        "properties": {
+          "collectDeliveryAddress": {
+            "description": "CollectDeliveryAddress is a setting to see if the checkout page will ask for\ndelivery address. False means the page will only ask for phone number.\nTrue means the page will ask for both phone number and delivery address.",
+            "type": "boolean"
+          },
+          "expiresAt": {
+            "description": "ExpiresAt is the timestamp where after this point in time the payment link\nwill expire and will not accept payment. Optional, with null value\nmeaning no expiry for the payment link.",
+            "example": "2025-04-08T03:58:28.343Z",
+            "type": "string"
+          },
+          "feeType": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FeeType"
+              }
+            ],
+            "description": "FeeType is the strategy of fee calculation for the payment link."
+          },
+          "linkSettings": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LinkSettings"
+              }
+            ],
+            "description": "LinkSettings is the settings of each payment method that is\nassociated with the payment link."
+          },
+          "merchantId": {
+            "description": "MerchantID is the identifier value of the merchant that owns this payment link",
+            "type": "string"
+          },
+          "order": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Order"
+              }
+            ],
+            "description": "Order is the detail of the order associated with the payment link."
+          },
+          "paymentLinkId": {
+            "description": "PaymentLinkID is the identifier value of the payment link",
+            "type": "string"
+          },
+          "redirectUrl": {
+            "description": "RedirectURL is the endpoint that the customer will be directed to after\npayment has succeeded.",
+            "example": "https://www.beamcheckout.com",
+            "type": "string"
+          },
+          "status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PaymentLinkStatus"
+              }
+            ],
+            "description": "Status is the status of the payment link."
+          },
+          "url": {
+            "description": "URL is the endpoint of the payment link, you can send this URL to your customer who wishes to make a payment.",
+            "example": "https://pay.beamcheckout.com/merchantId/paymentLinkId",
+            "type": "string"
+          }
+        },
+        "required": [
+          "feeType"
+        ],
+        "type": "object"
+      },
+      "PaymentLinkStatus": {
+        "enum": [
+          "ACTIVE",
+          "DISABLED",
+          "EXPIRED",
+          "PAID",
+          "VOIDED",
+          "REFUNDED"
+        ],
+        "type": "string",
+        "x-enum-varnames": [
+          "PaymentLinkStatusActive",
+          "PaymentLinkStatusDisabled",
+          "PaymentLinkStatusExpired",
+          "PaymentLinkStatusPaid",
+          "PaymentLinkStatusVoided",
+          "PaymentLinkStatusRefunded"
+        ]
+      },
+      "PaymentMethodRequest": {
+        "properties": {
+          "alipay": {
+            "$ref": "#/components/schemas/AlipayRequest"
+          },
+          "card": {
+            "$ref": "#/components/schemas/CardRequest"
+          },
+          "cardInstallments": {
+            "$ref": "#/components/schemas/CardInstallmentsRequest"
+          },
+          "cardToken": {
+            "$ref": "#/components/schemas/CardTokenRequest"
+          },
+          "cardTokenInstallments": {
+            "$ref": "#/components/schemas/CardTokenInstallmentsRequest"
+          },
+          "linePay": {
+            "$ref": "#/components/schemas/LinePayRequest"
+          },
+          "paymentMethodType": {
+            "$ref": "#/components/schemas/PaymentMethodType"
+          },
+          "qrPromptPay": {
+            "$ref": "#/components/schemas/QRPromptPayRequest"
+          },
+          "shopeePay": {
+            "$ref": "#/components/schemas/ShopeePayRequest"
+          },
+          "trueMoney": {
+            "$ref": "#/components/schemas/TrueMoneyRequest"
+          },
+          "weChatPay": {
+            "$ref": "#/components/schemas/WeChatPayRequest"
+          }
+        },
+        "type": "object"
+      },
+      "PaymentMethodResponse": {
+        "properties": {
+          "alipay": {
+            "$ref": "#/components/schemas/AlipayResponse"
+          },
+          "card": {
+            "$ref": "#/components/schemas/CardResponse"
+          },
+          "cardInstallments": {
+            "$ref": "#/components/schemas/CardInstallmentsResponse"
+          },
+          "linePay": {
+            "$ref": "#/components/schemas/LinePayResponse"
+          },
+          "paymentMethodType": {
+            "$ref": "#/components/schemas/PaymentMethodType"
+          },
+          "qrPromptPay": {
+            "$ref": "#/components/schemas/QRPromptPayResponse"
+          },
+          "shopeePay": {
+            "$ref": "#/components/schemas/ShopeePayResponse"
+          },
+          "trueMoney": {
+            "$ref": "#/components/schemas/TrueMoneyResponse"
+          },
+          "weChatPay": {
+            "$ref": "#/components/schemas/WeChatPayResponse"
+          }
+        },
+        "type": "object"
+      },
+      "PaymentMethodType": {
+        "enum": [
+          "CARD",
+          "CARD_INSTALLMENTS",
+          "CARD_TOKEN",
+          "CARD_TOKEN_INSTALLMENTS",
+          "QR_PROMPT_PAY",
+          "ALIPAY",
+          "WECHAT_PAY",
+          "TRUE_MONEY",
+          "LINE_PAY",
+          "SHOPEE_PAY"
+        ],
+        "type": "string",
+        "x-enum-varnames": [
+          "PaymentMethodTypeCard",
+          "PaymentMethodTypeCardInstallments",
+          "PaymentMethodTypeCardToken",
+          "PaymentMethodTypeCardTokenInstallments",
+          "PaymentMethodTypeQRPromptPay",
+          "PaymentMethodTypeAlipay",
+          "PaymentMethodTypeWeChatPay",
+          "PaymentMethodTypeTrueMoney",
+          "PaymentMethodTypeLinePay",
+          "PaymentMethodTypeShopeePay"
+        ]
+      },
+      "Phone": {
+        "properties": {
+          "countryCode": {
+            "type": "string"
+          },
+          "number": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "QRPromptPayLinkSettings": {
+        "description": "the link settings for the QR_PROMPTPAY payment method type.",
+        "properties": {
+          "isEnabled": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "QRPromptPayRequest": {
+        "description": "the request for QR_PROMPT_PAY payment method type.",
+        "properties": {
+          "expiresAt": {
+            "description": "ExpiresAt is the timestamp that the QR returned should expire by. Default is 30 minutes from creation time.",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "QRPromptPayResponse": {
+        "type": "object"
+      },
+      "Refund": {
+        "description": "This object represents a single attempt to refund from your Beam account.",
+        "properties": {
+          "amount": {
+            "type": "integer"
+          },
+          "chargeId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "failureCode": {
+            "$ref": "#/components/schemas/RefundFailureCode"
+          },
+          "merchantId": {
+            "type": "string"
+          },
+          "referenceId": {
+            "type": "string"
+          },
+          "refundId": {
+            "type": "string"
+          },
+          "refundReason": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RefundStatus"
+          },
+          "transactionTime": {
+            "description": "TransactionTime is the time when the Refund is recorded as SUCCEEDED or FAILED.",
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "RefundFailureCode": {
+        "description": "In the event that the RefundStatus is RefundStatusFailed, one of the following failure codes would be present. RefundFailureCodeFailed denotes generic failure due to processing, please retry with a new Refund.",
+        "enum": [
+          "RE_PROCESSING_FAILED"
+        ],
+        "type": "string",
+        "x-enum-varnames": [
+          "RefundFailureCodeFailed"
+        ]
+      },
+      "RefundStatus": {
+        "enum": [
+          "PENDING",
+          "SUCCEEDED",
+          "FAILED"
+        ],
+        "type": "string",
+        "x-enum-varnames": [
+          "RefundStatusPending",
+          "RefundStatusSucceeded",
+          "RefundStatusFailed"
+        ]
+      },
+      "ShopeePayRequest": {
+        "description": "the request for SHOPEE_PAY payment method type. currently, no child attributes are required.",
+        "type": "object"
+      },
+      "ShopeePayResponse": {
+        "type": "object"
+      },
+      "Transaction": {
+        "description": "The transaction object represents a succeeded Charge or Refund.",
+        "properties": {
+          "chargeSource": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ChargeSource"
+              }
+            ],
+            "description": "ChargeSource is the source of where the Charge was created from."
+          },
+          "createdAt": {
+            "description": "CreatedAt is the time when the transaction object was created.",
+            "type": "string"
+          },
+          "currency": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Currency"
+              }
+            ],
+            "description": "Currency is the currency of the transaction."
+          },
+          "feeAmount": {
+            "description": "FeeAmount is the total service fee for Beam in the smallest unit of the currency.\nFor example, for THB, this would be in satang (1 THB = 100 satang).",
+            "type": "integer"
+          },
+          "feeStrategy": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FeeStrategy"
+              }
+            ],
+            "description": "FeeStrategy is the strategy used to calculate the fee for the transaction."
+          },
+          "grossAmount": {
+            "description": "GrossAmount is the gross amount of the transaction (the amount paid before deducted by fees) in the smallest unit of the currency.\nFor example, for THB, this would be in satang (1 THB = 100 satang).",
+            "type": "integer"
+          },
+          "merchantId": {
+            "description": "MerchantID is the unique identifier for the merchant.",
+            "type": "string"
+          },
+          "netAmount": {
+            "description": "NetAmount is the total net amount in the smallest unit of the currency.\nCalculated as GrossAmount - FeeAmount - VATAmount = NetAmount.\nFor example, for THB, this would be in satang (1 THB = 100 satang).",
+            "type": "integer"
+          },
+          "referenceId": {
+            "description": "ReferenceID is the reference ID as provided by the merchant when creating charge or charge source.",
+            "type": "string"
+          },
+          "sourceId": {
+            "description": "SourceID is the unique identifier for the source of the transaction.\nHas no value for QR_PROMPT_PAY_LINK or API source.\nIs equal to merchantId for STORE_LINK source\nIs equal to the ID of the payment link for PAYMENT_LINK source.\nIs equal to the ID of the Bolt intent for BOLT source.",
+            "type": "string"
+          },
+          "transactionId": {
+            "description": "TransactionID is the unique identifier for the transaction.\nFor Payment transactions, this is the ID of the Charge associated.\nFor Refund or Void transactions, this is the ID of the Refund associated.",
+            "type": "string"
+          },
+          "transactionTime": {
+            "description": "TransactionTime is the time when the payment or refund is successfully processed.",
+            "type": "string"
+          },
+          "transactionType": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TransactionType"
+              }
+            ],
+            "description": "TransactionType is the type of transaction."
+          },
+          "vatAmount": {
+            "description": "VATAmount is the total 7% VAT amount in the smallest unit of the currency.\nFor example, for THB, this would be in satang (1 THB = 100 satang).",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "TransactionList": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/Transaction"
+            },
+            "type": "array"
+          },
+          "totalCount": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "TransactionType": {
+        "description": "The type of transaction. Classified as PAYMENT,VOID and REFUND.",
+        "enum": [
+          "PAYMENT",
+          "VOID",
+          "REFUND"
+        ],
+        "type": "string",
+        "x-enum-varnames": [
+          "TransactionTypePayment",
+          "TransactionTypeVoid",
+          "TransactionTypeRefund"
+        ]
+      },
+      "TrueMoneyRequest": {
+        "description": "the request for TRUE_MONEY payment method type. currently, no child attributes are required.",
+        "type": "object"
+      },
+      "TrueMoneyResponse": {
+        "type": "object"
+      },
+      "WeChatPayRequest": {
+        "description": "the request for WECHAT_PAY payment method type. currently, no child attributes are required.",
+        "type": "object"
+      },
+      "WeChatPayResponse": {
+        "type": "object"
+      },
+      "ErrorCode": {
+        "enum": [
+          "INVALID_JSON_ERROR",
+          "INVALID_XML_ERROR",
+          "API_VALIDATION_ERROR",
+          "INVALID_CREDENTIALS_ERROR",
+          "NO_PERMISSION_ERROR",
+          "NOT_FOUND_ERROR",
+          "IDEMPOTENCY_KEY_ERROR",
+          "MERCHANT_STATUS_INVALID_ERROR",
+          "REQUEST_CONFLICT_ERROR",
+          "TOO_MANY_REQUESTS_ERROR",
+          "OPERATION_NOT_ALLOWED_ERROR"
+        ],
+        "type": "string",
+        "x-enum-varnames": [
+          "ErrorCodeInvalidJSONError",
+          "ErrorCodeInvalidXMLError",
+          "ErrorCodeAPIValidationError",
+          "ErrorCodeInvalidCredentialsError",
+          "ErrorCodeNoPermissionError",
+          "ErrorCodeNotFoundError",
+          "ErrorCodeIdempotencyKeyError",
+          "ErrorCodeMerchantStatusInvalidError",
+          "ErrorCodeRequestConflictError",
+          "ErrorCodeTooManyRequestsError",
+          "ErrorCodeOperationNotAllowedError"
+        ]
+      },
+      "CreateCardTokenRequest": {
+        "description": "the request for card tokenization. The ID can be used to create a charge later.",
+        "properties": {
+          "cardHolderName": {
+            "type": "string"
+          },
+          "expiryMonth": {
+            "type": "integer"
+          },
+          "expiryYear": {
+            "type": "integer"
+          },
+          "pan": {
+            "example": "4111111111111111",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cardHolderName",
+          "expiryMonth",
+          "expiryYear",
+          "pan"
+        ],
+        "type": "object"
+      },
+      "CreateCardTokenResponse": {
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "APIErrorResponse": {
+        "properties": {
+          "errorCode": {
+            "$ref": "#/components/schemas/ErrorCode"
+          },
+          "errorMessage": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "APIResponse": {
+        "properties": {
+          "code": {
+            "description": "Code is the http status code",
+            "type": "integer"
+          },
+          "error": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/APIErrorResponse"
+              }
+            ],
+            "description": "Error is the object containing the details of the error, if any has occurred.\nThis object is expected if the Code is 4xx or 5xx."
+          },
+          "message": {
+            "description": "Message is the message to return in response body",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    }
+  }
+}

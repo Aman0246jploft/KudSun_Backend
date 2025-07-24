@@ -32,6 +32,13 @@ const publicRoutes = [
     `/api/v1/category/getSubCategoriesByCategoryId`,
     `/api/v1/appsetting/getVideo`,
     `/api/v1/user/loginAsGuest`,
+    `/api/v1/user/loginAsGuest`,
+
+    `/api/v1/order/paymentCallback`,
+
+    // `/api/v1/order/beam/initiate`,
+    `/api/v1/order/beam/webhook`,
+
 
 
     `/api/v1/user/requestResetOtpByEmail`,

@@ -1,5 +1,6 @@
 const express = require('express');
 const multer = require('multer');
+require('dotenv').config();
 const upload = multer();
 const router = express.Router();
 const moment = require("moment")
@@ -435,7 +436,444 @@ const trackOrderRevenue = async (order, feeMap, session) => {
 
 
 
-const paymentCallback = async (req, res) => {
+// Beam Payment Gateway Webhook Handler
+const beamPaymentWebhook = async (req, res) => {
+    try {
+        console.log("Beam Payment Webhook received:", req.body);
+
+        const { event, data } = req.body;
+
+        if (!event || !data) {
+            return res.status(400).json({ error: 'Invalid webhook payload' });
+        }
+
+        // Handle different Beam events
+        switch (event) {
+            case 'charge.succeeded':
+            case 'payment_link.paid':
+            case 'purchase.succeeded':
+                await handleBeamPaymentSuccess(data, req);
+                break;
+            case 'charge.failed':
+            case 'payment.failed':
+                await handleBeamPaymentFailure(data, req);
+                break;
+            default:
+                console.log(`Unhandled Beam event: ${event}`);
+        }
+
+        return res.status(200).json({ received: true });
+    } catch (error) {
+        console.error('Beam webhook error:', error);
+        return res.status(500).json({ error: 'Webhook processing failed' });
+    }
+};
+
+const handleBeamPaymentSuccess = async (paymentData, req) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        // Extract order information from payment data according to Beam API structure
+        // The order ID should be in the referenceId field as per OpenAPI spec
+        const orderId = paymentData.referenceId ||
+            paymentData.order?.referenceId ||
+            paymentData.metadata?.orderId ||
+            paymentData.order_id ||
+            paymentData.reference;
+        const paymentId = paymentData.chargeId ||
+            paymentData.id ||
+            paymentData.payment_id ||
+            paymentData.transaction_id;
+        const amount = paymentData.amount || paymentData.total;
+
+        if (!orderId) {
+            throw new Error('Order ID not found in payment data');
+        }
+
+        const order = await Order.findOne({ _id: orderId })
+            .populate('userId')
+            .populate('sellerId')
+            .session(session);
+
+        if (!order) {
+            throw new Error(`Order not found: ${orderId}`);
+        }
+
+        if (order.paymentStatus === PAYMENT_STATUS.COMPLETED) {
+            console.log(`Payment already completed for order: ${orderId}`);
+            await session.abortTransaction();
+            return;
+        }
+
+        // Update order payment info
+        order.paymentStatus = PAYMENT_STATUS.COMPLETED;
+        order.paymentId = paymentId;
+        order.paymentGateway = 'beam';
+
+        await order.save({ session });
+
+        // Create or get chat room between buyer and seller
+        const { room } = await findOrCreateOneOnOneRoom(order.userId, order.sellerId);
+
+        // Create system message for payment success
+        const systemMessage = new ChatMessage({
+            chatRoom: room._id,
+            messageType: 'PAYMENT_STATUS',
+            systemMeta: {
+                statusType: 'PAYMENT',
+                status: PAYMENT_STATUS.COMPLETED,
+                orderId: order._id,
+                productId: order.items[0].productId,
+                title: 'Payment Completed',
+                meta: createStandardizedChatMeta({
+                    orderNumber: order._id.toString(),
+                    totalAmount: order.grandTotal,
+                    amount: `$${(order.grandTotal || 0).toFixed(2)}`,
+                    itemCount: order.items.length,
+                    paymentId: paymentId,
+                    paymentMethod: 'Beam Payment',
+                    sellerId: order.sellerId,
+                    buyerId: order.userId,
+                    orderStatus: order.status,
+                    paymentStatus: PAYMENT_STATUS.COMPLETED
+                }),
+                actions: [
+                    {
+                        label: "View Order",
+                        url: `/order/${order._id}`,
+                        type: "primary"
+                    }
+                ],
+                theme: 'success'
+            }
+        });
+
+        await systemMessage.save({ session });
+
+        // Update chat room's last message
+        await ChatRoom.findByIdAndUpdate(
+            room._id,
+            {
+                lastMessage: systemMessage._id,
+                updatedAt: new Date()
+            },
+            { session }
+        );
+
+        await updateOrderRevenue(order, PAYMENT_STATUS.COMPLETED, session);
+        await session.commitTransaction();
+
+        // Post-transaction operations
+        await Transaction.create({
+            orderId: order._id,
+            userId: order.userId,
+            amount: order.grandTotal,
+            paymentMethod: 'beam',
+            paymentStatus: PAYMENT_STATUS.COMPLETED,
+            paymentGatewayId: paymentId
+        });
+
+        const io = req.app.get('io');
+        await emitSystemMessage(io, systemMessage, room, order.userId, order.sellerId);
+
+        // Send shipping pending message if needed
+        const populatedOrder = await Order.findById(order._id)
+            .populate('items.productId', 'deliveryType title');
+
+        const hasShippingProducts = populatedOrder.items.some(
+            item => item.productId?.deliveryType !== 'local pickup'
+        );
+
+        if (hasShippingProducts) {
+            const shippingPendingMessage = new ChatMessage({
+                chatRoom: room._id,
+                messageType: 'ORDER_STATUS',
+                systemMeta: {
+                    statusType: 'SHIPPING',
+                    status: 'PENDING',
+                    orderId: order._id,
+                    productId: order.items[0].productId,
+                    title: 'Shipping Pending',
+                    meta: createStandardizedChatMeta({
+                        orderNumber: order._id.toString(),
+                        totalAmount: order.grandTotal,
+                        amount: order.grandTotal,
+                        itemCount: order.items.length,
+                        sellerId: order.sellerId,
+                        buyerId: order.userId,
+                        orderStatus: order.status,
+                        paymentStatus: order.paymentStatus,
+                        paymentMethod: 'beam'
+                    }),
+                    actions: [
+                        {
+                            label: "View Order",
+                            url: `/order/${order._id}`,
+                            type: "primary"
+                        }
+                    ],
+                    theme: 'info',
+                    content: 'Shipping is pending. The seller will ship your items soon.'
+                }
+            });
+
+            await shippingPendingMessage.save();
+            await ChatRoom.findByIdAndUpdate(
+                room._id,
+                {
+                    lastMessage: shippingPendingMessage._id,
+                    updatedAt: new Date()
+                }
+            );
+            await emitSystemMessage(io, shippingPendingMessage, room, order.userId, order.sellerId);
+        }
+
+    } catch (error) {
+        await session.abortTransaction();
+        console.error('Beam payment success handler error:', error);
+        throw error;
+    } finally {
+        session.endSession();
+    }
+};
+
+const handleBeamPaymentFailure = async (paymentData, req) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        // Extract order information from payment data according to Beam API structure
+        const orderId = paymentData.referenceId ||
+            paymentData.order?.referenceId ||
+            paymentData.metadata?.orderId ||
+            paymentData.order_id ||
+            paymentData.reference;
+        const paymentId = paymentData.chargeId ||
+            paymentData.id ||
+            paymentData.payment_id ||
+            paymentData.transaction_id;
+        const failureReason = paymentData.failureCode ||
+            paymentData.failure_reason ||
+            paymentData.error_message ||
+            'Payment failed';
+
+        if (!orderId) {
+            throw new Error('Order ID not found in payment data');
+        }
+
+        const order = await Order.findOne({ _id: orderId })
+            .populate('userId')
+            .populate('sellerId')
+            .session(session);
+
+        if (!order) {
+            throw new Error(`Order not found: ${orderId}`);
+        }
+
+        // Update order payment info
+        order.paymentStatus = PAYMENT_STATUS.FAILED;
+        order.status = ORDER_STATUS.FAILED;
+        order.paymentId = paymentId;
+
+        await order.save({ session });
+
+        // Create system message for payment failure
+        const { room } = await findOrCreateOneOnOneRoom(order.userId, order.sellerId);
+        const systemMessage = new ChatMessage({
+            chatRoom: room._id,
+            messageType: 'PAYMENT_STATUS',
+            systemMeta: {
+                statusType: 'PAYMENT',
+                status: PAYMENT_STATUS.FAILED,
+                orderId: order._id,
+                productId: order.items[0].productId,
+                title: 'Payment Failed',
+                meta: createStandardizedChatMeta({
+                    orderNumber: order._id.toString(),
+                    totalAmount: order.grandTotal,
+                    failureReason: failureReason,
+                    sellerId: order.sellerId,
+                    buyerId: order.userId
+                }),
+                actions: [
+                    {
+                        label: "Try Payment Again",
+                        url: `/payment/retry/${order._id}`,
+                        type: "primary"
+                    }
+                ],
+                theme: 'error'
+            }
+        });
+
+        await systemMessage.save({ session });
+        await ChatRoom.findByIdAndUpdate(
+            room._id,
+            { lastMessage: systemMessage._id, updatedAt: new Date() },
+            { session }
+        );
+
+        await updateOrderRevenue(order, PAYMENT_STATUS.FAILED, session);
+        await session.commitTransaction();
+
+        const io = req.app.get('io');
+        await emitSystemMessage(io, systemMessage, room, order.userId, order.sellerId);
+
+    } catch (error) {
+        await session.abortTransaction();
+        console.error('Beam payment failure handler error:', error);
+        throw error;
+    } finally {
+        session.endSession();
+    }
+};
+
+
+
+// Initialize Beam Payment
+const initiateBeamPayment = async (req, res) => {
+    try {
+        const { orderId } = req.body;
+        const userId = req.user.userId;
+
+        const order = await Order.findOne({
+            _id: orderId,
+            userId: userId,
+            paymentStatus: PAYMENT_STATUS.PENDING
+        });
+
+        console.log("Order found:", order);
+
+        if (!order) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Order not found or already paid");
+        }
+
+        // Prepare payment data according to Beam API OpenAPI specification
+        const paymentData = {
+            order: {
+                currency: 'THB', // Required field
+                netAmount: Math.round(order.grandTotal * 100), // Convert to smallest currency unit (satang)
+                referenceId: order._id.toString(), // Move to order object
+                description: `Order payment for ${order._id}`, // Optional description
+            },
+            redirectUrl: `${process.env.BASE_URL}/payment/beam/callback?orderId=${order._id}`,
+            expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // 1 hour expiry
+            collectDeliveryAddress: false,
+            feeType: 'TRANSACTION_FEE',
+            linkSettings: {
+                qrPromptPay: { isEnabled: true },
+                // card: { isEnabled: true },
+                // mobileBanking: { isEnabled: true },
+                // trueMoney: { isEnabled: true }
+
+            }
+        };
+
+        console.log('Sending payment data:', JSON.stringify(paymentData, null, 2));
+
+        const beamResponse = await createBeamPaymentLink(paymentData);
+
+        if (beamResponse.success) {
+            return apiSuccessRes(HTTP_STATUS.OK, res, "Payment link created successfully", {
+                paymentUrl: beamResponse.url,
+                paymentId: beamResponse.id,
+                orderId: order._id
+            });
+        } else {
+            console.error('Beam payment error:', beamResponse.error, beamResponse.details);
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Failed to create payment link", beamResponse.details);
+        }
+
+    } catch (error) {
+        console.error("Beam payment initiation error:", error);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to initiate payment");
+    }
+};
+
+const createBeamPaymentLink = async (paymentData) => {
+
+    try {
+        const merchantId = process.env.BEAM_MERCHANT_ID?.trim();
+        const apiKey = process.env.BEAM_API_KEY?.trim();
+
+        if (!merchantId || !apiKey) {
+            throw new Error('Missing BEAM_MERCHANT_ID or BEAM_API_KEY in environment variables');
+        }
+
+        if (apiKey.length < 20) {
+            throw new Error('BEAM_API_KEY appears too short – check your API key');
+        }
+
+        if (!paymentData.order || !paymentData.order.currency || !paymentData.order.netAmount) {
+            throw new Error('Invalid payment data: missing required order fields');
+        }
+
+
+        const apiUrl =
+            //   'https://playground.api.beamcheckout.com/api/v1/payment-links'
+            'https://api.beamcheckout.com/api/v1/payment-links'
+
+
+
+        const idempotencyKey = `order_${paymentData.order.referenceId}_${Date.now()}`;
+
+        const headers = {
+            'Authorization': 'Basic ' + Buffer.from(`${merchantId}:${apiKey}`).toString('base64'),
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'User-Agent': 'Kudsun-Platform/1.0',
+            'x-beam-idempotency-key': idempotencyKey
+        };
+
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(paymentData)
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            let errorMessage = data?.error?.errorMessage || data?.message || `HTTP ${response.status}: ${response.statusText}`;
+
+            return {
+                success: false,
+                error: errorMessage,
+                details: data,
+                statusCode: response.status
+            };
+        }
+
+        return {
+            success: true,
+            url: data.url,
+            id: data.id
+        };
+    } catch (error) {
+        console.error('Beam API connection error:', error);
+        return {
+            success: false,
+            error: error.message || 'API connection failed'
+        };
+    }
+};
+
+
+
+
+
+
+
+
+// Update the existing paymentCallback to handle Beam webhooks
+const originalPaymentCallback = async (req, res) => {
+    // Check if this is a Beam webhook
+    if (req.body.event && req.body.data) {
+        return beamPaymentWebhook(req, res);
+    }
+
+    // Existing payment callback logic for other gateways
     const schema = Joi.object({
         orderId: Joi.string().required(),
         paymentStatus: Joi.string().valid(PAYMENT_STATUS.COMPLETED, PAYMENT_STATUS.FAILED).required(),
@@ -448,7 +886,6 @@ const paymentCallback = async (req, res) => {
     if (error) {
         return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, error.details[0].message);
     }
-
 
     console.log("value", value)
 
@@ -3865,7 +4302,11 @@ const getSellerPayoutCalculation = async (req, res) => {
 router.post('/previewOrder', perApiLimiter(), upload.none(), previewOrder);
 router.post('/placeOrder', perApiLimiter(), upload.none(), createOrder);
 
-router.post('/paymentCallback', upload.none(), paymentCallback);
+// Beam Payment Routes
+router.post('/beam/initiate', perApiLimiter(), upload.none(), initiateBeamPayment);
+router.post('/beam/webhook', upload.none(), beamPaymentWebhook);
+///////////////////////////
+router.post('/paymentCallback', upload.none(), originalPaymentCallback);
 
 router.post('/updateOrderStatusBySeller/:orderId', perApiLimiter(), upload.none(), updateOrderStatusBySeller);
 

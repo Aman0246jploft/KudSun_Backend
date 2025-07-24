@@ -18,6 +18,7 @@
   "dependencies": {
     "apple-signin-auth": "^2.0.0",
     "axios": "^1.9.0",
+    "base-64": "^1.0.0",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.2",
     "bull": "^4.16.5",

@@ -2958,7 +2958,7 @@ const getProductsWithDraft = async (req, res) => {
 
             // Sorting
             sortBy = 'createdAt',
-            sortOrder = 'desc',
+            orderBy = 'desc',
 
             // Pagination
             pageNo: page = 1,
@@ -2967,7 +2967,11 @@ const getProductsWithDraft = async (req, res) => {
         const isDraftMode = isDraft === 'true' || isDraft === true;
 
         const Model = isDraftMode ? SellProductDraft : SellProduct;
-
+        const allowedSortFields = ['createdAt', 'fixedPrice', "commentCount", 'viewCount'];
+        const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
+        const sortOrder = orderBy.toLowerCase() === 'desc' ? -1 : 1;
+        const sortOptions = {};
+        sortOptions[sortField] = sortOrder;
 
         // Build filter object
         const filter = {
@@ -3028,10 +3032,6 @@ const getProductsWithDraft = async (req, res) => {
             filter['auctionSettings.isBiddingOpen'] = isAuctionOpen === 'true';
         }
 
-        // Build sort object
-        const sort = {};
-        sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
-
         // Calculate skip value for pagination
         const skip = (parseInt(page) - 1) * parseInt(limit);
 
@@ -3049,7 +3049,7 @@ const getProductsWithDraft = async (req, res) => {
             })
             .populate('categoryId', 'name')
             .populate('subCategoryId', 'name')
-            .sort(sort)
+            .sort(sortOptions)
             .skip(skip)
             .limit(parseInt(limit))
             .lean();
