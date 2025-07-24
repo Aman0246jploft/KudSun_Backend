@@ -2991,10 +2991,10 @@ const getProductsWithDraft = async (req, res) => {
 
         // Category Filters
         if (categoryId) {
-            filter.categoryId = mongoose.Types.ObjectId(categoryId);
+            filter.categoryId =new mongoose.Types.ObjectId(categoryId);
         }
         if (subCategoryId) {
-            filter.subCategoryId = mongoose.Types.ObjectId(subCategoryId);
+            filter.subCategoryId =new mongoose.Types.ObjectId(subCategoryId);
         }
 
         // Price Range
@@ -3024,7 +3024,7 @@ const getProductsWithDraft = async (req, res) => {
 
         // Seller ID
         if (sellerId) {
-            filter.userId = mongoose.Types.ObjectId(sellerId);
+            filter.userId = new mongoose.Types.ObjectId(sellerId);
         }
 
         // Auction Status
