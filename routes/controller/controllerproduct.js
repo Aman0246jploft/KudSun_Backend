@@ -2023,7 +2023,24 @@ const fetchUserProducts = async (req, res) => {
             saleType = 'fixed',
             sortBy = 'createdAt',
             orderBy = 'desc',
+            categoryId,
+            subCategoryId,
+            condition,
+            minPrice,   // NEW
+            maxPrice,    // NEW
+            tags,
+            specifics,
+            keyWord,
         } = req.query;
+
+
+        const allowedSortFields = ['auctionSettings.biddingEndsAt', 'createdAt', "viewCount", "fixedPrice"];
+        const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
+        const sortOrder = orderBy.toLowerCase() === 'desc' ? -1 : 1;
+        const sortOptions = {};
+        sortOptions[sortField] = sortOrder;
+
+
 
         const page = parseInt(pageNo);
         const limit = parseInt(size);
@@ -2044,18 +2061,82 @@ const fetchUserProducts = async (req, res) => {
         if (userId) {
             filter.userId = toObjectId(userId);
         }
+        if (condition && condition !== "") {
+            filter.condition = condition;
+        }
+
+        if (categoryId && categoryId !== "") {
+            filter.categoryId = toObjectId(categoryId);
+        }
+
+        if (subCategoryId && subCategoryId !== "") {
+            filter.subCategoryId = toObjectId(subCategoryId);
+        }
+
 
         if (isSelfProfile) {
             filter.isDeleted = false;
             filter.isDisable = false;
         }
 
-        let sortConfig = {};
-        if (sortBy === 'fixedPrice') {
-            sortConfig = { fixedPrice: orderBy === 'desc' ? -1 : 1 };
-        } else {
-            sortConfig = { createdAt: orderBy === 'desc' ? -1 : 1 };
+        // Price range filter:
+        const hasMinPrice = minPrice !== null && minPrice !== undefined && minPrice !== "";
+        const hasMaxPrice = maxPrice !== null && maxPrice !== undefined && maxPrice !== "";
+
+        if (hasMinPrice && hasMaxPrice) {
+            filter.fixedPrice = {
+                $gte: parseFloat(minPrice),
+                $lte: parseFloat(maxPrice),
+            };
+        } else if (hasMinPrice) {
+            filter.fixedPrice = {
+                $gte: parseFloat(minPrice),
+            };
+        } else if (hasMaxPrice) {
+            filter.fixedPrice = {
+                $lte: parseFloat(maxPrice),
+            };
         }
+
+
+        if (req.query.provinceId || req.query.districtId || req.query.averageRatting) {
+            const userFilter = {
+                isDeleted: false,
+            };
+
+            if (req.query.provinceId) {
+                userFilter.provinceId = toObjectId(req.query.provinceId);
+            }
+
+            if (req.query.districtId) {
+                userFilter.districtId = toObjectId(req.query.districtId);
+            }
+
+            if (req.query.averageRatting) {
+                const avgRating = parseFloat(req.query.averageRatting);
+                if (!isNaN(avgRating)) {
+                    userFilter.averageRatting = { $gte: avgRating };
+                }
+            }
+
+            const matchedUsers = await User.find(userFilter).select("_id").lean();
+            const matchedUserIds = matchedUsers.map(user => user._id);
+
+            // Apply user filter if any users matched
+            if (matchedUserIds.length > 0) {
+                filter.userId = { $in: matchedUserIds };
+            } else {
+                // If no users match, return empty
+                return apiSuccessRes(HTTP_STATUS.OK, res, "Auction products fetched successfully", {
+                    pageNo: page,
+                    size: limit,
+                    total: 0,
+                    products: []
+                });
+            }
+        }
+
+
 
         // Fetch products and total count
         const [products, total] = await Promise.all([
@@ -2073,7 +2154,7 @@ const fetchUserProducts = async (req, res) => {
                     createdAt
                     isSold
                 `)
-                .sort(sortConfig)
+                .sort(sortOptions)
                 .skip(skip)
                 .limit(limit)
                 .lean(),
