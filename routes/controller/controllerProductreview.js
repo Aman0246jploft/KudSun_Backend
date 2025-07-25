@@ -421,7 +421,7 @@ const getReviewsAboutUser = async (req, res) => {
             })
             .populate({
                 path: 'userId',
-                select: 'userName profileImage provinceId districtId  isLive is_Id_verified is_Verified_Seller averageRatting',
+                select: 'userName profileImage provinceId districtId  isLive is_Id_verified is_Verified_Seller is_Preferred_seller averageRatting',
                 populate: [
                     { path: 'provinceId', select: 'value' },
                     { path: 'districtId', select: 'value' }
@@ -739,7 +739,7 @@ const getProductReviews = async (req, res) => {
             .limit(size)
             .populate({
                 path: 'userId',
-                select: 'userName profileImage provinceId districtId isLive is_Id_verified is_Verified_Seller averageRatting averageBuyerRatting totalRatingCount totalBuyerRatingCount',
+                select: 'userName profileImage provinceId districtId isLive is_Id_verified is_Verified_Seller is_Preferred_seller averageRatting averageBuyerRatting totalRatingCount totalBuyerRatingCount',
                 populate: [
                     { path: 'provinceId', select: 'value' },
                     { path: 'districtId', select: 'value' }
@@ -747,7 +747,7 @@ const getProductReviews = async (req, res) => {
             })
             .populate({
                 path: 'otheruserId',
-                select: 'userName profileImage provinceId districtId isLive is_Id_verified is_Verified_Seller averageRatting averageBuyerRatting',
+                select: 'userName profileImage provinceId districtId isLive is_Id_verified is_Verified_Seller is_Preferred_seller averageRatting averageBuyerRatting',
                 populate: [
                     { path: 'provinceId', select: 'value' },
                     { path: 'districtId', select: 'value' }

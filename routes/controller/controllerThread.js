@@ -477,7 +477,7 @@ const associatedProductByThreadId = async (req, res) => {
 
         // Step 2: Fetch products with user info
         const products = await SellProduct.find({ _id: { $in: paginatedIds } })
-            .populate({ path: 'userId', select: 'userName email is_Verified_Seller  profileImage isLive is_Id_verified' }) // user info
+            .populate({ path: 'userId', select: 'userName email is_Verified_Seller is_Preferred_seller  profileImage isLive is_Id_verified' }) // user info
             .sort({ [sortBy]: sortOrder })
             .lean();
 

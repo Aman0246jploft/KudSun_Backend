@@ -1910,6 +1910,7 @@ const userList = async (req, res) => {
                 isDisable: 1,
                 is_Verified_Seller: 1,
                 is_Id_verified: 1,
+                is_Preferred_seller:1,
                 createdAt: 1,
                 sellerVerificationStatus: 1,
                 sellerVerification: 1,
