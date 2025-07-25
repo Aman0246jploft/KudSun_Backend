@@ -328,7 +328,7 @@ const updateAllThreadTrending = async (req, res) => {
     try {
         const { updateAllThreadTrendingStatus } = require('../services/serviceThreadTrending');
         const result = await updateAllThreadTrendingStatus();
-        
+
         return apiSuccessRes(HTTP_STATUS.OK, res, "Thread trending status updated successfully", result);
     } catch (error) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
@@ -678,7 +678,7 @@ const getThreads = async (req, res) => {
         } = req.query;
 
 
-        const allowedSortFields = ['createdAt', 'commentCount','viewCount'];
+        const allowedSortFields = ['createdAt', 'commentCount', 'viewCount'];
         const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
         const sortOrder = orderBy.toLowerCase() === 'desc' ? -1 : 1;
         const sortOptions = {};
@@ -921,7 +921,7 @@ const getThreadById = async (req, res) => {
 
         // Increment view count
         await Thread.findByIdAndUpdate(threadId, { $inc: { viewCount: 1 } });
-        
+
         // Trigger trending update job
         const { addThreadTrendingUpdateJob } = require('../services/serviceThreadTrending');
         addThreadTrendingUpdateJob(threadId);
@@ -1068,6 +1068,7 @@ const getThreadById = async (req, res) => {
                         description: 1,
                         fixedPrice: 1,
                         isSold: 1,
+                        auctionSettings: 1,
                         productImages: 1
                     },
                     author: {
@@ -1088,7 +1089,9 @@ const getThreadById = async (req, res) => {
                             description: 1,
                             fixedPrice: 1,
                             isSold: 1,
-                            productImages: 1
+                            productImages: 1,
+                            auctionSettings: 1,
+
                         },
                         author: {
                             _id: 1,
@@ -1183,6 +1186,7 @@ const getThreadById = async (req, res) => {
                     totalBids: 1,
                     photo: 1,
                     productImages: 1,
+                    auctionSettings:1,
                     seller: {
                         _id: 1,
                         userName: 1,
