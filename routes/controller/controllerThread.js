@@ -9,7 +9,7 @@ const HTTP_STATUS = require('../../utils/statusCode');
 const { uploadImageCloudinary } = require('../../utils/cloudinary');
 const CONSTANTS_MSG = require('../../utils/constantsMessage');
 const { default: mongoose } = require('mongoose');
-const { SALE_TYPE, roleId } = require('../../utils/Role');
+const { SALE_TYPE, roleId, DeliveryType } = require('../../utils/Role');
 // Import Algolia service
 const { indexThread, deleteThreads } = require('../services/serviceAlgolia');
 
@@ -457,42 +457,110 @@ const addComment = async (req, res) => {
 
 const associatedProductByThreadId = async (req, res) => {
     try {
-        const { threadId } = req.params;
+        const {
+            threadId,
+        } = req.params;
+        const {
+            categoryId,
+            subCategoryId,
+            condition,
+            provinceId,
+            districtId,
+            averageRatting,
+            deliveryFilter,
+
+            keyWord
+        } = req.query
+
         const pageNo = parseInt(req.query.pageNo) || 1;
         const size = parseInt(req.query.size) || 10;
         const sortBy = req.query.sortBy || 'createdAt';
-        const sortOrder = req.query.sortOrder === 'asc' ? 1 : -1;
+        const sortOrder = req.query.orderBy === 'asc' ? 1 : -1;
 
         if (!threadId || threadId.length !== 24) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Invalid thread ID');
         }
 
-        // Step 1: Find all associated product IDs from comments
-        const comments = await ThreadComment.find({ thread: toObjectId(threadId) }).select('associatedProducts').lean();
+        // Step 1: Get associated product IDs from thread comments
+        const comments = await ThreadComment.find({ thread: toObjectId(threadId) })
+            .select('associatedProducts')
+            .lean();
+
         const productIds = comments.flatMap(c => c.associatedProducts).filter(Boolean);
         const uniqueProductIds = [...new Set(productIds.map(id => id.toString()))];
 
-        const total = uniqueProductIds.length;
-        const paginatedIds = uniqueProductIds.slice((pageNo - 1) * size, pageNo * size);
+        // Step 2: Build filter for products
+        // Step 2: Build filter for products
+        const filter = { _id: { $in: uniqueProductIds.map(toObjectId) } };
 
-        // Step 2: Fetch products with user info
-        const products = await SellProduct.find({ _id: { $in: paginatedIds } })
-            .populate({ path: 'userId', select: 'userName email is_Verified_Seller is_Preferred_seller  profileImage isLive is_Id_verified' }) // user info
+        // Step 2.1: Apply direct product filters
+        if (categoryId && categoryId.length === 24) filter.categoryId = toObjectId(categoryId);
+        if (subCategoryId && subCategoryId.length === 24) filter.subCategoryId = toObjectId(subCategoryId);
+        if (condition && condition !== "") filter.condition = condition;
+        if (keyWord?.trim()) {
+            filter.title = { $regex: keyWord.trim(), $options: 'i' };
+        }
+        if (deliveryFilter === "free") {
+            filter.deliveryType = { $in: [DeliveryType.FREE_SHIPPING, DeliveryType.LOCAL_PICKUP] };
+        } else if (deliveryFilter === "charged") {
+            filter.deliveryType = DeliveryType.CHARGE_SHIPPING;
+        }
+
+        // Step 2.2: Apply user-based filters
+        let userFilter = {};
+
+        if (provinceId && provinceId.length === 24) userFilter.provinceId = toObjectId(provinceId);
+        if (districtId && districtId.length === 24) userFilter.districtId = toObjectId(districtId);
+        if (averageRatting) userFilter.averageRatting = { $gte: parseFloat(averageRatting) };
+
+        let filteredUserIds = [];
+
+        if (Object.keys(userFilter).length > 0) {
+            const users = await User.find(userFilter).select('_id').lean();
+            filteredUserIds = users.map(u => u._id.toString());
+
+            // If no users match, prevent product match
+            if (filteredUserIds.length === 0) {
+                return apiSuccessRes(HTTP_STATUS.OK, res, 'No matching products found', {
+                    total: 0,
+                    size,
+                    products: []
+                });
+            }
+
+            filter.userId = { $in: filteredUserIds.map(toObjectId) };
+        }
+
+
+        console.log("filter", filter)
+
+
+        // Step 3: Count total products after filter
+        const total = await SellProduct.countDocuments(filter);
+
+        // Step 4: Fetch paginated, sorted products with user info
+        const products = await SellProduct.find(filter)
+            .populate({
+                path: 'userId',
+                select: 'userName email is_Verified_Seller is_Preferred_seller profileImage isLive is_Id_verified'
+            })
             .sort({ [sortBy]: sortOrder })
+            .skip((pageNo - 1) * size)
+            .limit(size)
             .lean();
 
-        // Step 3: Add bid count if product is auction
+        // Step 5: Append bid count if auction type
         const productWithBidInfo = await Promise.all(products.map(async (product) => {
             let bidCount = 0;
             if (product.saleType === SALE_TYPE.AUCTION) {
-                bidCount = await Bid.countDocuments({ productId: toObjectId(product?._id) });
+                bidCount = await Bid.countDocuments({ productId: toObjectId(product._id) });
             }
 
             return {
                 ...product,
                 bidCount,
-                user: product.userId, // keep userInfo under `user` key
-                userId: undefined // remove raw userId
+                user: product.userId,
+                userId: undefined
             };
         }));
 
@@ -523,7 +591,7 @@ const getThreadComments = async (req, res) => {
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit)
-            .populate('author', 'userName profileImage')
+            .populate('author', 'userName profileImage isLive is_Id_verified is_Preferred_seller averageRatting')
             .populate('associatedProducts')
             .lean();
 
@@ -545,7 +613,7 @@ const getThreadComments = async (req, res) => {
         // Fetch all replies for these top-level comments
         const replies = await ThreadComment.find({ parent: { $in: commentIds } })
             .sort({ createdAt: 1 })
-            .populate('author', 'userName profileImage isLive')
+            .populate('author', 'userName profileImage isLive is_Id_verified is_Preferred_seller averageRatting')
             .populate('associatedProducts')
             .lean();
 
