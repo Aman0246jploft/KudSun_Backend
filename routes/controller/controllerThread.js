@@ -2016,9 +2016,4 @@ router.get('/getThreadComments/:threadId', perApiLimiter(), getThreadComments);
 router.get('/getCommentByParentId/:parentId', perApiLimiter(), upload.none(), getCommentByParentId);
 
 
-
-
-
-
-
 module.exports = router;
