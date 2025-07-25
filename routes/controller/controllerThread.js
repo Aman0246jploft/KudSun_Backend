@@ -1186,7 +1186,7 @@ const getThreadById = async (req, res) => {
                     totalBids: 1,
                     photo: 1,
                     productImages: 1,
-                    auctionSettings:1,
+                    auctionSettings: 1,
                     seller: {
                         _id: 1,
                         userName: 1,
