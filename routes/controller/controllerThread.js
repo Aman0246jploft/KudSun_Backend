@@ -531,10 +531,6 @@ const associatedProductByThreadId = async (req, res) => {
             filter.userId = { $in: filteredUserIds.map(toObjectId) };
         }
 
-
-        console.log("filter", filter)
-
-
         // Step 3: Count total products after filter
         const total = await SellProduct.countDocuments(filter);
 
