@@ -13,8 +13,10 @@ const sellerWithdrawlSchema = new Schema({
     withdrawfeeType: {
         type: String
     },
-
-    status: { type: String, enum: ['pending', 'Approved', "Rejected"], default: "pending" }
+    status: { type: String, enum: ['pending', 'Approved', "Rejected"], default: "pending" },
+    adminNotes: { type: String, maxlength: 500 },
+    processedAt: { type: Date },
+    notes: { type: String, maxlength: 500 } // For user notes/comments
 }, {
     timestamps: true
 });

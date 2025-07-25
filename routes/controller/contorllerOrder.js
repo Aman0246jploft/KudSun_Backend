@@ -3203,7 +3203,7 @@ const addrequest = async (req, res) => {
             }
 
             user.walletBalance -= totalDeduction; WalletTnx
-            user.FreezWalletBalance += amount;
+            user.FreezWalletBalance += Number(amount);
             await user.save({ session });
 
             const newRequest = new SellerWithdrawl({
@@ -3286,7 +3286,21 @@ const trackWithdrawalRevenue = async (withdrawalRequest, withdrawalFee, session)
 const changeStatus = async (req, res) => {
     const session = await mongoose.startSession();
     try {
-        const { withdrawRequestId, status } = req.body;
+        const { withdrawRequestId, status, notes } = req.body;
+
+        // Input validation
+        if (!withdrawRequestId || !status) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "withdrawRequestId and status are required");
+        }
+
+        if (!['Approved', 'Rejected'].includes(status)) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid status. Must be 'Approved' or 'Rejected'");
+        }
+
+        if (notes && notes.length > 500) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Notes cannot exceed 500 characters");
+        }
+
         await session.withTransaction(async () => {
             const withdrawRequest = await SellerWithdrawl.findById(withdrawRequestId).session(session);
             if (!withdrawRequest) {
@@ -3302,23 +3316,27 @@ const changeStatus = async (req, res) => {
             }
 
             if (status === 'Approved') {
-                user.FreezWalletBalance -= withdrawRequest.amount;
+                user.FreezWalletBalance -= Number(withdrawRequest.amount);
             } else if (status === 'Rejected') {
                 let calculatedFee = 0;
                 if (withdrawRequest.withdrawfeeType === PRICING_TYPE.PERCENTAGE) {
-                    calculatedFee = (withdrawRequest.amount * withdrawRequest.withdrawfee) / 100;
+                    calculatedFee = (Number(withdrawRequest.amount) * Number(withdrawRequest.withdrawfee)) / 100;
                 } else if (withdrawRequest.withdrawfeeType === PRICING_TYPE.FIXED) {
-                    calculatedFee = withdrawRequest.withdrawfee;
+                    calculatedFee = Number(withdrawRequest.withdrawfee);
                 }
 
                 const totalRefund = Number(withdrawRequest.amount) + Number(calculatedFee);
-                user.FreezWalletBalance -= withdrawRequest.amount;
+                user.FreezWalletBalance -= Number(withdrawRequest.amount);
                 user.walletBalance += totalRefund;
             }
 
             await user.save({ session });
 
             withdrawRequest.status = status;
+            if (notes) {
+                withdrawRequest.adminNotes = notes.trim();
+            }
+            withdrawRequest.processedAt = new Date();
             await withdrawRequest.save({ session });
 
             await WalletTnx.findOneAndUpdate(
@@ -3349,9 +3367,9 @@ const changeStatus = async (req, res) => {
                 message: notificationMessage,
                 meta: createStandardizedNotificationMeta({
                     withdrawalId: withdrawRequest._id.toString(),
-                    amount: withdrawRequest.amount,
-                    withdrawalAmount: withdrawRequest.amount,
-                    withdrawalFee: withdrawRequest.withdrawfee,
+                    amount: Number(withdrawRequest.amount),
+                    withdrawalAmount: Number(withdrawRequest.amount),
+                    withdrawalFee: Number(withdrawRequest.withdrawfee),
                     status: status,
                     newStatus: status,
                     oldStatus: 'pending',
@@ -3420,8 +3438,8 @@ const getWithdrawalInfo = async (req, res) => {
             : null;
 
         return apiSuccessRes(200, res, "Withdrawal info fetched successfully", {
-            walletBalance: user.walletBalance,
-            FreezWalletBalance: user.FreezWalletBalance,
+            walletBalance: Number(user.walletBalance),
+            FreezWalletBalance: Number(user.FreezWalletBalance),
             withdrawalMethods,
             withdrawalFeeInfo
         });
@@ -3459,7 +3477,7 @@ const getAllWithdrawRequests = async (req, res) => {
 
         // Fetch paginated data
         const data = await SellerWithdrawl.find(filter)
-            .populate('userId', 'name email') // example: populate user name and email
+            .populate('userId', 'userName email') // example: populate user name and email
             .populate('withDrawMethodId')     // populate withdrawal method info
             .sort(sort)
             .skip((pageNo - 1) * size)

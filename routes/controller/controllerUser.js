@@ -60,8 +60,6 @@ const getUserResponse = (user) => {
 };
 
 
-
-
 const requestOtp = async (req, res) => {
     const { phoneNumber, language } = req.body;
 
