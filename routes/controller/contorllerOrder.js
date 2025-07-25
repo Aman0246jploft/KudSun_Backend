@@ -824,12 +824,9 @@ const createBeamPaymentLink = async (paymentData) => {
             throw new Error('Invalid payment data: missing required order fields');
         }
 
-
         const apiUrl =
               'https://playground.api.beamcheckout.com/api/v1/payment-links'
             // 'https://api.beamcheckout.com/api/v1/payment-links'
-
-
 
         const idempotencyKey = `order_${paymentData.order.referenceId}_${Date.now()}`;
 
@@ -848,6 +845,10 @@ const createBeamPaymentLink = async (paymentData) => {
         });
 
         const data = await response.json();
+
+        console.log("testing=======>>",response)
+
+
 
         if (!response.ok) {
             let errorMessage = data?.error?.errorMessage || data?.message || `HTTP ${response.status}: ${response.statusText}`;
@@ -3183,7 +3184,7 @@ const addrequest = async (req, res) => {
             const withDrawlSetting = feeSettings.find(f => f.name === "WITHDRAWAL_FEE");
 
             let withdrawfee = 0;
-            let withdrawfeeType = '';
+            let withdrawfeeType = PRICING_TYPE.FIXED;
 
             if (withDrawlSetting) {
                 if (withDrawlSetting.type === PRICING_TYPE.PERCENTAGE) {
@@ -3249,7 +3250,7 @@ const addrequest = async (req, res) => {
         });
 
     } catch (err) {
-        console.error("add request", err);
+        // console.error("add request", err);
         // <-- Remove this line:
         // await session.abortTransaction();
 

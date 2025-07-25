@@ -21,6 +21,8 @@ const { moduleSchemaForId } = require('../services/validations/globalCURDValidat
 const globalCrudController = require('./globalCrudController');
 const { default: mongoose } = require('mongoose');
 const Joi = require('joi');
+// Import Algolia service
+const { indexUser, deleteUser } = require('../services/serviceAlgolia');
 
 const uploadfile = async (req, res) => {
     try {
@@ -243,6 +245,14 @@ const completeRegistration = async (req, res) => {
     user.step = 5;
 
     await user.save();
+
+    // 🔍 Index the user in Algolia after successful registration
+    try {
+        await indexUser(user);
+    } catch (algoliaError) {
+        console.error('Algolia indexing failed for user:', user._id, algoliaError);
+        // Don't fail the main operation if Algolia fails
+    }
 
     const payload = {
         userId: user._id,
@@ -1482,6 +1492,7 @@ const getProfile = async (req, res) => {
             dealChatnotification: user?.dealChatnotification,
             activityNotification: user?.activityNotification,
             alertNotification: user?.alertNotification,
+            walletBalance: parseFloat(Number(user?.walletBalance).toFixed(2))
 
         };
 
@@ -1573,6 +1584,14 @@ const updateProfile = async (req, res) => {
             updateData,
             { new: true }
         ).populate([{ path: "provinceId", select: "value" }, { path: "districtId", select: "value" }]).select('-password');
+
+        // 🔍 Update the user in Algolia after successful profile update
+        try {
+            await indexUser(updatedUser);
+        } catch (algoliaError) {
+            console.error('Algolia update failed for user:', updatedUser._id, algoliaError);
+            // Don't fail the main operation if Algolia fails
+        }
 
         return apiSuccessRes(
             HTTP_STATUS.OK,

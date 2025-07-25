@@ -10,6 +10,8 @@ const { uploadImageCloudinary } = require('../../utils/cloudinary');
 const CONSTANTS_MSG = require('../../utils/constantsMessage');
 const { default: mongoose } = require('mongoose');
 const { SALE_TYPE, roleId } = require('../../utils/Role');
+// Import Algolia service
+const { indexThread, deleteThreads } = require('../services/serviceAlgolia');
 
 // Add a new thread // Draft also
 const addThread = async (req, res) => {
@@ -98,6 +100,15 @@ const addThread = async (req, res) => {
         } else {
             const thread = new Thread(threadData);
             saved = await thread.save();
+
+            // 🔍 Index the thread in Algolia after successful save
+            try {
+                await indexThread(saved);
+            } catch (algoliaError) {
+                console.error('Algolia indexing failed for thread:', saved._id, algoliaError);
+                // Don't fail the main operation if Algolia fails
+            }
+
             if (draftId) {
                 try {
                     await ThreadDraft.findByIdAndDelete(draftId);
@@ -206,6 +217,16 @@ const updateThread = async (req, res) => {
 
         const updated = await Model.findByIdAndUpdate(id, updateData, { new: true });
 
+        // 🔍 Update the thread in Algolia after successful update (only for published threads)
+        if (!draftMode) {
+            try {
+                await indexThread(updated);
+            } catch (algoliaError) {
+                console.error('Algolia update failed for thread:', updated._id, algoliaError);
+                // Don't fail the main operation if Algolia fails
+            }
+        }
+
         return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, updated);
 
     } catch (error) {
@@ -236,6 +257,16 @@ const deleteThread = async (req, res) => {
         // Soft delete: mark isDeleted = true
         existing.isDeleted = true;
         await existing.save();
+
+        // 🔍 Remove from Algolia index after successful deletion (only for published threads)
+        if (!draftMode) {
+            try {
+                await deleteThreads(existing._id);
+            } catch (algoliaError) {
+                console.error('Algolia deletion failed for thread:', existing._id, algoliaError);
+                // Don't fail the main operation if Algolia fails
+            }
+        }
 
         return apiSuccessRes(HTTP_STATUS.OK, res, `${draftMode ? 'Draft' : 'Thread'} deleted successfully.`);
 

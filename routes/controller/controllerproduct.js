@@ -11,6 +11,8 @@ const CONSTANTS_MSG = require('../../utils/constantsMessage');
 const { SALE_TYPE, DeliveryType, ORDER_STATUS, roleId, conditions } = require('../../utils/Role');
 const { DateTime } = require('luxon');
 const { default: mongoose } = require('mongoose');
+// Import Algolia service
+const { indexProduct, deleteProducts } = require('../services/serviceAlgolia');
 
 async function ensureParameterAndValue(categoryId, subCategoryId, key, value, userId = null, role) {
     const category = await Category.findById(categoryId);
@@ -304,6 +306,14 @@ const addSellerProduct = async (req, res) => {
             const product = new SellProduct(productData);
             savedProduct = await product.save();
 
+            // 🔍 Index the product in Algolia after successful save
+            try {
+                await indexProduct(savedProduct);
+            } catch (algoliaError) {
+                console.error('Algolia indexing failed for product:', savedProduct._id, algoliaError);
+                // Don't fail the main operation if Algolia fails
+            }
+
             // If this is publishing a draft (draftId provided), delete the draft
             if (draftId) {
                 try {
@@ -580,6 +590,16 @@ const updateSellerProduct = async (req, res) => {
 
         // Save updated product
         const updatedProduct = await existingProduct.save();
+
+        // 🔍 Update the product in Algolia after successful update (only for published products)
+        if (!isDraftUpdate) {
+            try {
+                await indexProduct(updatedProduct);
+            } catch (algoliaError) {
+                console.error('Algolia update failed for product:', updatedProduct._id, algoliaError);
+                // Don't fail the main operation if Algolia fails
+            }
+        }
 
         return apiSuccessRes(200, res, "Product updated successfully", updatedProduct);
 
@@ -2073,6 +2093,15 @@ const fetchUserProducts = async (req, res) => {
             filter.subCategoryId = toObjectId(subCategoryId);
         }
 
+        if (keyWord && keyWord.trim() !== "") {
+            const regex = new RegExp(keyWord.trim(), "i");
+            filter.$or = [
+                { title: regex },
+                { description: regex },
+                { tags: regex }, // if tags is an array of strings
+            ];
+        }
+
 
         if (isSelfProfile) {
             filter.isDeleted = false;
@@ -2184,7 +2213,7 @@ const fetchUserProducts = async (req, res) => {
         // Enhance products with totalBidCount for auctions
         const finalProducts = products.map(product => ({
             ...product,
-            totalBidCount: product.saleType === SALE_TYPE.AUCTION
+            totalBidsPlaced: product.saleType === SALE_TYPE.AUCTION
                 ? (bidCountsMap[product._id.toString()] || 0)
                 : undefined,
             isNew: now - new Date(product.createdAt).getTime() <= ONE_DAY_MS
@@ -2218,32 +2247,46 @@ const createHistory = async (req, res) => {
     const limit = parseInt(size);
     const skip = (page - 1) * limit;
 
-    let history = await SearchHistory.findOne({ searchQuery, userId });
+    let history = await SearchHistory.findOne({
+        searchQuery,
+        userId,
+        type: 'search'
+    });
 
     if (history) {
+        history.searchCount = (history.searchCount || 0) + 1;
+        history.lastSearched = new Date();
         if (history.isDeleted || history.isDisable) {
             history.isDeleted = false;
             history.isDisable = false;
-            await history.save();
         }
+        await history.save();
     } else {
         // Only create if it doesn't already exist
-        await SearchHistory.create({ userId, searchQuery });
+        await SearchHistory.create({
+            userId,
+            searchQuery,
+            type: 'search',
+            searchCount: 1,
+            lastSearched: new Date()
+        });
     }
 
     const total = await SearchHistory.countDocuments({
         userId,
+        type: 'search',
         isDeleted: false,
         isDisable: false,
     });
 
     const allHistories = await SearchHistory.find({
         userId,
+        type: 'search',
         isDeleted: false,
         isDisable: false,
     })
         .select('-createdAt -updatedAt')
-        .sort({ _id: -1 })
+        .sort({ lastSearched: -1 })
         .skip(skip)
         .limit(limit);
 
@@ -2255,6 +2298,107 @@ const createHistory = async (req, res) => {
     });
 };
 
+/**
+ * Track when user clicks on or views a product
+ */
+const trackProductView = async (req, res) => {
+    try {
+        const { productId } = req.params;
+        const { userId } = req.user;
+        const { source = 'search' } = req.query; // where they came from
+
+        if (!productId) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Product ID is required");
+        }
+
+        // Find the product to get its title
+        const product = await SellProduct.findById(productId)
+            .select('title categoryId')
+            .lean();
+
+        if (!product) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Product not found");
+        }
+
+        // Track the product view
+        if (userId) {
+            await SearchHistory.create({
+                userId: toObjectId(userId),
+                searchQuery: product.title,
+                type: 'product_view',
+                productId: toObjectId(productId),
+                categoryId: product.categoryId,
+                searchCount: 1,
+                lastSearched: new Date(),
+                filters: { source }
+            });
+        }
+
+        // Increment product view count
+        await SellProduct.findByIdAndUpdate(
+            productId,
+            { $inc: { viewCount: 1 } }
+        );
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Product view tracked");
+
+    } catch (error) {
+        console.error('Track product view error:', error);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to track view");
+    }
+};
+
+/**
+ * Get user's view history (recently viewed products)
+ */
+const getViewHistory = async (req, res) => {
+    try {
+        const { userId } = req.user;
+        const { pageNo = 1, size = 20 } = req.query;
+
+        const page = parseInt(pageNo);
+        const limit = parseInt(size);
+        const skip = (page - 1) * limit;
+
+        const viewHistory = await SearchHistory.find({
+            userId: toObjectId(userId),
+            type: 'product_view',
+            isDeleted: false
+        })
+            .populate({
+                path: 'productId',
+                select: 'title productImages fixedPrice saleType condition isSold userId',
+                populate: {
+                    path: 'userId',
+                    select: 'userName profileImage'
+                }
+            })
+            .sort({ lastSearched: -1 })
+            .skip(skip)
+            .limit(limit)
+            .lean();
+
+        const total = await SearchHistory.countDocuments({
+            userId: toObjectId(userId),
+            type: 'product_view',
+            isDeleted: false
+        });
+
+        // Filter out products that may have been deleted
+        const validHistory = viewHistory.filter(item => item.productId);
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "View history fetched", {
+            pageNo: page,
+            size: limit,
+            total,
+            data: validHistory
+        });
+
+    } catch (error) {
+        console.error('Get view history error:', error);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to fetch view history");
+    }
+};
 
 
 
@@ -2907,6 +3051,14 @@ const deleteProduct = async (req, res) => {
         product.isDeleted = true;
         await product.save();
 
+        // 🔍 Remove from Algolia index after successful deletion
+        try {
+            await deleteProducts(product._id);
+        } catch (algoliaError) {
+            console.error('Algolia deletion failed for product:', product._id, algoliaError);
+            // Don't fail the main operation if Algolia fails
+        }
+
         return apiSuccessRes(HTTP_STATUS.OK, res, "Product deleted successfully.");
     } catch (error) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
@@ -3284,6 +3436,10 @@ router.get('/createHistory', perApiLimiter(), createHistory);
 router.get('/clearAllHistory', perApiLimiter(), clearAllHistory);
 router.get('/clearOneHistory/:id', perApiLimiter(), clearOneHistory);
 router.get('/getSearchHistory', perApiLimiter(), getSearchHistory);
+
+// Product View Tracking
+router.post('/track-view/:productId', perApiLimiter(), trackProductView);
+router.get('/view-history', perApiLimiter(), getViewHistory);
 
 //comment
 router.post('/addComment', perApiLimiter(), upload.array('files', 2), addComment);

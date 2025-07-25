@@ -13,8 +13,8 @@ const sellerWithdrawlSchema = new Schema({
     withdrawfeeType: {
         type: String
     },
-    
-    status: { type: String, enum: ['pending', 'Approved', "Rejected"] }
+
+    status: { type: String, enum: ['pending', 'Approved', "Rejected"], default: "pending" }
 }, {
     timestamps: true
 });
@@ -24,7 +24,7 @@ const sellerWithdrawlSchema = new Schema({
 // Set null for undefined optional fields in JSON
 sellerWithdrawlSchema.set('toJSON', {
     transform: function (doc, ret) {
-        const fieldsToCheck = ['withdrawfee', 'withdrawfeeType','withDrawMethodId'];
+        const fieldsToCheck = ['withdrawfee', 'withdrawfeeType', 'withDrawMethodId'];
 
         for (const field of fieldsToCheck) {
             if (ret[field] === undefined) {

@@ -25,8 +25,8 @@ module.exports = {
     // chat: require("./controller/controllerChat"),
     notifiaction: require('./controller/controllerNotification'),
 
-
-
+    // Algolia Search
+    algoliaSearch: require('./controller/controllerAlgoliaSearch'),
 
     appsetting: require('./controller/controllerAppsettings'),
     module: require('./controller/controllerModule'),

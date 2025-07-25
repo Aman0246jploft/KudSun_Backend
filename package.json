@@ -16,6 +16,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "algoliasearch": "^4.25.2",
     "apple-signin-auth": "^2.0.0",
     "axios": "^1.9.0",
     "base-64": "^1.0.0",
