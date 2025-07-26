@@ -1682,29 +1682,51 @@ const getRecentFollowedUsers = async (req, res) => {
                         { $match: { $expr: { $eq: ['$userId', '$$userId'] }, isDeleted: false, isDisable: false } },
                         { $sort: { createdAt: -1 } },
                         { $limit: 1 },
+                        // Count total distinct comments
                         {
                             $lookup: {
                                 from: 'ThreadComment',
                                 let: { threadId: '$_id' },
                                 pipeline: [
-                                    { $match: { $expr: { $eq: ['$thread', '$$threadId'] }, isDeleted: false, isDisable: false } },
-                                    { $unwind: { path: "$associatedProducts", preserveNullAndEmptyArrays: true } },
-                                    { $group: { _id: null, count: { $sum: 1 } } }
-                                ],
-                                as: 'associatedProductCountInfo'
-                            }
-                        },
-                        {
-                            $lookup: {
-                                from: 'ThreadComment',
-                                let: { threadId: '$_id' },
-                                pipeline: [
-                                    { $match: { $expr: { $eq: ['$thread', '$$threadId'] }, isDeleted: false, isDisable: false } },
+                                    {
+                                        $match: {
+                                            $expr: { $eq: ['$thread', '$$threadId'] },
+                                            isDeleted: false,
+                                            isDisable: false
+                                        }
+                                    },
                                     { $count: 'totalComments' }
                                 ],
                                 as: 'commentsCountInfo'
                             }
                         },
+
+                        // Count all associated products across all comments
+                        {
+                            $lookup: {
+                                from: 'ThreadComment',
+                                let: { threadId: '$_id' },
+                                pipeline: [
+                                    {
+                                        $match: {
+                                            $expr: { $eq: ['$thread', '$$threadId'] },
+                                            isDeleted: false,
+                                            isDisable: false,
+                                            associatedProducts: { $exists: true, $ne: [] }
+                                        }
+                                    },
+                                    { $unwind: '$associatedProducts' },
+                                    {
+                                        $group: {
+                                            _id: null,
+                                            count: { $sum: 1 }
+                                        }
+                                    }
+                                ],
+                                as: 'associatedProductCountInfo'
+                            }
+                        },
+
                         {
                             $lookup: {
                                 from: 'ThreadLike',
