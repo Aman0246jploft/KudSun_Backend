@@ -1644,7 +1644,7 @@ const getSoldProducts = async (req, res) => {
             sellerId,
             isDeleted: false,
             isDisable: false,
-            // paymentStatus: PAYMENT_STATUS.COMPLETED
+            paymentStatus: PAYMENT_STATUS.COMPLETED
         };
 
         let { paymentStatus, status } = req.query
@@ -1769,6 +1769,14 @@ const getSoldProducts = async (req, res) => {
                 allowedNextStatuses = ""
 
             }
+
+
+
+
+            // if (order.paymentStatus == PAYMENT_STATUS.PENDING) {
+            //     labalStatuses = "InProgress"
+            //     allowedNextStatuses = ""
+            // }
             // else if (currentStatus === ORDER_STATUS.SHIPPED) {
             //     allowedNextStatuses = ORDER_STATUS.DELIVERED;
             // }
