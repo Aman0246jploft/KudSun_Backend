@@ -1635,6 +1635,7 @@ const getSoldProducts = async (req, res) => {
             sellerId,
             isDeleted: false,
             isDisable: false,
+            paymentStatus:PAYMENT_STATUS.COMPLETED
         };
 
         let { paymentStatus, status } = req.query
