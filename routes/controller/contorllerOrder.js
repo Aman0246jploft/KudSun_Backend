@@ -1644,7 +1644,7 @@ const getSoldProducts = async (req, res) => {
             sellerId,
             isDeleted: false,
             isDisable: false,
-            paymentStatus: PAYMENT_STATUS.COMPLETED
+            // paymentStatus: PAYMENT_STATUS.COMPLETED
         };
 
         let { paymentStatus, status } = req.query
@@ -1708,6 +1708,8 @@ const getSoldProducts = async (req, res) => {
 
             // Compute allowed next statuses based on current order status and delivery types
             const currentStatus = order.status;
+            const paymentStatuss = order.paymentStatus;
+
 
             const allLocalPickup = order.items.every(item => item.productId?.deliveryType === "local pickup");
 
@@ -1720,6 +1722,13 @@ const getSoldProducts = async (req, res) => {
 
             let allowedNextStatuses = '';
             let labalStatuses = ''
+
+            if (paymentStatuss === PAYMENT_STATUS.PENDING) {
+                let labalStatuses = 'Payment Pending'
+            }
+
+
+
 
             if (currentStatus === ORDER_STATUS.PENDING) {
                 labalStatuses = ''
