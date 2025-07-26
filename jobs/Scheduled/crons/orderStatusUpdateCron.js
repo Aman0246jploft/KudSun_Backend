@@ -217,7 +217,7 @@ async function updateShippedToDelivered(cutoffDate, session) {
             isDeleted: false,
             isDisable: false,
             // Add safety check for order age
-            // createdAt: { $lt: moment().subtract(1, 'hour').toDate() } // At least 1 hour old
+            // createdAt: { $lte: moment().subtract(1, 'hour').toDate() } // At least 1 hour old
         }).populate('sellerId userId', 'userName email').session(session);
 
         console.log(`📦 Found ${shippedOrders.length} shipped orders to check`);
