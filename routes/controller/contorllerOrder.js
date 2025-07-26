@@ -296,6 +296,15 @@ const createOrder = async (req, res) => {
             { session }
         );
 
+        for (const item of orderItems) {
+            await SellProduct.updateOne(
+                { _id: item.productId },
+                { $set: { isSold: true } },
+                { session }
+            );
+        }
+
+
         await session.commitTransaction();
 
 
@@ -825,8 +834,8 @@ const createBeamPaymentLink = async (paymentData) => {
         }
 
         const apiUrl =
-              'https://playground.api.beamcheckout.com/api/v1/payment-links'
-            // 'https://api.beamcheckout.com/api/v1/payment-links'
+            'https://playground.api.beamcheckout.com/api/v1/payment-links'
+        // 'https://api.beamcheckout.com/api/v1/payment-links'
 
         const idempotencyKey = `order_${paymentData.order.referenceId}_${Date.now()}`;
 
@@ -846,7 +855,7 @@ const createBeamPaymentLink = async (paymentData) => {
 
         const data = await response.json();
 
-        console.log("testing=======>>",response)
+        console.log("testing=======>>", response)
 
 
 
@@ -1635,7 +1644,7 @@ const getSoldProducts = async (req, res) => {
             sellerId,
             isDeleted: false,
             isDisable: false,
-            paymentStatus:PAYMENT_STATUS.COMPLETED
+            paymentStatus: PAYMENT_STATUS.COMPLETED
         };
 
         let { paymentStatus, status } = req.query
