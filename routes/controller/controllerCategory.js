@@ -681,13 +681,18 @@ const getSubCategoriesByCategoryId = async (req, res) => {
         }
 
         // Map only required subcategory fields
-        const subCategories = category.subCategories.map(subCat => ({
-            _id: subCat._id,
-            name: subCat.name,
-            slug: subCat.slug,
-            image: subCat.image,
-            parameterCount: subCat.parameters?.length || 0
-        }));
+        const subCategories = category.subCategories.map(subCat => {
+            const adminParamCount = subCat.parameters?.filter(param => param.isAddedByAdmin)?.length || 0;
+            return {
+
+                _id: subCat._id,
+                name: subCat.name,
+                slug: subCat.slug,
+                image: subCat.image,
+                parameterCount: adminParamCount
+                // ||subCat.parameters?.length || 0
+            }
+        });
 
         return apiSuccessRes(HTTP_STATUS.OK, res, 'Subcategories fetched successfully', {
             categoryId,
@@ -754,7 +759,9 @@ const getParametersBySubCategoryId = async (req, res) => {
     try {
         const { subCategoryId } = req.params;
         const userId = req.user?.userId;
-        const isAdmin = req.user?.roleId === 1; // Assuming role is stored in JWT payload
+        // const isAdmin = req.user?.roleId === 1; // Assuming role is stored in JWT payload
+
+        const isAdmin = false; // Assuming role is stored in JWT payload
 
         if (!subCategoryId) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Subcategory ID is required');
@@ -771,24 +778,62 @@ const getParametersBySubCategoryId = async (req, res) => {
 
         const subCategory = category.subCategories[0];
 
-        const parameters = subCategory.parameters.map(param => {
-            // Show all values to admin
-            let filteredValues;
-            if (isAdmin) {
-                filteredValues = param.values;
-            } else {
-                filteredValues = param.values.filter(val =>
+        // const parameters = subCategory.parameters.map(param => {
+        //     // Show all values to admin
+        //     let filteredValues;
+        //     if (isAdmin) {
+        //         filteredValues = param.values;
+        //     } else {
+        //         filteredValues = param.values.filter(val =>
+        //             val.isAddedByAdmin ||
+        //             (userId && val.addedByUserId?.toString() === userId)
+        //         );
+        //     }
+
+        //     return {
+        //         _id: param._id,
+        //         key: param.key,
+        //         values: filteredValues
+        //     };
+        // });
+
+
+
+
+        const parameters = subCategory.parameters
+            .filter(param => {
+                if (isAdmin) return true;
+
+                // Filter entire param if:
+                // 1. The param key was added by admin (assume isAddedByAdmin on param)
+                // 2. OR if any of the values are visible to user
+                const hasVisibleValues = param.values.some(val =>
                     val.isAddedByAdmin ||
                     (userId && val.addedByUserId?.toString() === userId)
                 );
-            }
 
-            return {
-                _id: param._id,
-                key: param.key,
-                values: filteredValues
-            };
-        });
+                const isParamVisible =
+                    param.isAddedByAdmin ||
+                    (userId && param.addedByUserId?.toString() === userId);
+
+                return isParamVisible && hasVisibleValues;
+            })
+            .map(param => {
+                const filteredValues = isAdmin
+                    ? param.values
+                    : param.values.filter(val =>
+                        val.isAddedByAdmin ||
+                        (userId && val.addedByUserId?.toString() === userId)
+                    );
+
+                return {
+                    _id: param._id,
+                    key: param.key,
+                    values: filteredValues
+                };
+            });
+
+
 
         // Optionally, filter out parameters with no visible values for non-admins
         const finalParameters = isAdmin ? parameters : parameters.filter(p => p.values.length > 0);
