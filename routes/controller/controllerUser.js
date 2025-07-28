@@ -1450,8 +1450,12 @@ const getProfile = async (req, res) => {
             Thread.countDocuments({ userId, isDeleted: false }),
             SellProducts.countDocuments({ userId, isDeleted: false }),
             Order.countDocuments({ userId, isDeleted: false }),
-            SellProducts.countDocuments({ userId, isDeleted: false, isSold: true }),
 
+            Order.countDocuments({
+                sellerId: userId,
+                isDeleted: false,
+                paymentStatus: PAYMENT_STATUS.COMPLETED
+            }),
             ThreadDraft.countDocuments({ userId, isDeleted: false }),
             SellProductDraft.countDocuments({ userId, isDeleted: false }),
 

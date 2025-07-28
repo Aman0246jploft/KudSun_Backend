@@ -720,7 +720,262 @@ const getCommentByParentId = async (req, res) => {
 };
 
 
+//corrrect only total count is issue
+// const getThreads = async (req, res) => {
+//     try {
+//         let {
+//             pageNo = 1,
+//             size = 10,
+//             keyWord = '',
+//             categoryId,
+//             subCategoryId,
+//             userId,
+//             isTrending,
+//             sortBy = 'createdAt', // 'createdAt' | 'budget' | 'comments'
+//             orderBy = 'desc',   // 'asc' | 'desc',
+//             minBudget,
+//             maxBudget,
+//             isDraft = 'false',
+//             minAverageRatting,
+//             provinceId,
+//             districtId
+//         } = req.query;
 
+
+
+//         const allowedSortFields = ['createdAt', 'commentCount', 'viewCount'];
+//         const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
+//         const sortOrder = orderBy.toLowerCase() === 'desc' ? -1 : 1;
+//         const sortOptions = {};
+//         sortOptions[sortField] = sortOrder;
+
+//         let page = parseInt(pageNo);
+//         let limit = parseInt(size);
+
+
+//         const filters = { isDeleted: false };
+//         if (minBudget || maxBudget) {
+//             filters['budgetRange.min'] = {};
+//             if (minBudget) {
+//                 filters['budgetRange.min'].$gte = parseFloat(minBudget);
+//             }
+//             if (maxBudget) {
+//                 filters['budgetRange.min'].$lte = parseFloat(maxBudget);
+//             }
+//         }
+
+//         if (categoryId && mongoose.Types.ObjectId.isValid(categoryId)) {
+//             filters.categoryId = categoryId;
+//         }
+
+
+//         if (req.query.isTrending !== undefined) {
+//             filter.isTrending = req.query.isTrending === 'true'; // or Boolean(JSON.parse(req.query.isTrending))
+//         }
+
+//         if (subCategoryId && mongoose.Types.ObjectId.isValid(subCategoryId)) {
+//             filters.subCategoryId = subCategoryId;
+//         }
+
+//         if (userId && mongoose.Types.ObjectId.isValid(userId)) {
+//             filters.userId = userId; // 👈 filter by userId
+//         }
+//         if (keyWord?.trim()) {
+//             filters.title = { $regex: keyWord.trim(), $options: 'i' };
+//         }
+
+
+//         let userFilter = {};
+//         if (provinceId && mongoose.Types.ObjectId.isValid(provinceId)) {
+//             userFilter.provinceId = provinceId;
+//         }
+//         if (districtId && mongoose.Types.ObjectId.isValid(districtId)) {
+//             userFilter.districtId = districtId;
+//         }
+
+
+//         if (Object.keys(userFilter).length > 0) {
+//             // find users matching location filter
+//             const matchedUsers = await User.find(userFilter).select('_id').lean();
+//             const matchedUserIds = matchedUsers.map(u => u._id.toString());
+//             // if userId filter already exists, intersect userIds; else assign
+//             if (filters.userId) {
+//                 // intersect existing userId filter with matchedUserIds
+//                 if (Array.isArray(filters.userId)) {
+//                     filters.userId = filters.userId.filter(id => matchedUserIds.includes(id.toString()));
+//                 } else {
+//                     filters.userId = matchedUserIds.includes(filters.userId.toString()) ? filters.userId : null;
+//                 }
+//             } else {
+//                 filters.userId = { $in: matchedUserIds };
+//             }
+//             // if no matched users, no threads should be returned
+//             if (!filters.userId || (Array.isArray(filters.userId) && filters.userId.length === 0)) {
+//                 return apiSuccessRes(HTTP_STATUS.OK, res, "Products fetched successfully", {
+//                     pageNo: parseInt(pageNo),
+//                     size: parseInt(size),
+//                     total: 0,
+//                     products: [],
+//                 });
+//             }
+//         }
+//         Object.keys(filters).forEach(key => {
+//             if (
+//                 filters[key] === undefined ||
+//                 filters[key] === null ||
+//                 filters[key] === '' ||
+//                 (Array.isArray(filters[key]) && filters[key].length === 0)
+//             ) {
+//                 delete filters[key];
+//             }
+//         });
+
+//         const ThreadModel = isDraft === 'true' ? ThreadDraft : Thread;
+//         const threads = await ThreadModel.find(filters)
+//             .populate('userId', 'userName profileImage isLive is_Id_verified is_Preferred_seller averageRatting')
+//             .populate('categoryId', 'name subCategoryId image') // populate but remove later
+//             // .sort(sortOptions)
+//             .sort(sortField === 'createdAt' ? sortOptions : {}) // Apply sort only if createdAt
+//             .skip((page - 1) * limit)
+//             .limit(limit)
+//             .select(' -__v')
+//             .lean();
+
+//         console.log('Threads fetched:', threads.length);
+//         const threadIds = threads.map(t => t?._id);
+//         const userIds = [...new Set(threads.map(t => t.userId?._id?.toString()).filter(Boolean))];
+
+//         const [followerCounts, commentCounts, likeCounts, productCounts] = await Promise.all([
+//             Follow.aggregate([
+//                 { $match: { userId: { $in: userIds.map(id => toObjectId(id)) }, isDeleted: false, isDisable: false } },
+//                 { $group: { _id: '$userId', count: { $sum: 1 } } }
+//             ]),
+//             ThreadComment.aggregate([
+//                 { $match: { thread: { $in: threadIds } } },
+//                 { $group: { _id: '$thread', count: { $sum: 1 } } }
+//             ]),
+//             ThreadLike.aggregate([
+//                 { $match: { threadId: { $in: threadIds }, isDeleted: false, isDisable: false } },
+//                 { $group: { _id: '$threadId', count: { $sum: 1 } } }
+//             ]),
+//             ThreadComment.aggregate([
+//                 { $match: { thread: { $in: threadIds }, associatedProducts: { $exists: true, $not: { $size: 0 } } } },
+//                 {
+//                     $group: {
+//                         _id: '$thread',
+//                         productSet: { $addToSet: '$associatedProducts' }
+//                     }
+//                 },
+//                 {
+//                     $project: {
+//                         count: {
+//                             $size: {
+//                                 $reduce: {
+//                                     input: '$productSet',
+//                                     initialValue: [],
+//                                     in: { $setUnion: ['$$value', '$$this'] }
+//                                 }
+//                             }
+//                         }
+//                     }
+//                 }
+//             ])
+//         ]);
+
+//         const followerMap = Object.fromEntries(followerCounts.map(f => [f?._id.toString(), f.count]));
+//         const commentMap = Object.fromEntries(commentCounts.map(c => [c?._id.toString(), c.count]));
+//         const likeMap = Object.fromEntries(likeCounts.map(l => [l?._id.toString(), l.count]));
+//         const productMap = Object.fromEntries(productCounts.map(p => [p?._id.toString(), p.count]));
+
+//         let currentUserId = req.user?.userId?.toString();
+
+//         // Get liked thread IDs by current user
+//         let likedThreadSet = new Set();
+//         if (currentUserId) {
+
+//             const userLikes = await ThreadLike.find({
+//                 likeBy: toObjectId(currentUserId),
+//                 threadId: { $in: threadIds.map(id => toObjectId(id)) }
+//             }).select('threadId').lean();
+//             likedThreadSet = new Set(userLikes.map(like => like.threadId.toString()));
+//         }
+
+//         const subCategoryNameMap = {};
+
+//         const categories = await Category.find({
+//             'subCategories._id': { $in: threads.map(t => t.subCategoryId) }
+//         }).lean();
+
+//         categories.forEach(category => {
+//             category.subCategories.forEach(sub => {
+//                 subCategoryNameMap[sub._id.toString()] = sub.name;
+//             });
+//         });
+
+
+//         let filteredThreads = threads;
+
+//         // Apply minAverageRatting before paginating
+//         if (minAverageRatting) {
+//             filteredThreads = threads.filter(thread => {
+//                 const rating = parseFloat(thread?.userId?.averageRatting) || 0;
+//                 return rating >= parseFloat(minAverageRatting);
+//             });
+//         } else {
+//             filteredThreads = threads;
+//         }
+
+//         // Store total BEFORE slicing (pagination)
+//         const total = filteredThreads.length;
+//         console.log("777777", total)
+
+//         // Apply pagination AFTER filtering
+//         filteredThreads = filteredThreads.slice((page - 1) * limit, page * limit);
+
+
+//         const enrichedThreads = filteredThreads.map(thread => {
+//             const tid = thread?._id.toString();
+//             const uid = thread.userId?._id?.toString() || '';
+//             const { subCategoryId, photos, ...rest } = thread;
+//             return {
+//                 ...rest,
+//                 image: thread?.image || thread?.photos,
+//                 totalFollowers: followerMap[uid] || 0,
+//                 totalComments: commentMap[tid] || 0,
+//                 totalLikes: likeMap[tid] || 0,
+//                 totalAssociatedProducts: productMap[tid] || 0,
+//                 myThread: currentUserId && uid === currentUserId,
+//                 isLiked: likedThreadSet.has(tid),
+//                 subCategory: {
+//                     id: subCategoryId,
+//                     name: subCategoryNameMap[subCategoryId] || null
+//                 },
+//             };
+//         });
+//         if (sortField === 'commentCount') {
+//             enrichedThreads.sort((a, b) => {
+//                 const countA = a.totalComments || 0;
+//                 const countB = b.totalComments || 0;
+//                 return sortOrder === -1 ? countB - countA : countA - countB;
+//             });
+//         }
+
+//         // const total = filteredThreads.length;
+
+//         return apiSuccessRes(HTTP_STATUS.OK, res, "Products fetched successfully", {
+//             pageNo: page,
+//             size: limit,
+//             total: total,
+//             products: enrichedThreads,
+//         });
+
+//     } catch (error) {
+//         console.error('Error in getThreads:', error);
+//         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Something went wrong");
+
+//     }
+// };
+//
 const getThreads = async (req, res) => {
     try {
         let {
@@ -741,8 +996,6 @@ const getThreads = async (req, res) => {
             districtId
         } = req.query;
 
-
-
         const allowedSortFields = ['createdAt', 'commentCount', 'viewCount'];
         const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
         const sortOrder = orderBy.toLowerCase() === 'desc' ? -1 : 1;
@@ -751,7 +1004,6 @@ const getThreads = async (req, res) => {
 
         let page = parseInt(pageNo);
         let limit = parseInt(size);
-
 
         const filters = { isDeleted: false };
         if (minBudget || maxBudget) {
@@ -768,9 +1020,9 @@ const getThreads = async (req, res) => {
             filters.categoryId = categoryId;
         }
 
-
+        // Fixed: Changed 'filter' to 'filters'
         if (req.query.isTrending !== undefined) {
-            filter.isTrending = req.query.isTrending === 'true'; // or Boolean(JSON.parse(req.query.isTrending))
+            filters.isTrending = req.query.isTrending === 'true'; // or Boolean(JSON.parse(req.query.isTrending))
         }
 
         if (subCategoryId && mongoose.Types.ObjectId.isValid(subCategoryId)) {
@@ -784,7 +1036,6 @@ const getThreads = async (req, res) => {
             filters.title = { $regex: keyWord.trim(), $options: 'i' };
         }
 
-
         let userFilter = {};
         if (provinceId && mongoose.Types.ObjectId.isValid(provinceId)) {
             userFilter.provinceId = provinceId;
@@ -792,7 +1043,6 @@ const getThreads = async (req, res) => {
         if (districtId && mongoose.Types.ObjectId.isValid(districtId)) {
             userFilter.districtId = districtId;
         }
-
 
         if (Object.keys(userFilter).length > 0) {
             // find users matching location filter
@@ -819,9 +1069,7 @@ const getThreads = async (req, res) => {
                 });
             }
         }
-        console.log("Final query filter????? =>", filters);
-
-
+        
         Object.keys(filters).forEach(key => {
             if (
                 filters[key] === undefined ||
@@ -833,11 +1081,29 @@ const getThreads = async (req, res) => {
             }
         });
 
-
-        console.log("Final query filter =>", filters);
-
-
         const ThreadModel = isDraft === 'true' ? ThreadDraft : Thread;
+
+        // Get total count first - without pagination, but with all other filters
+        let totalCountQuery = ThreadModel.find(filters);
+        
+        // If minAverageRatting is specified, we need to populate and filter
+        if (minAverageRatting) {
+            totalCountQuery = totalCountQuery.populate('userId', 'averageRatting');
+        }
+        
+        let totalThreads = await totalCountQuery.lean();
+        
+        // Apply minAverageRatting filter if specified
+        if (minAverageRatting) {
+            totalThreads = totalThreads.filter(thread => {
+                const rating = parseFloat(thread?.userId?.averageRatting) || 0;
+                return rating >= parseFloat(minAverageRatting);
+            });
+        }
+        
+        const total = totalThreads.length;
+
+        // Now get the actual paginated data
         const threads = await ThreadModel.find(filters)
             .populate('userId', 'userName profileImage isLive is_Id_verified is_Preferred_seller averageRatting')
             .populate('categoryId', 'name subCategoryId image') // populate but remove later
@@ -848,7 +1114,7 @@ const getThreads = async (req, res) => {
             .select(' -__v')
             .lean();
 
-        console.log('Threads fetched:', threads.length, ThreadModel);
+        console.log('Threads fetched:', threads.length);
         const threadIds = threads.map(t => t?._id);
         const userIds = [...new Set(threads.map(t => t.userId?._id?.toString()).filter(Boolean))];
 
@@ -919,13 +1185,16 @@ const getThreads = async (req, res) => {
             });
         });
 
-
         let filteredThreads = threads;
+
+        // Apply minAverageRatting filter to paginated results
         if (minAverageRatting) {
-            filteredThreads = filteredThreads.filter(thread => {
+            filteredThreads = threads.filter(thread => {
                 const rating = parseFloat(thread?.userId?.averageRatting) || 0;
                 return rating >= parseFloat(minAverageRatting);
             });
+        } else {
+            filteredThreads = threads;
         }
 
         const enrichedThreads = filteredThreads.map(thread => {
@@ -947,6 +1216,7 @@ const getThreads = async (req, res) => {
                 },
             };
         });
+        
         if (sortField === 'commentCount') {
             enrichedThreads.sort((a, b) => {
                 const countA = a.totalComments || 0;
@@ -955,13 +1225,10 @@ const getThreads = async (req, res) => {
             });
         }
 
-
-        const total = filteredThreads.length;
-
         return apiSuccessRes(HTTP_STATUS.OK, res, "Products fetched successfully", {
             pageNo: page,
             size: limit,
-            total: total,
+            total: total, // Now correctly shows total after all filtering
             products: enrichedThreads,
         });
 
@@ -971,7 +1238,6 @@ const getThreads = async (req, res) => {
 
     }
 };
-
 
 
 const getThreadById = async (req, res) => {
