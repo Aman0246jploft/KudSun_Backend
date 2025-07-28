@@ -1,0 +1,25 @@
+### Dashboard API Tests
+
+@baseUrl = http://localhost:9097/api/v1
+# Replace with your actual token for authenticated endpoints
+@authToken = YOUR_JWT_TOKEN_HERE
+
+### Get Available Years
+GET {{baseUrl}}/dashboard/available-years
+Authorization: Bearer {{authToken}}
+
+### Get Monthly Analytics for Current Year
+GET {{baseUrl}}/dashboard/monthly-analytics
+Authorization: Bearer {{authToken}}
+
+### Get Monthly Analytics for Specific Year
+GET {{baseUrl}}/dashboard/monthly-analytics?year=2024
+Authorization: Bearer {{authToken}}
+
+### Get Dashboard Summary for Current Year
+GET {{baseUrl}}/dashboard/summary
+Authorization: Bearer {{authToken}}
+
+### Get Dashboard Summary for Specific Year
+GET {{baseUrl}}/dashboard/summary?year=2023
+Authorization: Bearer {{authToken}} 

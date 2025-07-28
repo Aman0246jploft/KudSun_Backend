@@ -31,4 +31,5 @@ module.exports = {
     appsetting: require('./controller/controllerAppsettings'),
     module: require('./controller/controllerModule'),
     reviewManagement: require('./controller/controllerReviewManagement'),
+    dashboard: require('./controller/controllerDashboard'),
 }
