@@ -730,7 +730,7 @@ const getThreads = async (req, res) => {
             categoryId,
             subCategoryId,
             userId,
-            isTrending = false,
+            isTrending,
             sortBy = 'createdAt', // 'createdAt' | 'budget' | 'comments'
             orderBy = 'desc',   // 'asc' | 'desc',
             minBudget,
@@ -740,6 +740,7 @@ const getThreads = async (req, res) => {
             provinceId,
             districtId
         } = req.query;
+
 
 
         const allowedSortFields = ['createdAt', 'commentCount', 'viewCount'];
@@ -768,10 +769,9 @@ const getThreads = async (req, res) => {
         }
 
 
-        if (isTrending !== "") {
-            filters.isTrending = isTrending;
+        if (req.query.isTrending !== undefined) {
+            filter.isTrending = req.query.isTrending === 'true'; // or Boolean(JSON.parse(req.query.isTrending))
         }
-
 
         if (subCategoryId && mongoose.Types.ObjectId.isValid(subCategoryId)) {
             filters.subCategoryId = subCategoryId;
@@ -819,10 +819,25 @@ const getThreads = async (req, res) => {
                 });
             }
         }
+        console.log("Final query filter????? =>", filters);
+
+
+        Object.keys(filters).forEach(key => {
+            if (
+                filters[key] === undefined ||
+                filters[key] === null ||
+                filters[key] === '' ||
+                (Array.isArray(filters[key]) && filters[key].length === 0)
+            ) {
+                delete filters[key];
+            }
+        });
+
+
+        console.log("Final query filter =>", filters);
 
 
         const ThreadModel = isDraft === 'true' ? ThreadDraft : Thread;
-
         const threads = await ThreadModel.find(filters)
             .populate('userId', 'userName profileImage isLive is_Id_verified is_Preferred_seller averageRatting')
             .populate('categoryId', 'name subCategoryId image') // populate but remove later
@@ -833,7 +848,7 @@ const getThreads = async (req, res) => {
             .select(' -__v')
             .lean();
 
-
+        console.log('Threads fetched:', threads.length, ThreadModel);
         const threadIds = threads.map(t => t?._id);
         const userIds = [...new Set(threads.map(t => t.userId?._id?.toString()).filter(Boolean))];
 
