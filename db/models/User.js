@@ -5,6 +5,9 @@ const { roleId } = require("../../utils/Role");
 const Schema = mongoose.Schema;
 
 const UserSchema = new Schema({
+    userId: {
+        type: String,
+    },
     step: {
         type: Number,
         default: 1,
@@ -180,6 +183,16 @@ UserSchema.pre('save', async function (next) {
     } catch (err) {
         next(err);
     }
+
+
+
+    if (!this.userId) {
+        try {
+            this.userId = await generateUniqueUserId();
+        } catch (err) {
+            return next(err);
+        }
+    }
 });
 
 
@@ -212,5 +225,17 @@ UserSchema.options.toJSON = {
     }
 };
 
+async function generateUniqueUserId() {
+    let unique = false;
+    let userId = '';
+
+    while (!unique) {
+        userId = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit number
+        const existingUser = await User.findOne({ userId });
+        if (!existingUser) unique = true;
+    }
+
+    return userId;
+}
 
 module.exports = mongoose.model("User", UserSchema, "User"); 
