@@ -31,7 +31,7 @@ const getMonthlyAnalytics = async (req, res) => {
             { $sort: { '_id.month': 1 } }
         ]);
 
-        console.log("777777", monthlyUsers)
+
 
 
         // Revenue analytics - Monthly revenue from platform revenue
