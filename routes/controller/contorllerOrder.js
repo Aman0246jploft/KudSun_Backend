@@ -182,7 +182,6 @@ const createOrder = async (req, res) => {
                     return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `You have not won the auction for: ${product.title}`);
                 }
 
-
                 if (auctionSettings.reservePrice && winningBid.amount < auctionSettings.reservePrice) {
                     await session.abortTransaction();
                     return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `Winning bid for ${product.title} does not meet the reserve price`);

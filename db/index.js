@@ -60,7 +60,9 @@ module.exports = {
     SellerBank: require("./models/SellerBank"),
     BlockUser: require("./models/BlockUser"),
     OrderStatusHistory: require("./models/Payment/OrderStatusHistory"),
-    
+
+    ReportType: require('./models/ReportType'),
+
     Transaction: require("./models/Payment/Transaction"),
     PlatformRevenue: require("./models/PlatformRevenue"),
     WalletTnx: require("./models/Payment/WalletTnx"),
