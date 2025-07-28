@@ -985,7 +985,7 @@ const getThreads = async (req, res) => {
             categoryId,
             subCategoryId,
             userId,
-            isTrending,
+            isTrending='false',
             sortBy = 'createdAt', // 'createdAt' | 'budget' | 'comments'
             orderBy = 'desc',   // 'asc' | 'desc',
             minBudget,
@@ -1069,7 +1069,7 @@ const getThreads = async (req, res) => {
                 });
             }
         }
-        
+
         Object.keys(filters).forEach(key => {
             if (
                 filters[key] === undefined ||
@@ -1085,14 +1085,14 @@ const getThreads = async (req, res) => {
 
         // Get total count first - without pagination, but with all other filters
         let totalCountQuery = ThreadModel.find(filters);
-        
+
         // If minAverageRatting is specified, we need to populate and filter
         if (minAverageRatting) {
             totalCountQuery = totalCountQuery.populate('userId', 'averageRatting');
         }
-        
+
         let totalThreads = await totalCountQuery.lean();
-        
+
         // Apply minAverageRatting filter if specified
         if (minAverageRatting) {
             totalThreads = totalThreads.filter(thread => {
@@ -1100,7 +1100,7 @@ const getThreads = async (req, res) => {
                 return rating >= parseFloat(minAverageRatting);
             });
         }
-        
+
         const total = totalThreads.length;
 
         // Now get the actual paginated data
@@ -1114,7 +1114,7 @@ const getThreads = async (req, res) => {
             .select(' -__v')
             .lean();
 
-        console.log('Threads fetched:', threads.length);
+
         const threadIds = threads.map(t => t?._id);
         const userIds = [...new Set(threads.map(t => t.userId?._id?.toString()).filter(Boolean))];
 
@@ -1216,7 +1216,7 @@ const getThreads = async (req, res) => {
                 },
             };
         });
-        
+
         if (sortField === 'commentCount') {
             enrichedThreads.sort((a, b) => {
                 const countA = a.totalComments || 0;

@@ -1403,14 +1403,18 @@ const showAuctionProducts = async (req, res) => {
         // Aggregate bids count grouped by productId
         const bidsCounts = await Bid.aggregate([
             { $match: { productId: { $in: productIds } } },
-            { $group: { _id: "$productId", totalBidsPlaced: { $sum: 1 } } }
+            { $group: { _id: "$productId", totalBidsPlaced: { $sum: 1 }, highestBidAmount: { $max: "$amount" } } }
         ]);
 
         // Create a map for quick lookup
         const bidsCountMap = bidsCounts.reduce((acc, curr) => {
-            acc[curr._id.toString()] = curr.totalBidsPlaced;
+            acc[curr._id.toString()] = {
+                totalBidsPlaced: curr.totalBidsPlaced,
+                highestBidAmount: curr.highestBidAmount || 0
+            };
             return acc;
         }, {});
+
 
         products.forEach(product => {
             const utcEnd = DateTime.fromJSDate(product.auctionSettings.biddingEndsAt, { zone: 'utc' });
@@ -1418,7 +1422,9 @@ const showAuctionProducts = async (req, res) => {
             const localDate = utcDate.setZone(product.auctionSettings.timeZone || 'Asia/Kolkata');
             const utcNow = DateTime.utc();
             const timeLeftMs = utcEnd.diff(utcNow).toMillis();
-            product.totalBidsPlaced = bidsCountMap[product._id.toString()] || 0;
+            const bidData = bidsCountMap[product._id.toString()] || { totalBidsPlaced: 0, highestBidAmount: 0 };
+            product.totalBidsPlaced = bidData.totalBidsPlaced;
+            product.highestBidAmount = bidData.highestBidAmount; // <--- Just add this line
             const nowTimestamp = new Date()
             const offsetMinutes = nowTimestamp.getTimezoneOffset();
             const localNow = new Date(nowTimestamp.getTime() - offsetMinutes * 60 * 1000);
