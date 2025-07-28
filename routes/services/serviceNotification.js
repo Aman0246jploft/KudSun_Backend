@@ -32,7 +32,7 @@ const notificationProcessor = async (job) => {
         const userNotification = job.data;
 
         // Validate required fields
-        const { userId, title, message } = userNotification;
+        const { recipientId: userId, title, message } = userNotification;
         if (!userId || !title || !message) {
             console.error("Invalid notification format in queue", userNotification);
             return;
