@@ -29,6 +29,10 @@ const publicRoutes = [
     `/api/v1/user/resendLoginOtp`,
     `/api/v1/user/resendResetOtp`,
     `/api/v1/user/resendOtp`,
+
+    `/api/v1/user/googleSignIn`,
+
+
     `/api/v1/category/getSubCategoriesByCategoryId`,
     `/api/v1/appsetting/getVideo`,
     `/api/v1/user/loginAsGuest`,
