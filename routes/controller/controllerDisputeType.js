@@ -21,7 +21,7 @@ const getReports = async (req, res) => {
         const filter = { isDisable: false };
         if (userId) filter.userId = userId;
 
-        const [totalCount, reports] = await Promise.all([
+        const [totalCount, data] = await Promise.all([
             DisputeType.countDocuments(filter),
             DisputeType.find(filter)
                 .sort({ createdAt: -1 })
@@ -34,10 +34,10 @@ const getReports = async (req, res) => {
             pageNo: page,
             size: limit,
             totalPages: Math.ceil(totalCount / limit),
-            reports,
+            data,
         };
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Reports fetched successfully", response);
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Dispute type fetched successfully", response);
     } catch (err) {
         console.error('Error fetching reports:', err);
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);

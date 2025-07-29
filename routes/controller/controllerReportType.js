@@ -21,7 +21,7 @@ const getReports = async (req, res) => {
         const filter = { isDisable: false };
         if (userId) filter.userId = userId;
 
-        const [totalCount, reports] = await Promise.all([
+        const [totalCount, data] = await Promise.all([
             ReportType.countDocuments(filter),
             ReportType.find(filter)
                 .sort({ createdAt: -1 })
@@ -34,7 +34,7 @@ const getReports = async (req, res) => {
             pageNo: page,
             size: limit,
             totalPages: Math.ceil(totalCount / limit),
-            reports,
+            data,
         };
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Reports fetched successfully", response);

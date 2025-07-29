@@ -1,4 +1,3 @@
-
 const express = require('express');
 const multer = require('multer');
 const upload = multer();
@@ -10,7 +9,7 @@ const CONSTANTS = require('../../utils/constants')
 const HTTP_STATUS = require('../../utils/statusCode');
 const { apiErrorRes, verifyPassword, apiSuccessRes, generateOTP, generateKey, toObjectId } = require('../../utils/globalFunction');
 const { signToken } = require('../../utils/jwtTokenUtils');
-const { loginSchema, followSchema, threadLikeSchema, productLikeSchema, requestResetOtpSchema, verifyResetOtpSchema, resetPasswordSchema, loginStepOneSchema, loginStepTwoSchema, loginStepThreeSchema, otpTokenSchema, resendResetOtpSchema, resendOtpSchema } = require('../services/validations/userValidation');
+const { loginSchema, followSchema, threadLikeSchema, productLikeSchema, requestResetOtpSchema, verifyResetOtpSchema, resetPasswordSchema, loginStepOneSchema, loginStepTwoSchema, loginStepThreeSchema, otpTokenSchema, resendResetOtpSchema, resendOtpSchema, googleSignInSchema } = require('../services/validations/userValidation');
 const validateRequest = require('../../middlewares/validateRequest');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const { setKeyWithTime, setKeyNoTime, getKey, removeKey } = require('../services/serviceRedis');
@@ -23,6 +22,7 @@ const { default: mongoose } = require('mongoose');
 const Joi = require('joi');
 // Import Algolia service
 const { indexUser, deleteUser } = require('../services/serviceAlgolia');
+const { OAuth2Client } = require('google-auth-library');
 
 const uploadfile = async (req, res) => {
     try {
@@ -540,7 +540,7 @@ const resendLoginOtp = async (req, res) => {
         const query = {
             $or: [
                 { email: cleanedIdentifier },
-                { phoneNumber: identifier },
+                { phoneNumber: cleanedIdentifier },
                 { userName: cleanedIdentifier }
             ]
         };
@@ -567,8 +567,182 @@ const resendLoginOtp = async (req, res) => {
 
 
 
+const googleSignIn = async (req, res) => {
+    try {
+        const { idToken, fcmToken } = req.body;
 
+        if (!idToken) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Google ID token is required");
+        }
 
+        // Initialize Google OAuth2 client
+        const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+        // Verify the Google ID token
+        let ticket;
+        try {
+            ticket = await client.verifyIdToken({
+                idToken: idToken,
+                audience: process.env.GOOGLE_CLIENT_ID,
+            });
+        } catch (error) {
+            console.error('Google token verification failed:', error);
+            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Invalid Google token");
+        }
+
+        const payload = ticket.getPayload();
+        const { 
+            email, 
+            name, 
+            picture, 
+            sub: googleId,
+            given_name: firstName,
+            family_name: lastName 
+        } = payload;
+
+        if (!email) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Email not provided by Google");
+        }
+
+        // Check if user already exists with this email
+        let user = await User.findOne({ email: email.toLowerCase() }).populate([
+            { path: 'provinceId', select: 'value' }, 
+            { path: 'districtId', select: 'value' }
+        ]);
+
+        if (user) {
+            // User exists - check if account is disabled or deleted
+            if (user.isDisable) {
+                return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, CONSTANTS_MSG.ACCOUNT_DISABLE);
+            }
+            if (user.isDeleted) {
+                return apiErrorRes(HTTP_STATUS.UNPROCESSABLE_ENTITY, res, CONSTANTS_MSG.ACCOUNT_DELETED);
+            }
+
+            // Update FCM token if provided
+            if (fcmToken) {
+                user.fcmToken = fcmToken;
+            }
+
+            // Update last login and Google profile image if not set
+            user.lastLogin = new Date();
+            if (!user.profileImage && picture) {
+                user.profileImage = picture;
+            }
+
+            await user.save();
+        } else {
+            // Create new user
+            const userName = await generateUniqueUsername(name || email.split('@')[0]);
+            
+            user = new User({
+                email: email.toLowerCase(),
+                userName: userName,
+                profileImage: picture || null,
+                fcmToken: fcmToken || null,
+                step: 5, // Complete registration for Google users
+                lastLogin: new Date(),
+                // Note: No password for Google users - they can only sign in via Google
+                // Or you can generate a random password if needed
+            });
+
+            await user.save();
+
+            // Index the user in Algolia after successful registration
+            try {
+                await indexUser(user);
+            } catch (algoliaError) {
+                console.error('Algolia indexing failed for Google user:', user._id, algoliaError);
+                // Don't fail the main operation if Algolia fails
+            }
+
+            // Populate location fields for new user
+            user = await User.findById(user._id).populate([
+                { path: 'provinceId', select: 'value' }, 
+                { path: 'districtId', select: 'value' }
+            ]);
+        }
+
+        // Get follower counts
+        const [totalFollowers, totalFollowing] = await Promise.all([
+            Follow.countDocuments({
+                userId: user._id,
+                isDeleted: false,
+                isDisable: false
+            }),
+            Follow.countDocuments({
+                followedBy: user._id,
+                isDeleted: false,
+                isDisable: false
+            })
+        ]);
+
+        // Generate JWT token
+        const payload_jwt = {
+            userId: user._id,
+            email: user.email,
+            roleId: user.roleId,
+            role: user.role,
+            userName: user.userName,
+            profileImage: user.profileImage
+        };
+
+        const token = signToken(payload_jwt);
+
+        // Prepare response
+        const userResponse = {
+            token,
+            ...user.toJSON(),
+            totalFollowers,
+            totalFollowing
+        };
+
+        return apiSuccessRes(
+            HTTP_STATUS.OK, 
+            res, 
+            "Google sign-in successful", 
+            userResponse
+        );
+
+    } catch (error) {
+        console.error('Google Sign-In error:', error);
+        return apiErrorRes(
+            HTTP_STATUS.INTERNAL_SERVER_ERROR,
+            res,
+            "Internal server error",
+            error.message
+        );
+    }
+};
+
+// Helper function to generate unique username
+const generateUniqueUsername = async (baseName) => {
+    let username = baseName.toLowerCase().replace(/[^a-zA-Z0-9@._]/g, '');
+    
+    // Ensure username has at least one letter
+    if (!/[a-zA-Z]/.test(username)) {
+        username = 'user' + username;
+    }
+    
+    // Ensure minimum length
+    if (username.length < 3) {
+        username = username + Math.floor(Math.random() * 1000);
+    }
+    
+    let counter = 0;
+    let finalUsername = username;
+    
+    while (true) {
+        const existingUser = await User.findOne({ userName: finalUsername });
+        if (!existingUser) {
+            break;
+        }
+        counter++;
+        finalUsername = `${username}${counter}`;
+    }
+    
+    return finalUsername;
+};
 
 const follow = async (req, res) => {
     try {
@@ -2616,6 +2790,7 @@ router.post('/resendLoginOtp', perApiLimiter(), upload.none(), resendLoginOtp);
 
 router.post('/login', perApiLimiter(), upload.none(), validateRequest(loginSchema), login);
 router.post('/loginAsGuest', perApiLimiter(), upload.none(), loginAsGuest);
+router.post('/googleSignIn', perApiLimiter(), upload.none(), validateRequest(googleSignInSchema), googleSignIn);
 
 //RESET PASSWORD 
 router.post('/requestResetOtp', perApiLimiter(), upload.none(), requestResetOtp);

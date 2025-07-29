@@ -119,6 +119,14 @@ const otpTokenSchema = Joi.object({
   otpToken: Joi.string().required(),
 })
 
+const googleSignInSchema = Joi.object({
+  idToken: Joi.string().required().messages({
+    'string.base': `"idToken" should be a type of 'string'`,
+    'any.required': `"idToken" is a required field`
+  }),
+  fcmToken: Joi.string().optional()
+});
+
 module.exports = {
   loginSchema,
   mobileLoginSchema,
@@ -137,5 +145,6 @@ module.exports = {
   loginStepThreeSchema,
   otpTokenSchema,
   resendOtpSchema,
-  resendResetOtpSchema
+  resendResetOtpSchema,
+  googleSignInSchema
 };
