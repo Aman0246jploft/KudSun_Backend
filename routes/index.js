@@ -21,6 +21,7 @@ module.exports = {
     supportKey: require("./controller/controllerSupportKey"),
     sellerBank: require("./controller/controllerSellerBank"),
     reportType: require("./controller/controllerReportType"),
+    disputeType: require("./controller/controllerDisputeType"),
 
 
     revenue: require("./controller/controllerPlatformRevenue"),

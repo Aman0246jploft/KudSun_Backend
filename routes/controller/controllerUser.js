@@ -3,7 +3,7 @@ const express = require('express');
 const multer = require('multer');
 const upload = multer();
 const router = express.Router();
-const { User, Follow, ThreadLike, ProductLike, SellProduct, Thread, Order, SellProductDraft, ThreadDraft, TempUser, Bid, UserLocation, ProductReview, BlockUser } = require('../../db');
+const { User, Follow, ThreadLike, ProductLike, SellProduct, Thread, Order, SellProductDraft, ThreadDraft, TempUser, Bid, UserLocation, ProductReview, BlockUser, SellerVerification } = require('../../db');
 const { getDocumentByQuery } = require('../services/serviceGlobalCURD');
 const CONSTANTS_MSG = require('../../utils/constantsMessage');
 const CONSTANTS = require('../../utils/constants')
@@ -1445,7 +1445,7 @@ const getProfile = async (req, res) => {
 
 
 
-        const [myThreadCount, productListed, boughtCount, sellCount, ThreadDraftCount, ProductDraftCount, ThreadLikes, productLike] = await Promise.all([
+        const [myThreadCount, productListed, boughtCount, sellCount, ThreadDraftCount, ProductDraftCount, ThreadLikes, productLike, sellerVerification] = await Promise.all([
 
             Thread.countDocuments({ userId, isDeleted: false }),
             SellProducts.countDocuments({ userId, isDeleted: false }),
@@ -1460,12 +1460,13 @@ const getProfile = async (req, res) => {
             SellProductDraft.countDocuments({ userId, isDeleted: false }),
 
             ThreadLike.countDocuments({ likeBy: toObjectId(userId), isDeleted: false }),
-            ProductLike.countDocuments({ likeBy: toObjectId(userId), isDeleted: false })
-
+            ProductLike.countDocuments({ likeBy: toObjectId(userId), isDeleted: false }),
+            SellerVerification.findOne({
+                userId: toObjectId(userId)
+            }).sort({ createdAt: -1 })
         ]);
 
-
-
+        const sellerVerificationStatus = !sellerVerification || sellerVerification.verificationStatus !== "Approved";
 
         const output = {
             userId: user._id,
@@ -1478,7 +1479,7 @@ const getProfile = async (req, res) => {
             dob: user.dob,
             gender: user.gender,
             language: user.language,
-            is_Verified_Seller: user.is_Verified_Seller,
+            is_Verified_Seller: sellerVerificationStatus,
             is_Id_verified: user.is_Id_verified,
             is_Preferred_seller: user.is_Preferred_seller,
             myThreadCount,

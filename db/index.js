@@ -62,6 +62,7 @@ module.exports = {
     OrderStatusHistory: require("./models/Payment/OrderStatusHistory"),
 
     ReportType: require('./models/ReportType'),
+    DisputeType: require('./models/DisputeType'),
 
     Transaction: require("./models/Payment/Transaction"),
     PlatformRevenue: require("./models/PlatformRevenue"),
