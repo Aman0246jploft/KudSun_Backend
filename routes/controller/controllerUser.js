@@ -1752,6 +1752,7 @@ const userList = async (req, res) => {
             status,
             isDisable,
             showSellerRequests = false,
+            isFlagedReported = false,
             showReported = false,
             registrationDateStart,
             sortBy = "createdAt",
@@ -1768,6 +1769,12 @@ const userList = async (req, res) => {
             isDeleted: false,
             roleId: { $nin: [roleId.SUPER_ADMIN, roleId.GUEST] },
         };
+
+        if (isFlagedReported === true || isFlagedReported === "true") {
+            query["isFlagedReported"] = true;
+        }
+
+
 
         if (keyWord) {
             const regex = new RegExp(keyWord, "i");
@@ -1899,6 +1906,10 @@ const userList = async (req, res) => {
                 },
             });
         }
+
+
+
+
 
 
         aggregation.push({

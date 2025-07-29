@@ -3412,7 +3412,7 @@ router.post('/toggleProductDisable/:id', perApiLimiter(), upload.none(), toggleP
 
 
 router.get('/getDraftProducts', perApiLimiter(), getDraftProducts);
-router.post('/deleteProduct/:id', perApiLimiter(), deleteProduct);
+router.get('/deleteProduct/:id', perApiLimiter(), deleteProduct);
 router.post('/trending/:id', perApiLimiter(), trending);
 router.post('/update-all-trending', perApiLimiter(), updateAllTrending);
 
