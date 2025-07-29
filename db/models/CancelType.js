@@ -2,11 +2,12 @@ const mongoose = require('mongoose');
 
 const Schema = mongoose.Schema;
 
-const DisputeTypeSchema = new Schema({
+const CancelTypeSchema = new Schema({
     name: {
         type: String,
         required: true,
         trim: true,
+
         unique: true,
         minlength: 2
     },
@@ -17,6 +18,6 @@ const DisputeTypeSchema = new Schema({
 });
 
 // Optional index
-// DisputeTypeSchema.index({ name: 1 });
+// CancelTypeSchema.index({ name: 1 });
 
-module.exports = mongoose.model('DisputeType', DisputeTypeSchema, 'DisputeType'); // or omit 3rd arg for auto pluralization
+module.exports = mongoose.model('CancelType', CancelTypeSchema, 'CancelType'); // or omit 3rd arg for auto pluralization

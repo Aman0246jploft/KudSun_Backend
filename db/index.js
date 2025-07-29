@@ -64,6 +64,9 @@ module.exports = {
     ReportType: require('./models/ReportType'),
     DisputeType: require('./models/DisputeType'),
 
+    CancelType: require('./models/CancelType'),
+
+
     Transaction: require("./models/Payment/Transaction"),
     PlatformRevenue: require("./models/PlatformRevenue"),
     WalletTnx: require("./models/Payment/WalletTnx"),

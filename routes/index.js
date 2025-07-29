@@ -22,6 +22,7 @@ module.exports = {
     sellerBank: require("./controller/controllerSellerBank"),
     reportType: require("./controller/controllerReportType"),
     disputeType: require("./controller/controllerDisputeType"),
+    cancelType: require("./controller/controllerCancelType"),
 
 
     revenue: require("./controller/controllerPlatformRevenue"),
