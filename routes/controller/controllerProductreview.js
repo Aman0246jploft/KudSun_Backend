@@ -138,7 +138,7 @@ const createOrUpdateReview = async (req, res) => {
             seller.averageRating = seller.totalRatingCount > 0
                 ? parseFloat((seller.totalRatingSum / seller.totalRatingCount).toFixed(2))
                 : 0;
-                
+
             await seller.save();
 
         } else if (raterRole === 'seller') {
@@ -193,7 +193,7 @@ const createOrUpdateReview = async (req, res) => {
                     raterRole: raterRole,
                     raterName: raterName,
                     isNewReview: isNewReview,
-                    sellerId: order.sellerId,   
+                    sellerId: order.sellerId,
                     buyerId: order.userId,
                     orderStatus: order.status
                 }),
@@ -499,7 +499,8 @@ const getReviewersList = async (req, res) => {
                 $match: {
                     productId: { $in: productIds },
                     isDeleted: false,
-                    isDisable: false
+                    isDisable: false,
+                    otheruserId: toObjectId(userId) // Add this line
                 }
             },
             {
