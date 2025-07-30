@@ -1043,6 +1043,7 @@ const getLikedThreads = async (req, res) => {
         // 2. Build match condition for liked threads and keyword search
         const matchCondition = {
             _id: { $in: likedThreadIds }
+
         };
 
         if (keyword) {
@@ -1087,6 +1088,7 @@ const getLikedThreads = async (req, res) => {
                         {
                             $match: {
                                 $expr: { $eq: ["$thread", "$$threadId"] },
+                                parent: null,
                                 isDisable: false,
                                 isDeleted: false
                             }
