@@ -4737,7 +4737,7 @@ const cancelOrderByBuyer = async (req, res) => {
         const { orderId } = req.params;
         const { cancellationReason } = req.body;
 
-console.log("44444444444")
+        console.log("44444444444")
 
         // Input validation
         if (!buyerId) {
@@ -4752,7 +4752,10 @@ console.log("44444444444")
         // Find the order and validate ownership
         const order = await Order.findOne({
             _id: orderId,
-            userId: buyerId,
+            $or: [
+                { userId: buyerId },
+                { sellerId: buyerId }
+            ],
             isDeleted: false
         }).populate('items.productId');
 
@@ -4801,12 +4804,15 @@ console.log("44444444444")
             }
         } else if (allLocalPickup) {
             // For local pickup orders - check 3-day rule
+            const daysToCheck = parseInt(process.env.DAY || '3', 10);
+
             const orderDate = new Date(order.createdAt);
             const currentDate = new Date();
             const hoursDifference = (currentDate - orderDate) / (1000 * 60 * 60);
-            const threeDaysInHours = 72; // 3 days = 72 hours
+            const limitInHours = daysToCheck * 24;
 
-            if (hoursDifference <= threeDaysInHours) {
+
+            if (hoursDifference <= limitInHours) {
                 if ([ORDER_STATUS.PENDING, ORDER_STATUS.CONFIRMED].includes(order.status)) {
                     canCancel = true;
                 } else {
