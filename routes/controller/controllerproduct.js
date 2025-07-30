@@ -4,7 +4,7 @@ const upload = multer();
 const router = express.Router();
 const { SellProduct, Bid, SearchHistory, Follow, User, ProductComment, SellProductDraft, Category, ProductLike, ProductReview } = require('../../db');
 const perApiLimiter = require('../../middlewares/rateLimiter');
-const { apiErrorRes, apiSuccessRes, toObjectId, formatTimeRemaining } = require('../../utils/globalFunction');
+const { apiErrorRes, apiSuccessRes, toObjectId, formatTimeRemaining, isNewItem } = require('../../utils/globalFunction');
 const HTTP_STATUS = require('../../utils/statusCode');
 const { uploadImageCloudinary, deleteImageCloudinary } = require('../../utils/cloudinary');
 const CONSTANTS_MSG = require('../../utils/constantsMessage');
@@ -856,7 +856,8 @@ const showNormalProducts = async (req, res) => {
                         originPrice: 1,
                         description: 1,
                         specifics: 1,
-                        categoryId: 1
+                        categoryId: 1,
+                        createdAt:1
                     }
                 }
             ];
@@ -884,6 +885,7 @@ const showNormalProducts = async (req, res) => {
                     const category = categories.find(cat => cat?._id.toString() === product?.categoryId?._id.toString());
                     const subCat = category?.subCategories?.find(sub => sub?._id.toString() === product?.subCategoryId?.toString());
                     product["subCategoryName"] = subCat ? subCat.name : null;
+                    product.isNew = isNewItem(product.createdAt);
                 }
             }
 
@@ -921,7 +923,7 @@ const showNormalProducts = async (req, res) => {
                 .sort(sortOptions)
                 .skip(skip)
                 .limit(limit)
-                .select("title fixedPrice saleType shippingCharge deliveryType isTrending isDisable productImages condition subCategoryId isSold userId  tags originPriceView originPrice description specifics")
+                .select("title fixedPrice saleType shippingCharge deliveryType isTrending isDisable productImages condition subCategoryId isSold userId  tags originPriceView originPrice description specifics createdAt")
                 .populate("categoryId", "name")
                 .populate("userId", "userName profileImage averageRatting is_Id_verified isLive is_Preferred_seller")
                 .lean(),
@@ -939,6 +941,7 @@ const showNormalProducts = async (req, res) => {
             for (const product of products) {
                 const category = categories.find(cat => cat?._id.toString() === product?.categoryId?._id.toString());
                 const subCat = category?.subCategories?.find(sub => sub?._id.toString() === product?.subCategoryId?.toString());
+                product.isNew = isNewItem(product.createdAt);
                 if (subCat) {
                     product["subCategoryName"] = subCat.name;
                 } else {

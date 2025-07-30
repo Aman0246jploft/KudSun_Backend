@@ -154,6 +154,18 @@ function formatTimeRemaining(ms) {
 }
 
 
+
+const ONE_DAY_MS = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
+function isNewItem(createdAt) {
+  const now = Date.now();
+  const createdTime = new Date(createdAt).getTime();
+  return now - createdTime <= ONE_DAY_MS;
+}
+
+
+
+
 module.exports = {
   resultDb,
   generateOTP,
@@ -163,5 +175,6 @@ module.exports = {
   verifyPassword,
   toObjectId,
   parseItems,
-  formatTimeRemaining
+  formatTimeRemaining,
+  isNewItem
 };
