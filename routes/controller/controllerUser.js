@@ -7,7 +7,7 @@ const { getDocumentByQuery } = require('../services/serviceGlobalCURD');
 const CONSTANTS_MSG = require('../../utils/constantsMessage');
 const CONSTANTS = require('../../utils/constants')
 const HTTP_STATUS = require('../../utils/statusCode');
-const { apiErrorRes, verifyPassword, apiSuccessRes, generateOTP, generateKey, toObjectId } = require('../../utils/globalFunction');
+const { apiErrorRes, verifyPassword, apiSuccessRes, generateOTP, generateKey, toObjectId, isNewItem } = require('../../utils/globalFunction');
 const { signToken } = require('../../utils/jwtTokenUtils');
 const { loginSchema, followSchema, threadLikeSchema, productLikeSchema, requestResetOtpSchema, verifyResetOtpSchema, resetPasswordSchema, loginStepOneSchema, loginStepTwoSchema, loginStepThreeSchema, otpTokenSchema, resendResetOtpSchema, resendOtpSchema, googleSignInSchema } = require('../services/validations/userValidation');
 const validateRequest = require('../../middlewares/validateRequest');
@@ -987,11 +987,12 @@ const getLikedProducts = async (req, res) => {
         // Step 3: Add totalBids per product (if auction type)
         const productsWithBidCount = await Promise.all(
             products.map(async (product) => {
+                const isNew = isNewItem(product.createdAt);
                 if (product.saleType === SALE_TYPE.AUCTION) {
                     const bidCount = await Bid.countDocuments({ productId: product._id });
                     return { ...product, totalBids: bidCount };
                 }
-                return { ...product, totalBids: 0 };
+                return { ...product, totalBids: 0, isNew };
             })
         );
 
