@@ -1765,9 +1765,6 @@ const getSoldProducts = async (req, res) => {
                     labalStatuses = "Disputed"
                     allowedNextStatuses = "Response"
                 }
-
-
-
             }
 
             if (order.status == ORDER_STATUS.COMPLETED) {
@@ -1779,9 +1776,6 @@ const getSoldProducts = async (req, res) => {
             if (order.status == ORDER_STATUS.CANCELLED) {
                 labalStatuses = 'Cancelled';
                 allowedNextStatuses = ""
-
-
-
             }
 
 
