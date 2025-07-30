@@ -4737,6 +4737,8 @@ const cancelOrderByBuyer = async (req, res) => {
         const { orderId } = req.params;
         const { cancellationReason } = req.body;
 
+console.log("44444444444")
+
         // Input validation
         if (!buyerId) {
             return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Authentication required");
@@ -5046,8 +5048,6 @@ const cancelOrderByBuyer = async (req, res) => {
     }
 };
 
-
-
-router.post('/cancelOrderByBuyer/:orderId', perApiLimiter(), upload.none(), cancelOrderByBuyer);
+router.post('/cancelOrder/:orderId', perApiLimiter(), upload.none(), cancelOrderByBuyer);
 
 module.exports = router;
