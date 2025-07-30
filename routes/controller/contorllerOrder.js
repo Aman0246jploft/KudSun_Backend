@@ -4763,6 +4763,13 @@ const cancelOrderByBuyer = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Order not found");
         }
 
+        const isBuyer = String(order.userId) === String(req.user?.userId);
+        const isSeller = String(order.sellerId) === String(req.user?.userId);
+        
+        if (isSeller && order.status !== ORDER_STATUS.PENDING) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Sellers can only cancel orders in 'Pending' status");
+        }
+
         // Check if order is already in a terminal status
         const terminalStatuses = [ORDER_STATUS.CANCELLED, ORDER_STATUS.RETURNED, ORDER_STATUS.FAILED];
         if (terminalStatuses.includes(order.status)) {
@@ -4773,6 +4780,8 @@ const cancelOrderByBuyer = async (req, res) => {
         if (order.paymentStatus !== PAYMENT_STATUS.COMPLETED) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Only paid orders can be cancelled");
         }
+
+
 
         // Populate product data to check delivery types
         const populatedOrder = await order.populate('items.productId');
