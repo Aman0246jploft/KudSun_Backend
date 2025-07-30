@@ -988,8 +988,8 @@ const getThreads = async (req, res) => {
             isTrending = 'false',
             sortBy = 'createdAt', // 'createdAt' | 'budget' | 'comments'
             orderBy = 'desc',   // 'asc' | 'desc',
-            minBudget,
-            maxBudget,
+            minPrice,
+            maxPrice,
             isDraft = 'false',
             minAverageRatting,
             provinceId,
@@ -1006,13 +1006,13 @@ const getThreads = async (req, res) => {
         let limit = parseInt(size);
 
         const filters = { isDeleted: false };
-        if (minBudget || maxBudget) {
+        if (minPrice || maxPrice) {
             filters['budgetRange.min'] = {};
-            if (minBudget) {
-                filters['budgetRange.min'].$gte = parseFloat(minBudget);
+            if (minPrice) {
+                filters['budgetRange.min'].$gte = parseFloat(minPrice);
             }
-            if (maxBudget) {
-                filters['budgetRange.min'].$lte = parseFloat(maxBudget);
+            if (maxPrice) {
+                filters['budgetRange.min'].$lte = parseFloat(maxPrice);
             }
         }
 
