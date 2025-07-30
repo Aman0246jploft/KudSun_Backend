@@ -199,7 +199,8 @@ const createStandardizedNotificationMeta = (data = {}) => {
         shippingFee: data.shippingFee || null,
         taxAmount: data.taxAmount || null,
         serviceCharge: data.serviceCharge || null,
-        platformFee: data.platformFee || null
+        platformFee: data.platformFee || null,
+        roomId:data.roomId||null
     };
 };
 

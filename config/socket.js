@@ -7,6 +7,7 @@ const { handleGetChatRooms, handleGetMessageList } = require('../routes/controll
 const { toObjectId } = require('../utils/globalFunction');
 const path = require('path');
 const { NOTIFICATION_TYPES, createStandardizedNotificationMeta } = require('../utils/Role');
+const { saveNotification } = require('../routes/services/serviceNotification');
 
 // Get base URL from environment or default to localhost
 const BASE_URL = process.env.BASE_URL || 'http://localhost:9097';
@@ -47,6 +48,8 @@ async function setupSocket(server) {
 
     io.on('connection', (socket) => {
         const userId = socket.user.userId;
+        const userName = socket.user.userName;
+
         let socketId = socket.id
         socket.join(`user_${userId}`);
         connectedUsers[socket.id] = userId;
@@ -86,27 +89,14 @@ async function setupSocket(server) {
                         recipientId: recipientId,
                         userId: recipientId,
                         type: NOTIFICATION_TYPES.CHAT,
-                        title: `New message from ${senderName}`,
-                        message: `A buyer has cancelled their order. Reason: ${cancellationReason}`,
+                        title: `New message from ${userName}`,
+                        message: `You have received a new message in chat.`,
                         meta: createStandardizedNotificationMeta({
-                            orderNumber: order._id.toString(),
-                            orderId: order._id.toString(),
-                            newStatus: ORDER_STATUS.CANCELLED,
-                            oldStatus: order.status,
-                            actionBy: 'buyer',
-                            sellerId: order.sellerId,
-                            buyerId: buyerId,
-                            totalAmount: order.grandTotal,
-                            amount: order.grandTotal,
-                            itemCount: order.items.length,
-                            paymentMethod: order.paymentMethod,
-                            cancellationReason: cancellationReason,
-                            status: ORDER_STATUS.CANCELLED
+                            roomId: roomId,
                         }),
-                        redirectUrl: `/order/${order._id}`
                     }];
 
-                    await saveNotification(sellerNotification);
+                    await saveNotification(notification);
                 }
 
 
