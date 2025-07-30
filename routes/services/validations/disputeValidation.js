@@ -3,12 +3,7 @@ const { DISPUTE_RESPONSE_TYPE, DISPUTE_DECISION, DISPUTE_STATUS } = require('../
 
 exports.createDisputeSchema = Joi.object({
   orderId: Joi.string().hex().length(24).required(),
-  disputeType: Joi.string().valid(
-    'ITEM_NOT_RECEIVED',
-    'ITEM_NOT_AS_DESCRIBED',
-    'FAKE_ITEM',
-    'SIGNIFICANT_DAMAGE'
-  ).required(),
+  disputeType: Joi.string().required(),
   description: Joi.string().max(1200).required()
 });
 
