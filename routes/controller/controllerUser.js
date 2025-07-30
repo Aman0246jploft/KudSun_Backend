@@ -591,13 +591,13 @@ const googleSignIn = async (req, res) => {
         }
 
         const payload = ticket.getPayload();
-        const { 
-            email, 
-            name, 
-            picture, 
+        const {
+            email,
+            name,
+            picture,
             sub: googleId,
             given_name: firstName,
-            family_name: lastName 
+            family_name: lastName
         } = payload;
 
         if (!email) {
@@ -606,7 +606,7 @@ const googleSignIn = async (req, res) => {
 
         // Check if user already exists with this email
         let user = await User.findOne({ email: email.toLowerCase() }).populate([
-            { path: 'provinceId', select: 'value' }, 
+            { path: 'provinceId', select: 'value' },
             { path: 'districtId', select: 'value' }
         ]);
 
@@ -620,12 +620,11 @@ const googleSignIn = async (req, res) => {
             }
 
             // Update FCM token if provided
-            if (fcmToken) {
+            if (fcmToken && fcmToken !== "") {
                 user.fcmToken = fcmToken;
             }
 
             // Update last login and Google profile image if not set
-            user.lastLogin = new Date();
             if (!user.profileImage && picture) {
                 user.profileImage = picture;
             }
@@ -634,14 +633,13 @@ const googleSignIn = async (req, res) => {
         } else {
             // Create new user
             const userName = await generateUniqueUsername(name || email.split('@')[0]);
-            
+
             user = new User({
                 email: email.toLowerCase(),
                 userName: userName,
                 profileImage: picture || null,
                 fcmToken: fcmToken || null,
                 step: 5, // Complete registration for Google users
-                lastLogin: new Date(),
                 // Note: No password for Google users - they can only sign in via Google
                 // Or you can generate a random password if needed
             });
@@ -658,7 +656,7 @@ const googleSignIn = async (req, res) => {
 
             // Populate location fields for new user
             user = await User.findById(user._id).populate([
-                { path: 'provinceId', select: 'value' }, 
+                { path: 'provinceId', select: 'value' },
                 { path: 'districtId', select: 'value' }
             ]);
         }
@@ -698,9 +696,9 @@ const googleSignIn = async (req, res) => {
         };
 
         return apiSuccessRes(
-            HTTP_STATUS.OK, 
-            res, 
-            "Google sign-in successful", 
+            HTTP_STATUS.OK,
+            res,
+            "Google sign-in successful",
             userResponse
         );
 
@@ -718,20 +716,20 @@ const googleSignIn = async (req, res) => {
 // Helper function to generate unique username
 const generateUniqueUsername = async (baseName) => {
     let username = baseName.toLowerCase().replace(/[^a-zA-Z0-9@._]/g, '');
-    
+
     // Ensure username has at least one letter
     if (!/[a-zA-Z]/.test(username)) {
         username = 'user' + username;
     }
-    
+
     // Ensure minimum length
     if (username.length < 3) {
         username = username + Math.floor(Math.random() * 1000);
     }
-    
+
     let counter = 0;
     let finalUsername = username;
-    
+
     while (true) {
         const existingUser = await User.findOne({ userName: finalUsername });
         if (!existingUser) {
@@ -740,7 +738,7 @@ const generateUniqueUsername = async (baseName) => {
         counter++;
         finalUsername = `${username}${counter}`;
     }
-    
+
     return finalUsername;
 };
 
