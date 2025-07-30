@@ -2853,7 +2853,7 @@ router.post('/updateUserNotificationSettings', perApiLimiter(), upload.none(), u
 
 
 
-//NotifiactionTable
+//Notifiaction
 
 
 

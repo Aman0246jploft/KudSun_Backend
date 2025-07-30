@@ -1790,9 +1790,11 @@ const getSoldProducts = async (req, res) => {
             //     labalStatuses = "InProgress"
             //     allowedNextStatuses = ""
             // }
-            // else if (currentStatus === ORDER_STATUS.SHIPPED) {
-            //     allowedNextStatuses = ORDER_STATUS.DELIVERED;
-            // }
+            // else
+            if (currentStatus === ORDER_STATUS.SHIPPED) {
+                labalStatuses = "Shipped";
+                allowedNextStatuses = ""
+            }
             // else {
             //     allowedNextStatuses = ALLOWED_NEXT_STATUSES[currentStatus] || [];
             // }
@@ -2712,6 +2714,46 @@ const getOrderDetails = async (req, res) => {
             })
         );
 
+
+        const isLocalPickup = (order.items || [])[0]?.productId?.deliveryType === 'local_pickup';
+
+        // Define base steps
+        const baseSteps = isLocalPickup
+            ? ['paid', 'delivered', 'review']
+            : ['paid', 'shipped', 'delivered', 'review'];
+
+        // Normalize history statuses to lowercase
+        const statusSet = new Set((statusHistory || []).map(h => h.newStatus?.toLowerCase()));
+
+        // Helper to check if step is reached
+        const getStepStatus = (step, index, allSteps) => {
+            if (step === 'paid') return statusSet.has('confirmed') || statusSet.has('completed'); // 'confirmed' means paid
+            if (step === 'shipped') return statusSet.has('shipped');
+            if (step === 'delivered') return statusSet.has('delivered');
+            if (step === 'review') return reviews?.length > 0 && reviews[0].reviews?.some(r => r.isYourReview);
+            return false;
+        };
+
+        // Build progress bar array
+        const progressSteps = baseSteps.map((step, index) => {
+            const isCompleted = getStepStatus(step, index, baseSteps);
+            return {
+                label: step.charAt(0).toUpperCase() + step.slice(1),
+                value: step,
+                status: isCompleted ? 'completed' : 'upcoming'
+            };
+        });
+
+        // Mark current active step
+        for (let i = 0; i < progressSteps.length; i++) {
+            if (progressSteps[i].status === 'upcoming') {
+                progressSteps[i].status = 'active';
+                break;
+            }
+        }
+
+
+
         // Fetch transaction info for this order
         const transaction = await Transaction.findOne({ orderId: order._id }).lean();
 
@@ -2723,6 +2765,8 @@ const getOrderDetails = async (req, res) => {
             taxes: order.Tax || 0,
             total: order.grandTotal || 0,
         };
+
+
 
         // Format response
         const response = {
@@ -2779,6 +2823,7 @@ const getOrderDetails = async (req, res) => {
                 cardLast4: transaction.cardLast4 || '',
                 createdAt: transaction.createdAt,
             } : null,
+            progressSteps: progressSteps
         };
 
         return apiSuccessRes(HTTP_STATUS.OK, res, 'Order details fetched', response);
@@ -2787,6 +2832,9 @@ const getOrderDetails = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || 'Failed to fetch order details');
     }
 };
+
+
+
 
 const retryOrderPayment = async (req, res) => {
     try {
