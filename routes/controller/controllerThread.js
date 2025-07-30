@@ -985,7 +985,7 @@ const getThreads = async (req, res) => {
             categoryId,
             subCategoryId,
             userId,
-            isTrending='false',
+            isTrending = 'false',
             sortBy = 'createdAt', // 'createdAt' | 'budget' | 'comments'
             orderBy = 'desc',   // 'asc' | 'desc',
             minBudget,
@@ -1124,7 +1124,7 @@ const getThreads = async (req, res) => {
                 { $group: { _id: '$userId', count: { $sum: 1 } } }
             ]),
             ThreadComment.aggregate([
-                { $match: { thread: { $in: threadIds } } },
+                { $match: { thread: { $in: threadIds }, parent: null } },
                 { $group: { _id: '$thread', count: { $sum: 1 } } }
             ]),
             ThreadLike.aggregate([
