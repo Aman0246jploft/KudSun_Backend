@@ -82,12 +82,12 @@ async function setupSocket(server) {
                 }
 
 
-                const recipientId = data.otherUserId;
+                
 
-                if (recipientId) {
+                if (data.otherUserId) {
                     const notification = [{
-                        recipientId: recipientId,
-                        userId: recipientId,
+                        recipientId: data.otherUserId,
+                        userId: data.otherUserId,
                         type: NOTIFICATION_TYPES.CHAT,
                         title: `New message from ${userName}`,
                         message: `You have received a new message in chat.`,
