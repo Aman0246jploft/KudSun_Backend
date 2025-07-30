@@ -857,7 +857,7 @@ const showNormalProducts = async (req, res) => {
                         description: 1,
                         specifics: 1,
                         categoryId: 1,
-                        createdAt:1
+                        createdAt: 1
                     }
                 }
             ];
@@ -1239,6 +1239,8 @@ const showAuctionProducts = async (req, res) => {
                 const endTime = new Date(product.auctionSettings.biddingEndsAt).getTime();
                 product.timeRemaining = timeLeftMs > 0 ? formatTimeRemaining(timeLeftMs) : 0;
                 product.auctionSettings.biddingEndsAt = localDate.toISO();
+                product.isNew = isNewItem(product.createdAt);
+
             }
 
             // Add isLiked
@@ -1299,7 +1301,8 @@ const showAuctionProducts = async (req, res) => {
                         description: 1,
                         specifics: 1,
                         categoryId: 1,
-                        userId: 1
+                        userId: 1,
+                        createdAt: 1
                     }
                 }
             ];
@@ -1343,6 +1346,8 @@ const showAuctionProducts = async (req, res) => {
                 product.totalBidsPlaced = bidsCountMap[product._id.toString()] || 0;
                 product.timeRemaining = timeLeftMs > 0 ? formatTimeRemaining(timeLeftMs) : 0;
                 product.auctionSettings.biddingEndsAt = localDate.toISO();
+                product.isNew = isNewItem(product.createdAt);
+
             }
 
             let likedProductIds = new Set();
@@ -1378,7 +1383,7 @@ const showAuctionProducts = async (req, res) => {
                 .sort(sortOptions) // Ending soonest first
                 .skip(skip)
                 .limit(limit)
-                .select("title productImages condition isDisable subCategoryId auctionSettings tags description specifics")
+                .select("title productImages condition isDisable subCategoryId auctionSettings tags description specifics createdAt")
                 .populate("categoryId", "name")
                 .populate("userId", "userName profileImage averageRatting is_Id_verified isLive is_Preferred_seller")
                 .lean(),
@@ -1393,6 +1398,8 @@ const showAuctionProducts = async (req, res) => {
                 .lean();
 
             for (const product of products) {
+                product.isNew = isNewItem(product.createdAt);
+
                 const category = categories.find(cat => cat?._id.toString() === product?.categoryId?._id.toString());
                 const subCat = category?.subCategories?.find(sub => sub?._id.toString() === product?.subCategoryId?.toString());
                 if (subCat) {
