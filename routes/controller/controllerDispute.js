@@ -632,6 +632,6 @@ router.post('/sellerRespond', perApiLimiter(), upload.array('file', 3), sellerRe
 router.post('/adminDecision', perApiLimiter(), upload.any(), adminDecision);
 router.post('/updateStatus', perApiLimiter(), updateStatus);
 router.get('/adminListAll', perApiLimiter(), adminListAll);
-router.get('/byOrderId/:orderId', perApiLimiter(), disputeByOrderId);
+router.get('/disputeByOrderId/:orderId', perApiLimiter(), disputeByOrderId);
 
 module.exports = router;

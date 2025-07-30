@@ -4,7 +4,7 @@ require('dotenv').config();
 const upload = multer();
 const router = express.Router();
 const moment = require("moment")
-const { UserAddress, Transaction, Order, SellProduct, Bid, FeeSetting, User, Shipping, OrderStatusHistory, ProductReview, ChatRoom, ChatMessage, WalletTnx, SellerWithdrawl, SellerBank, PlatformRevenue, Dispute } = require('../../db');
+const { UserAddress, Transaction, Order, SellProduct, Bid, FeeSetting, User, Shipping, OrderStatusHistory, ProductReview, ChatRoom, ChatMessage, WalletTnx, SellerWithdrawl, SellerBank, PlatformRevenue, Dispute, CancelType } = require('../../db');
 const { findOrCreateOneOnOneRoom } = require('../services/serviceChat');
 const { saveNotification } = require('../services/serviceNotification');
 const perApiLimiter = require('../../middlewares/rateLimiter');
@@ -1802,236 +1802,7 @@ const getSoldProducts = async (req, res) => {
 };
 
 
-const cancelOrderAndRelistProducts = async (req, res) => {
-    const maxRetries = 3;
-    let attempt = 0;
 
-    while (attempt < maxRetries) {
-        const session = await mongoose.startSession();
-
-        try {
-            session.startTransaction();
-
-            const { orderId } = req.body;
-            const sellerId = req.user?.userId; // Current user (seller)
-
-            // Input validation
-            if (!orderId) {
-                await session.abortTransaction();
-                session.endSession();
-                return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Order ID is required");
-            }
-
-            if (!sellerId) {
-                await session.abortTransaction();
-                session.endSession();
-                return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Authentication required");
-            }
-
-            // Define allowed statuses for cancellation
-            const allowedOrderStatuses = [
-                ORDER_STATUS.PENDING,
-                ORDER_STATUS.CANCELLED,
-                ORDER_STATUS.RETURNED,
-                ORDER_STATUS.FAILED,
-            ];
-
-            const allowedPaymentStatuses = [
-                PAYMENT_STATUS.PENDING,
-                PAYMENT_STATUS.FAILED,
-                PAYMENT_STATUS.REFUNDED,
-            ];
-
-            // Step 1: Find and validate the order
-            const order = await Order.findOne({
-                _id: orderId,
-                isDeleted: false
-            })
-                .populate({
-                    path: 'items.productId',
-                    select: 'userId isSold title', // Get seller info and current sold status
-                    model: 'SellProduct'
-                })
-                .session(session);
-
-            if (!order) {
-                await session.abortTransaction();
-                session.endSession();
-                return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Order not found");
-            }
-
-            // Step 2: Validate order status
-            if (!allowedOrderStatuses.includes(order.status)) {
-                await session.abortTransaction();
-                session.endSession();
-                return apiErrorRes(
-                    HTTP_STATUS.BAD_REQUEST,
-                    res,
-                    `Cannot cancel order. Current status: ${order.status}`
-                );
-            }
-
-            // Step 3: Validate payment status
-            if (!allowedPaymentStatuses.includes(order.paymentStatus)) {
-                await session.abortTransaction();
-                session.endSession();
-                return apiErrorRes(
-                    HTTP_STATUS.BAD_REQUEST,
-                    res,
-                    `Cannot cancel order. Payment status: ${order.paymentStatus}`
-                );
-            }
-
-            // Step 4: Validate seller ownership of ALL products in the order
-            const invalidProducts = [];
-            const validProductIds = [];
-
-            for (const item of order.items) {
-                if (!item.productId) {
-                    invalidProducts.push({ error: "Product not found", itemId: item._id });
-                    continue;
-                }
-                // Check if current user is the seller of this product
-                if (item.productId.userId.toString() !== sellerId.toString()) {
-                    invalidProducts.push({
-                        productId: item.productId._id,
-                        productTitle: item.productId.title,
-                        error: "You are not the seller of this product"
-                    });
-                } else {
-                    validProductIds.push(item.productId._id);
-                }
-            }
-
-            // If any products don't belong to the seller, reject the request
-            if (invalidProducts.length > 0) {
-                await session.abortTransaction();
-                session.endSession();
-                return apiErrorRes(
-                    HTTP_STATUS.FORBIDDEN,
-                    res,
-                    "You can only cancel orders containing your own products",
-                    { invalidProducts }
-                );
-            }
-
-            if (validProductIds.length === 0) {
-                await session.abortTransaction();
-                session.endSession();
-                return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "No valid products found in order");
-            }
-
-            // Step 5: Update products back to available (isSold: false)
-            // Only update products that are currently sold to avoid unnecessary writes
-            const productUpdateResult = await SellProduct.updateMany(
-                {
-                    _id: { $in: validProductIds },
-                    isSold: true, // Only update if currently sold
-                    userId: sellerId // Extra security check
-                },
-                {
-                    $set: {
-                        isSold: false,
-                        updatedAt: new Date()
-                    }
-                },
-                { session }
-            );
-
-            // console.log("Product relist result:", {
-            //     totalProducts: validProductIds.length,
-            //     matchedCount: productUpdateResult.matchedCount,
-            //     modifiedCount: productUpdateResult.modifiedCount
-            // });
-
-            // Step 6: Update order status to CANCELLED (if not already cancelled)
-            let orderUpdateResult = null;
-            if (order.status !== ORDER_STATUS.CANCELLED) {
-                orderUpdateResult = await Order.findByIdAndUpdate(
-                    order._id,
-                    {
-                        status: ORDER_STATUS.CANCELLED,
-                        cancelledAt: new Date(),
-                        cancelledBy: sellerId,
-                        updatedAt: new Date()
-                    },
-                    {
-                        session,
-                        new: true
-                    }
-                );
-            }
-
-            // Step 7: Commit transaction
-            await session.commitTransaction();
-            session.endSession();
-
-            // Success response with details
-            if (orderUpdateResult?.status !== order.status) {
-                await OrderStatusHistory.create({
-                    orderId: order._id,
-                    oldStatus: order.status,
-                    newStatus: orderUpdateResult.status,
-                    changedBy: req.user?.userId,
-                    note: 'Status updated by seller'
-                });
-            }
-
-            return apiSuccessRes(HTTP_STATUS.OK, res, "Order cancelled and products relisted successfully", {
-                orderId: order._id,
-                orderStatus: orderUpdateResult?.status || order.status,
-                productsRelisted: productUpdateResult.modifiedCount,
-                totalProducts: validProductIds.length,
-                message: productUpdateResult.modifiedCount < validProductIds.length
-                    ? "Some products were already available for sale"
-                    : "All products are now available for sale"
-            });
-
-        } catch (err) {
-            await session.abortTransaction();
-            session.endSession();
-
-            // Handle write conflicts with retry logic
-            if (err.errorLabels && err.errorLabels.includes('TransientTransactionError')) {
-                attempt++;
-                // console.log(`Write conflict detected. Retry attempt ${attempt}/${maxRetries}`, {
-                //     orderId: req.body.orderId,
-                //     sellerId: req.user?.userId,
-                //     errorCode: err.code
-                // });
-
-                if (attempt < maxRetries) {
-                    // Exponential backoff
-                    const delay = 100 * Math.pow(2, attempt);
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                    continue; // Retry the transaction
-                }
-            }
-
-            // Log error details for debugging
-            console.error("Cancel Order Error:", {
-                orderId: req.body.orderId,
-                sellerId: req.user?.userId,
-                attempt: attempt + 1,
-                error: err.message,
-                code: err.code,
-                codeName: err.codeName
-            });
-
-            return apiErrorRes(
-                HTTP_STATUS.INTERNAL_SERVER_ERROR,
-                res,
-                attempt >= maxRetries
-                    ? "Order cancellation failed after multiple attempts. Please try again later."
-                    : err.message || "Failed to cancel order and relist products",
-                {
-                    orderId: req.body.orderId,
-                    retryAttempt: attempt + 1
-                }
-            );
-        }
-    }
-};
 
 
 const ALLOWED_NEXT_STATUSES = {
@@ -4946,6 +4717,325 @@ router.post('/admin/markSellerPaid', perApiLimiter(), upload.none(), markSellerA
 // PENDING -> CONFIRMED -> SHIPPED -> DELIVERED sor seller
 // SHIPPED -> CONFIRM_RECEIPT 
 
+const cancelOrderByBuyer = async (req, res) => {
+    try {
+        const buyerId = req.user?.userId;
+        const { orderId } = req.params;
+        const { cancellationReason } = req.body;
 
+        // Input validation
+        if (!buyerId) {
+            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Authentication required");
+        }
+
+        if (!cancellationReason) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Cancellation reason is required");
+        }
+
+
+
+
+        // Find the order and validate ownership
+        const order = await Order.findOne({
+            _id: orderId,
+            userId: buyerId,
+            isDeleted: false
+        }).populate('items.productId');
+
+        if (!order) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Order not found");
+        }
+
+        // Check if order is already in a terminal status
+        const terminalStatuses = [ORDER_STATUS.CANCELLED, ORDER_STATUS.RETURNED, ORDER_STATUS.FAILED];
+        if (terminalStatuses.includes(order.status)) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `Order is already ${order.status}`);
+        }
+
+        // Check if payment is completed (only allow cancellation of paid orders)
+        if (order.paymentStatus !== PAYMENT_STATUS.COMPLETED) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Only paid orders can be cancelled");
+        }
+
+        // Populate product data to check delivery types
+        const populatedOrder = await order.populate('items.productId');
+
+        // Check if ALL products are local pickup
+        const allLocalPickup = populatedOrder.items.every(
+            item => item.productId?.deliveryType === "local pickup"
+        );
+
+        // Check if ANY product has shipping
+        const hasShippingProducts = populatedOrder.items.some(
+            item => item.productId?.deliveryType !== "local pickup"
+        );
+
+        // Validate cancellation based on delivery type and current status
+        let canCancel = false;
+        let reason = "";
+
+        if (hasShippingProducts) {
+            // For orders with shipping products
+            if ([ORDER_STATUS.PENDING, ORDER_STATUS.CONFIRMED].includes(order.status)) {
+                canCancel = true;
+            } else if (order.status === ORDER_STATUS.SHIPPED) {
+                canCancel = false;
+                reason = "Cannot cancel order after it has been shipped";
+            } else {
+                canCancel = false;
+                reason = `Cannot cancel order in ${order.status} status`;
+            }
+        } else if (allLocalPickup) {
+            // For local pickup orders - check 3-day rule
+            const orderDate = new Date(order.createdAt);
+            const currentDate = new Date();
+            const hoursDifference = (currentDate - orderDate) / (1000 * 60 * 60);
+            const threeDaysInHours = 72; // 3 days = 72 hours
+
+            if (hoursDifference <= threeDaysInHours) {
+                if ([ORDER_STATUS.PENDING, ORDER_STATUS.CONFIRMED].includes(order.status)) {
+                    canCancel = true;
+                } else {
+                    canCancel = false;
+                    reason = `Cannot cancel local pickup order in ${order.status} status`;
+                }
+            } else {
+                canCancel = false;
+                reason = "Cannot cancel local pickup order after 3 days of placement";
+            }
+        }
+
+        if (!canCancel) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, reason);
+        }
+
+        // Start transaction for atomic operations
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
+        try {
+            // Update order status and cancellation details
+            const updatedOrder = await Order.findByIdAndUpdate(
+                order._id,
+                {
+                    status: ORDER_STATUS.CANCELLED,
+                    cancelledBy: buyerId,
+                    cancellationReason,
+                    cancelledAt: new Date(),
+
+                    updatedAt: new Date()
+                },
+                {
+                    session,
+                    new: true
+                }
+            );
+
+            // Create order status history
+            await OrderStatusHistory.create([{
+                orderId: order._id,
+                oldStatus: order.status,
+                newStatus: ORDER_STATUS.CANCELLED,
+                changedBy: buyerId,
+                note: `Cancelled by buyer. Reason: ${cancellationReason}`
+            }], { session });
+
+            // Reset product availability (set isSold = false)
+            const productIds = order.items.map(item => item.productId._id);
+            await SellProduct.updateMany(
+                {
+                    _id: { $in: productIds },
+                    isSold: true
+                },
+                {
+                    $set: {
+                        isSold: false,
+                        updatedAt: new Date()
+                    }
+                },
+                { session }
+            );
+
+            // Create or get chat room for system message
+            const { room } = await findOrCreateOneOnOneRoom(buyerId, order.sellerId);
+
+            // Create system message for cancellation
+            const systemMessage = new ChatMessage({
+                chatRoom: room._id,
+                messageType: 'TEXT',
+                content: `Order cancelled by buyer`,
+                systemMeta: {
+                    statusType: 'ORDER',
+                    status: ORDER_STATUS.CANCELLED,
+                    orderId: order._id,
+                    productId: order.items[0].productId,
+                    title: 'Order Cancelled by Buyer',
+                    meta: createStandardizedChatMeta({
+                        orderNumber: order._id.toString(),
+                        previousStatus: order.status,
+                        newStatus: ORDER_STATUS.CANCELLED,
+                        totalAmount: `$${(order.grandTotal || 0).toFixed(2)}`,
+                        amount: order.grandTotal,
+                        itemCount: order.items.length,
+                        sellerId: order.sellerId,
+                        buyerId: buyerId,
+                        orderStatus: ORDER_STATUS.CANCELLED,
+                        paymentStatus: order.paymentStatus,
+                        paymentMethod: order.paymentMethod,
+                        cancellationReason: cancellationReason,
+                    }),
+                    actions: [
+                        {
+                            label: "View Order",
+                            url: `/order/${order._id}`,
+                            type: "primary"
+                        }
+                    ],
+                    theme: 'warning',
+                    content: `Order has been cancelled by the buyer. Reason: ${cancellationReason}`
+                }
+            });
+
+            await systemMessage.save({ session });
+
+            // Update chat room's last message
+            await ChatRoom.findByIdAndUpdate(
+                room._id,
+                {
+                    lastMessage: systemMessage._id,
+                    updatedAt: new Date()
+                },
+                { session }
+            );
+
+            // Emit system message to both parties
+            await emitSystemMessage(io, systemMessage, room, order.sellerId, buyerId);
+
+            // Send notification to seller about cancellation
+            const sellerNotification = [{
+                recipientId: order.sellerId,
+                userId: buyerId,
+                orderId: order._id,
+                productId: order.items[0].productId,
+                type: NOTIFICATION_TYPES.ORDER,
+                title: "Order Cancelled by Buyer",
+                message: `A buyer has cancelled their order. Reason: ${cancellationReason}`,
+                meta: createStandardizedNotificationMeta({
+                    orderNumber: order._id.toString(),
+                    orderId: order._id.toString(),
+                    newStatus: ORDER_STATUS.CANCELLED,
+                    oldStatus: order.status,
+                    actionBy: 'buyer',
+                    sellerId: order.sellerId,
+                    buyerId: buyerId,
+                    totalAmount: order.grandTotal,
+                    amount: order.grandTotal,
+                    itemCount: order.items.length,
+                    paymentMethod: order.paymentMethod,
+                    cancellationReason: cancellationReason,
+                    status: ORDER_STATUS.CANCELLED
+                }),
+                redirectUrl: `/order/${order._id}`
+            }];
+
+            await saveNotification(sellerNotification);
+
+            // Handle refund logic for paid orders
+            let refundStatus = "not_required";
+            let refundAmount = 0;
+
+            if (order.paymentStatus === PAYMENT_STATUS.COMPLETED && order.grandTotal > 0) {
+                // Create refund transaction for buyer
+                refundAmount = order.grandTotal;
+
+                const buyerRefundTnx = new WalletTnx({
+                    orderId: order._id,
+                    userId: buyerId,
+                    amount: refundAmount,
+                    netAmount: refundAmount,
+                    tnxType: TNX_TYPE.CREDIT, // Credit to buyer wallet
+                    tnxStatus: PAYMENT_STATUS.COMPLETED,
+                    note: `Refund for cancelled order. Reason: ${cancellationReason}`,
+                    createdAt: new Date()
+                });
+
+                await buyerRefundTnx.save({ session });
+
+                // Update buyer wallet balance
+                await User.findByIdAndUpdate(
+                    buyerId,
+                    { $inc: { walletBalance: refundAmount } },
+                    { session }
+                );
+
+                refundStatus = "completed";
+
+                console.log(`💰 Refund processed: ฿${refundAmount} credited to buyer wallet`);
+
+                // Send refund notification to buyer
+                const buyerRefundNotification = [{
+                    recipientId: buyerId,
+                    userId: buyerId,
+                    orderId: order._id,
+                    productId: order.items[0].productId,
+                    type: NOTIFICATION_TYPES.PAYMENT,
+                    title: "Refund Processed",
+                    message: `Your refund of ฿${refundAmount.toFixed(2)} has been credited to your wallet for the cancelled order.`,
+                    meta: createStandardizedNotificationMeta({
+                        orderNumber: order._id.toString(),
+                        orderId: order._id.toString(),
+                        amount: refundAmount,
+                        refundAmount: refundAmount,
+                        cancellationReason: cancellationReason,
+                        actionBy: 'buyer',
+                        sellerId: order.sellerId,
+                        buyerId: buyerId,
+                        status: ORDER_STATUS.CANCELLED
+                    }),
+                    redirectUrl: `/order/${order._id}`
+                }];
+
+                await saveNotification(buyerRefundNotification);
+            }
+
+            // Commit transaction
+            await session.commitTransaction();
+            session.endSession();
+
+            return apiSuccessRes(
+                HTTP_STATUS.OK,
+                res,
+                "Order cancelled successfully",
+                {
+                    orderId: order._id,
+                    status: ORDER_STATUS.CANCELLED,
+                    cancellationReason: cancellationReason,
+                    cancelledAt: new Date(),
+                    refundStatus: refundStatus,
+                    refundAmount: refundAmount,
+                    productsRelisted: productIds.length
+                }
+            );
+
+        } catch (error) {
+            await session.abortTransaction();
+            session.endSession();
+            throw error;
+        }
+
+    } catch (err) {
+        console.error("Cancel order by buyer error:", err);
+        return apiErrorRes(
+            HTTP_STATUS.INTERNAL_SERVER_ERROR,
+            res,
+            err.message || "Failed to cancel order",
+            err
+        );
+    }
+};
+
+
+
+router.post('/cancelOrderByBuyer/:orderId', perApiLimiter(), upload.none(), cancelOrderByBuyer);
 
 module.exports = router;

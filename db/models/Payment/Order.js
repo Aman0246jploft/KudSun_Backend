@@ -65,8 +65,13 @@ const OrderSchema = new Schema({
         type: Schema.Types.ObjectId,
         ref: 'Dispute',
     },
+
+    
     isDisable: { type: Boolean, default: false },
-    isDeleted: { type: Boolean, default: false }
+    isDeleted: { type: Boolean, default: false },
+    cancelledBy: { type: Schema.Types.ObjectId, ref: 'User' }, // Who cancelled (buyer/seller)
+    cancellationReason: { type: String }, // Reason for cancellation
+    cancelledAt: { type: Date }, // When it was cancelled
 }, {
     timestamps: true
 });
