@@ -6,6 +6,7 @@ const { findOrCreateOneOnOneRoom } = require('../routes/services/serviceChat');
 const { handleGetChatRooms, handleGetMessageList } = require('../routes/controller/controllerChat');
 const { toObjectId } = require('../utils/globalFunction');
 const path = require('path');
+const { NOTIFICATION_TYPES, createStandardizedNotificationMeta } = require('../utils/Role');
 
 // Get base URL from environment or default to localhost
 const BASE_URL = process.env.BASE_URL || 'http://localhost:9097';
@@ -76,6 +77,43 @@ async function setupSocket(server) {
                     isNewRoom = isNew || false;
                     socket.join(roomId); // join the socket room dynamically
                 }
+
+
+                const recipientId = data.otherUserId;
+
+                if (recipientId) {
+                    const notification = [{
+                        recipientId: recipientId,
+                        userId: recipientId,
+                        type: NOTIFICATION_TYPES.CHAT,
+                        title: `New message from ${senderName}`,
+                        message: `A buyer has cancelled their order. Reason: ${cancellationReason}`,
+                        meta: createStandardizedNotificationMeta({
+                            orderNumber: order._id.toString(),
+                            orderId: order._id.toString(),
+                            newStatus: ORDER_STATUS.CANCELLED,
+                            oldStatus: order.status,
+                            actionBy: 'buyer',
+                            sellerId: order.sellerId,
+                            buyerId: buyerId,
+                            totalAmount: order.grandTotal,
+                            amount: order.grandTotal,
+                            itemCount: order.items.length,
+                            paymentMethod: order.paymentMethod,
+                            cancellationReason: cancellationReason,
+                            status: ORDER_STATUS.CANCELLED
+                        }),
+                        redirectUrl: `/order/${order._id}`
+                    }];
+
+                    await saveNotification(sellerNotification);
+                }
+
+
+
+
+
+
 
                 // Handle file uploads
                 if (type === 'IMAGE' || type === 'VIDEO' || type === 'AUDIO' || type === 'FILE') {

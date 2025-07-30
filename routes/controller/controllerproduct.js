@@ -846,6 +846,7 @@ const showNormalProducts = async (req, res) => {
                         isTrending: 1,
                         isDisable: 1,
                         productImages: 1,
+
                         condition: 1,
                         subCategoryId: 1,
                         isSold: 1,
@@ -868,7 +869,7 @@ const showNormalProducts = async (req, res) => {
             // Populate manually (same fields as .populate())
             await SellProduct.populate(products, [
                 { path: "categoryId", select: "name" },
-                { path: "userId", select: "userName profileImage is_Id_verified isLive is_Preferred_seller" }
+                { path: "userId", select: "userName profileImage averageRatting is_Id_verified isLive is_Preferred_seller" }
             ]);
 
             // Add subCategoryName
@@ -922,7 +923,7 @@ const showNormalProducts = async (req, res) => {
                 .limit(limit)
                 .select("title fixedPrice saleType shippingCharge deliveryType isTrending isDisable productImages condition subCategoryId isSold userId  tags originPriceView originPrice description specifics")
                 .populate("categoryId", "name")
-                .populate("userId", "userName profileImage is_Id_verified isLive is_Preferred_seller")
+                .populate("userId", "userName profileImage averageRatting is_Id_verified isLive is_Preferred_seller")
                 .lean(),
 
             SellProduct.countDocuments(filter)
@@ -1376,7 +1377,7 @@ const showAuctionProducts = async (req, res) => {
                 .limit(limit)
                 .select("title productImages condition isDisable subCategoryId auctionSettings tags description specifics")
                 .populate("categoryId", "name")
-                .populate("userId", "userName profileImage is_Id_verified isLive is_Preferred_seller")
+                .populate("userId", "userName profileImage averageRatting is_Id_verified isLive is_Preferred_seller")
                 .lean(),
             SellProduct.countDocuments(filter)
         ]);
