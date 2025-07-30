@@ -146,7 +146,7 @@ const createDispute = async (req, res) => {
         // Create system message for dispute creation
         const disputeMessage = new ChatMessage({
             chatRoom: room._id,
-            messageType: 'DISPUTE_STATUS',
+            messageType: 'TEXT',
             systemMeta: {
                 statusType: 'DISPUTE',
                 status: DISPUTE_STATUS.PENDING,
@@ -283,7 +283,7 @@ const sellerRespond = async (req, res) => {
         // Create system message for seller response
         const responseMessage = new ChatMessage({
             chatRoom: room._id,
-            messageType: 'DISPUTE_STATUS',
+            messageType: 'TEXT',
             systemMeta: {
                 statusType: 'DISPUTE',
                 status: DISPUTE_STATUS.UNDER_REVIEW,
@@ -418,7 +418,7 @@ const adminDecision = async (req, res) => {
         // Create system message for admin decision
         const decisionMessage = new ChatMessage({
             chatRoom: room._id,
-            messageType: 'DISPUTE_STATUS',
+            messageType: 'TEXT',
             systemMeta: {
                 statusType: 'DISPUTE',
                 status: DISPUTE_STATUS.RESOLVED,
