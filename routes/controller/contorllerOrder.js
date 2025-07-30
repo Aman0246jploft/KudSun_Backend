@@ -1448,6 +1448,13 @@ const getBoughtProducts = async (req, res) => {
 
 
             }
+
+            if (order.status == ORDER_STATUS.CANCELLED) {
+                order.labalStatuses = 'Cancelled';
+
+
+            }
+
         }
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Bought products fetched successfully", {
@@ -1769,6 +1776,13 @@ const getSoldProducts = async (req, res) => {
 
             }
 
+            if (order.status == ORDER_STATUS.CANCELLED) {
+                labalStatuses = 'Cancelled';
+                allowedNextStatuses = ""
+
+
+
+            }
 
 
 
@@ -4731,8 +4745,6 @@ const cancelOrderByBuyer = async (req, res) => {
         if (!cancellationReason) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Cancellation reason is required");
         }
-
-
 
 
         // Find the order and validate ownership
