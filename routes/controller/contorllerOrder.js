@@ -4737,7 +4737,6 @@ const cancelOrderByBuyer = async (req, res) => {
         const { orderId } = req.params;
         const { cancellationReason } = req.body;
 
-        console.log("44444444444")
 
         // Input validation
         if (!buyerId) {
@@ -4765,10 +4764,7 @@ const cancelOrderByBuyer = async (req, res) => {
 
         const isBuyer = String(order.userId) === String(req.user?.userId);
         const isSeller = String(order.sellerId) === String(req.user?.userId);
-        
-        if (isSeller && order.status !== ORDER_STATUS.PENDING) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Sellers can only cancel orders in 'Pending' status");
-        }
+
 
         // Check if order is already in a terminal status
         const terminalStatuses = [ORDER_STATUS.CANCELLED, ORDER_STATUS.RETURNED, ORDER_STATUS.FAILED];
@@ -4898,7 +4894,7 @@ const cancelOrderByBuyer = async (req, res) => {
                     status: ORDER_STATUS.CANCELLED,
                     orderId: order._id,
                     productId: order.items[0].productId,
-                    title: 'Order Cancelled by Buyer',
+                    title: 'Order Cancelled',
                     meta: createStandardizedChatMeta({
                         orderNumber: order._id.toString(),
                         previousStatus: order.status,
