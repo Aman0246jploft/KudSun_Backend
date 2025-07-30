@@ -990,7 +990,7 @@ const getLikedProducts = async (req, res) => {
                 const isNew = isNewItem(product.createdAt);
                 if (product.saleType === SALE_TYPE.AUCTION) {
                     const bidCount = await Bid.countDocuments({ productId: product._id });
-                    return { ...product, totalBids: bidCount };
+                    return { ...product, totalBids: bidCount, isNew };
                 }
                 return { ...product, totalBids: 0, isNew };
             })
