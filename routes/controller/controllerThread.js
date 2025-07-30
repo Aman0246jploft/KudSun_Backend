@@ -1007,16 +1007,15 @@ const getThreads = async (req, res) => {
 
         const filters = { isDeleted: false };
         if (minPrice || maxPrice) {
-            filters['budgetRange.min'] = {};
             if (minPrice && minPrice !== "") {
-                filters['budgetRange.min'].$gte = parseFloat(minPrice);
+                filters['budgetRange.min'] = { $gte: parseFloat(minPrice) };
             }
+
             if (maxPrice && maxPrice !== "") {
-                filters['budgetRange.min'].$lte = parseFloat(maxPrice);
+                filters['budgetRange.max'] = { $lte: parseFloat(maxPrice) };
             }
         }
 
-        console.log(filters)
 
         if (categoryId && mongoose.Types.ObjectId.isValid(categoryId)) {
             filters.categoryId = categoryId;
