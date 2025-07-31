@@ -4,7 +4,7 @@ const upload = multer();
 const router = express.Router();
 const { SellProduct, Bid, SearchHistory, Follow, User, ProductComment, SellProductDraft, Category, ProductLike, ProductReview } = require('../../db');
 const perApiLimiter = require('../../middlewares/rateLimiter');
-const { apiErrorRes, apiSuccessRes, toObjectId, formatTimeRemaining, isNewItem } = require('../../utils/globalFunction');
+const { apiErrorRes, apiSuccessRes, toObjectId, formatTimeRemaining, isNewItem, getBlockedUserIds } = require('../../utils/globalFunction');
 const HTTP_STATUS = require('../../utils/statusCode');
 const { uploadImageCloudinary, deleteImageCloudinary } = require('../../utils/cloudinary');
 const CONSTANTS_MSG = require('../../utils/constantsMessage');
@@ -681,6 +681,12 @@ const showNormalProducts = async (req, res) => {
             // _id: { $nin: soldProductIds }
         };
 
+        const blockedUserIds = await getBlockedUserIds(req.user?.userId);
+        if (blockedUserIds.length) {
+            filter.userId = { $nin: blockedUserIds };
+        }
+
+
         if (!isAdmin) {
             filter.isDisable = false
         }
@@ -1017,6 +1023,11 @@ const showAuctionProducts = async (req, res) => {
         const limit = parseInt(size);
         const skip = (page - 1) * limit;
 
+
+
+
+
+
         // Step 1: Build filter
         const filter = {
             saleType: SALE_TYPE.AUCTION,
@@ -1024,6 +1035,10 @@ const showAuctionProducts = async (req, res) => {
 
         };
 
+        const blockedUserIds = await getBlockedUserIds(req.user?.userId);
+        if (blockedUserIds.length) {
+            filter.userId = { $nin: blockedUserIds };
+        }
 
         if (req.query.spec) {
             const specParams = Array.isArray(req.query.spec) ? req.query.spec : [req.query.spec];

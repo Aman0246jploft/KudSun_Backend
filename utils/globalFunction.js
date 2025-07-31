@@ -1,6 +1,7 @@
 const CONSTANTS = require('./constants');
 const bcrypt = require('bcryptjs');
 const { default: mongoose } = require('mongoose');
+const { BlockUser } = require('../db');
 
 
 const resultDb = (statusCode, data = null) => {
@@ -165,6 +166,14 @@ function isNewItem(createdAt) {
 
 
 
+const getBlockedUserIds = async (currentUserId) => {
+  if (!currentUserId) return [];
+  const blocked = await BlockUser.find({ blockBy: currentUserId }).select("userId").lean();
+  return blocked.map(b => b.userId.toString());
+};
+
+
+
 
 module.exports = {
   resultDb,
@@ -176,5 +185,6 @@ module.exports = {
   toObjectId,
   parseItems,
   formatTimeRemaining,
-  isNewItem
+  isNewItem,
+  getBlockedUserIds
 };

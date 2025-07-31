@@ -4,7 +4,7 @@ const upload = multer();
 const router = express.Router();
 const { Thread, ThreadComment, SellProduct, Bid, Follow, ThreadLike, ThreadDraft, User, Category } = require('../../db');
 const perApiLimiter = require('../../middlewares/rateLimiter');
-const { apiErrorRes, apiSuccessRes, toObjectId } = require('../../utils/globalFunction');
+const { apiErrorRes, apiSuccessRes, toObjectId, getBlockedUserIds } = require('../../utils/globalFunction');
 const HTTP_STATUS = require('../../utils/statusCode');
 const { uploadImageCloudinary } = require('../../utils/cloudinary');
 const CONSTANTS_MSG = require('../../utils/constantsMessage');
@@ -1008,6 +1008,9 @@ const getThreads = async (req, res) => {
         let page = parseInt(pageNo);
         let limit = parseInt(size);
 
+        const blockedUserIds = await getBlockedUserIds(req.user?.userId);
+
+
         const filters = { isDeleted: false };
         if (minPrice || maxPrice) {
             if (minPrice && minPrice !== "") {
@@ -1036,6 +1039,31 @@ const getThreads = async (req, res) => {
         if (userId && mongoose.Types.ObjectId.isValid(userId)) {
             filters.userId = userId; // 👈 filter by userId
         }
+
+
+        if (blockedUserIds.length > 0) {
+            if (filters.userId) {
+                // If filters.userId is already set
+                if (Array.isArray(filters.userId.$in)) {
+                    filters.userId.$in = filters.userId.$in.filter(id => !blockedUserIds.includes(id.toString()));
+                } else if (typeof filters.userId === 'object' && '$in' in filters.userId) {
+                    filters.userId.$in = filters.userId.$in.filter(id => !blockedUserIds.includes(id.toString()));
+                } else if (typeof filters.userId === 'string' || filters.userId instanceof mongoose.Types.ObjectId) {
+                    if (blockedUserIds.includes(filters.userId.toString())) {
+                        return apiSuccessRes(HTTP_STATUS.OK, res, "Products fetched successfully", {
+                            pageNo: parseInt(pageNo),
+                            size: parseInt(size),
+                            total: 0,
+                            products: [],
+                        });
+                    }
+                }
+            } else {
+                filters.userId = { $nin: blockedUserIds };
+            }
+        }
+
+
         if (keyWord?.trim()) {
             filters.title = { $regex: keyWord.trim(), $options: 'i' };
         }
