@@ -10,14 +10,16 @@ const notificationQueue = createQueue('notificationQueue');
 
 
 
-const saveNotification = async (payload) => {
+const saveNotification = async (payload, data) => {
     try {
+
         if (!Array.isArray(payload) || payload.length === 0) {
             return resultDb(SERVER_ERROR_CODE, "Payload must be a non-empty array");
         }
 
         for (const notification of payload) {
-            await addJobToQueue(notificationQueue, notification);
+            const notificationWithSkip = { ...notification, skip: data || false };
+            await addJobToQueue(notificationQueue, notificationWithSkip);
         }
 
         return resultDb(SUCCESS, { message: "Notifications added to the queue for processing" });
@@ -32,11 +34,13 @@ const notificationProcessor = async (job) => {
         const userNotification = job.data;
 
         // Validate required fields
-        const { recipientId: userId, title, message } = userNotification;
+        const { recipientId: userId, title, message, skip } = userNotification;
         if (!userId || !title || !message) {
             console.error("Invalid notification format in queue", userNotification);
             return;
         }
+
+
         // Send Firebase notification if token exists
         const userInfo = await User.findById(userId).select('fcmToken');
         if (userInfo?.fcmToken) {
@@ -50,20 +54,21 @@ const notificationProcessor = async (job) => {
         }
 
         // Save notification in DB
-        await Notification.create({
-            recipientId: userNotification.recipientId,
-            type: userNotification.type,
-            userId: userNotification.userId,
-            chatId: userNotification.chatId,
-            orderId: userNotification.orderId,
-            productId: userNotification.productId,
-            title: userNotification.title,
-            message: userNotification.message,
-            meta: userNotification.meta || {},
-            activityType: userNotification.activityType || null,
-            redirectUrl: userNotification.redirectUrl || null
-        });
-
+        if (!skip) {
+            await Notification.create({
+                recipientId: userNotification.recipientId,
+                type: userNotification.type,
+                userId: userNotification.userId,
+                chatId: userNotification.chatId,
+                orderId: userNotification.orderId,
+                productId: userNotification.productId,
+                title: userNotification.title,
+                message: userNotification.message,
+                meta: userNotification.meta || {},
+                activityType: userNotification.activityType || null,
+                redirectUrl: userNotification.redirectUrl || null
+            });
+        }
     } catch (error) {
         console.error("Error processing notification job:", error);
         throw error; // Let Bull handle retries if configured

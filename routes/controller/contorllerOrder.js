@@ -2768,6 +2768,53 @@ const getOrderDetails = async (req, res) => {
         };
 
 
+        let deliveryProgressSteps = [];
+        // Extract timestamps from statusHistory
+        const shippedStatus = statusHistory.find(h => h.newStatus?.toLowerCase() === 'shipped');
+        const deliveredStatus = statusHistory.find(h => h.newStatus?.toLowerCase() === 'delivered');
+        if (isLocalPickup) {
+            const isDelivered = !!deliveredStatus;
+            deliveryProgressSteps = [
+                {
+                    label: 'Delivered',
+                    value: 'delivered',
+                    status: isDelivered ? 'completed' : 'active',
+                    changedAt: deliveredStatus?.changedAt || null,
+                    address: order.addressId || null,
+                }
+            ];
+        } else {
+            const isShipped = !!shippedStatus;
+            const isDelivered = !!deliveredStatus;
+
+            // Determine each step's status
+            const shippedStep = {
+                label: 'Shipped',
+                value: 'shipped',
+                status: isShipped ? 'completed' : 'active',
+                changedAt: shippedStatus?.changedAt || null,
+            };
+
+            const onTheWayStep = {
+                label: 'On The Way',
+                value: 'on_the_way',
+                status: isDelivered ? 'completed' : (isShipped ? 'active' : 'upcoming'),
+                changedAt: isShipped ? shippedStatus?.changedAt || null : null, // Approx. time since shipped
+            };
+
+            const deliveredStep = {
+                label: 'Delivered',
+                value: 'delivered',
+                status: isDelivered ? 'completed' : (isShipped ? 'upcoming' : 'upcoming'),
+                changedAt: deliveredStatus?.changedAt || null,
+            };
+
+            deliveryProgressSteps = [shippedStep, onTheWayStep, deliveredStep];
+        }
+
+
+
+
 
         // Format response
         const response = {
@@ -2824,6 +2871,7 @@ const getOrderDetails = async (req, res) => {
                 cardLast4: transaction.cardLast4 || '',
                 createdAt: transaction.createdAt,
             } : null,
+            deliveryProgressSteps,
             progressSteps: progressSteps
         };
 

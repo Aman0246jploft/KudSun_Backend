@@ -82,8 +82,6 @@ async function setupSocket(server) {
                 }
 
 
-                
-
                 if (data.otherUserId) {
                     const notification = [{
                         recipientId: data.otherUserId,
@@ -93,11 +91,29 @@ async function setupSocket(server) {
                         message: `You have received a new message in chat.`,
                         meta: createStandardizedNotificationMeta({
                             roomId: roomId,
-                            userName:userName
+                            userName: userName
                         }),
                     }];
 
-                    await saveNotification(notification);
+                    await saveNotification(notification, true);
+                } else {
+                    const room = await ChatRoom.findById(roomId).lean();
+                    const otherParticipants = room.participants.filter(p => p.toString() !== userId);
+                    for (const recipientId of otherParticipants) {
+                        const notification = [{
+                            recipientId,
+                            userId: userId,
+                            type: NOTIFICATION_TYPES.CHAT,
+                            title: `New message from ${userName}`,
+                            message: `You have received a new message in chat.`,
+                            meta: createStandardizedNotificationMeta({
+                                roomId: roomId,
+                                userName: userName
+                            }),
+                        }];
+                        await saveNotification(notification, true);
+                    }
+
                 }
 
 
