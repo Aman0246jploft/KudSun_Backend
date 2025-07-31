@@ -244,15 +244,18 @@ const deleteThread = async (req, res) => {
 
         const Model = draftMode ? ThreadDraft : Thread;
 
+
+
         const existing = await Model.findById(id);
         // console.log(existing)
         if (!existing) {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, `${draftMode ? 'Draft' : 'Thread'} not found.`);
         }
 
-        if (existing.userId.toString() !== req.user.userId) {
+        if ((req.user.roleId !== roleId.SUPER_ADMIN) && (existing.userId.toString() !== req.user.userId)) {
             return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, "You are not authorized to delete this thread.");
         }
+
 
         // Soft delete: mark isDeleted = true
         existing.isDeleted = true;
