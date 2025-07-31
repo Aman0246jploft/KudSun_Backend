@@ -601,7 +601,13 @@ const disputeByOrderId = async (req, res) => {
             orderId: orderId,
             isDeleted: false
         })
-            .populate({ path: "orderId" })
+              .populate({
+            path: 'orderId',
+            populate: {
+                path: 'items.productId',
+                select: 'productImages title description',
+            },
+        })
             .populate('raisedBy', 'userName profileImage isLive is_Id_verified is_Verified_Seller is_Preferred_seller averageRatting')
             .populate('sellerId', 'userName profileImage isLive is_Id_verified is_Verified_Seller is_Preferred_seller averageRatting').lean()
 
