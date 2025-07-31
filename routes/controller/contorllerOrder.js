@@ -1729,9 +1729,7 @@ const getSoldProducts = async (req, res) => {
             let allowedNextStatuses = '';
             let labalStatuses = ''
 
-            if (paymentStatuss === PAYMENT_STATUS.PENDING) {
-                labalStatuses = 'Payment Pending'
-            }
+
 
 
 
@@ -1794,8 +1792,11 @@ const getSoldProducts = async (req, res) => {
             // }
 
 
+            if (paymentStatuss === PAYMENT_STATUS.PENDING) {
+                labalStatuses = 'Payment Pending',
+                allowedNextStatuses=""
+            }
 
-            
             order.allowedNextStatuses = allowedNextStatuses;
 
             order.labalStatuses = labalStatuses;
@@ -2725,7 +2726,7 @@ const getOrderDetails = async (req, res) => {
 
         // Helper to check if step is reached
         const getStepStatus = (step, index, allSteps) => {
-            if (step === 'paid') return statusSet.has('confirmed')|| statusSet.has('pending') || statusSet.has('completed'); // 'confirmed' means paid
+            if (step === 'paid') return statusSet.has('confirmed') || statusSet.has('pending') || statusSet.has('completed'); // 'confirmed' means paid
             if (step === 'shipped') return statusSet.has('shipped');
             if (step === 'delivered') return statusSet.has('delivered');
             if (step === 'review') return reviews?.length > 0 && reviews[0].reviews?.some(r => r.isYourReview);
