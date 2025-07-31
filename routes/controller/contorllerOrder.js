@@ -2790,21 +2790,21 @@ const getOrderDetails = async (req, res) => {
             // Determine each step's status
             const shippedStep = {
                 label: 'Shipped',
-                value: 'shipped',
+                value: `${shipping?.carrier?.name} / ${shipping?.trackingNumber}`,
                 status: isShipped ? 'completed' : 'active',
                 changedAt: shippedStatus?.changedAt || null,
             };
 
             const onTheWayStep = {
                 label: 'On The Way',
-                value: 'on_the_way',
+                value: ``,
                 status: isDelivered ? 'completed' : (isShipped ? 'active' : 'upcoming'),
                 changedAt: isShipped ? shippedStatus?.changedAt || null : null, // Approx. time since shipped
             };
 
             const deliveredStep = {
                 label: 'Delivered',
-                value: 'delivered',
+                value: `${order?.addressId?.provinceId?.value} / ${order?.addressId?.districtId?.value}`,
                 status: isDelivered ? 'completed' : (isShipped ? 'upcoming' : 'upcoming'),
                 changedAt: deliveredStatus?.changedAt || null,
             };
