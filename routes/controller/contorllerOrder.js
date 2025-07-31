@@ -2808,8 +2808,8 @@ const getOrderDetails = async (req, res) => {
                 status: isDelivered ? 'completed' : (isShipped ? 'upcoming' : 'upcoming'),
                 changedAt: deliveredStatus?.changedAt || null,
             };
-
-            deliveryProgressSteps = [shippedStep, onTheWayStep, deliveredStep];
+            deliveryProgressSteps = [deliveredStep, onTheWayStep, shippedStep];
+            // deliveryProgressSteps = [shippedStep, onTheWayStep, deliveredStep];
         }
 
 
