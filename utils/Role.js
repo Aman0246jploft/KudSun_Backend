@@ -200,7 +200,8 @@ const createStandardizedNotificationMeta = (data = {}) => {
         taxAmount: data.taxAmount || null,
         serviceCharge: data.serviceCharge || null,
         platformFee: data.platformFee || null,
-        roomId:data.roomId||null
+        roomId:data.roomId||null,
+        userName:data.userName||null
     };
 };
 

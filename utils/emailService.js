@@ -2,25 +2,16 @@ const nodemailer = require("nodemailer");
 
 // Create transporter using the same configuration as mailtest.js
 const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com", // ❌ You wrote "smtp.gmail.email" — which is invalid
+  host: "smtp.gmail.com", 
   port: 465,
-  secure: true, // ✅ true for port 465
+  secure: true,
   auth: {
     user: "kadsun4@gmail.com",
-    pass: "scsv cwyt uvsb aawy", // ✅ This looks like a valid App Password (16-char)
+    pass: "scsv cwyt uvsb aawy",
   },
 });
 
-/**
- * Send email using nodemailer
- * @param {Object} options - Email options
- * @param {string} options.to - Recipient email
- * @param {string} options.subject - Email subject
- * @param {string} options.text - Plain text content
- * @param {string} options.html - HTML content
- * @param {string} options.from - Sender name (optional)
- * @returns {Promise<Object>} - Email result
- */
+
 const sendEmail = async ({ to, subject, text, html, from = 'Kadsun Team' }) => {
   try {
     if (!to || !subject || (!text && !html)) {
@@ -61,15 +52,7 @@ const sendEmail = async ({ to, subject, text, html, from = 'Kadsun Team' }) => {
   }
 };
 
-/**
- * Send reply email for contact us submissions
- * @param {Object} options - Reply options
- * @param {string} options.to - Recipient email
- * @param {string} options.subject - Email subject
- * @param {string} options.body - Email body content
- * @param {Object} options.originalSubmission - Original contact submission data
- * @returns {Promise<Object>} - Email result
- */
+
 const sendContactUsReply = async ({ to, subject, body, originalSubmission }) => {
   try {
     // Create HTML template for contact us reply
@@ -119,10 +102,7 @@ const sendContactUsReply = async ({ to, subject, body, originalSubmission }) => 
   }
 };
 
-/**
- * Test email connection
- * @returns {Promise<Object>} - Connection test result
- */
+
 const testEmailConnection = async () => {
   try {
     await transporter.verify();

@@ -13,6 +13,7 @@ const { toObjectId, apiSuccessRes, apiErrorRes, parseItems } = require('../../ut
 const { SALE_TYPE, DEFAULT_AMOUNT, PAYMENT_METHOD, ORDER_STATUS, PAYMENT_STATUS, CHARGE_TYPE, PRICING_TYPE, SHIPPING_STATUS, TNX_TYPE, NOTIFICATION_TYPES, createStandardizedChatMeta, createStandardizedNotificationMeta, DISPUTE_STATUS, DISPUTE_DECISION } = require('../../utils/Role');
 const { default: mongoose } = require('mongoose');
 const Joi = require('joi');
+const { uploadImageCloudinary } = require('../../utils/cloudinary');
 
 
 
@@ -1794,7 +1795,7 @@ const getSoldProducts = async (req, res) => {
 
             if (paymentStatuss === PAYMENT_STATUS.PENDING) {
                 labalStatuses = 'Payment Pending',
-                allowedNextStatuses=""
+                    allowedNextStatuses = ""
             }
 
             order.allowedNextStatuses = allowedNextStatuses;
@@ -2249,7 +2250,8 @@ const updateOrderStatusBySeller = async (req, res) => {
                     status: newStatus,
                     actionBy: 'seller'
                 }),
-                redirectUrl: `/order/${order._id}`
+                redirectUrl: `/order/${order._id}`,
+
             }];
 
             await saveNotification(statusNotifications);
@@ -3145,6 +3147,10 @@ const changeStatus = async (req, res) => {
     const session = await mongoose.startSession();
     try {
         const { withdrawRequestId, status, notes } = req.body;
+        const image = req.file;
+
+
+
 
         // Input validation
         if (!withdrawRequestId || !status) {
@@ -3194,6 +3200,10 @@ const changeStatus = async (req, res) => {
             if (notes) {
                 withdrawRequest.adminNotes = notes.trim();
             }
+            if (image) {
+                const imageUrl = await uploadImageCloudinary(image, 'withdrawal-images');
+                withdrawRequest.adminImage = imageUrl;
+            }
             withdrawRequest.processedAt = new Date();
             await withdrawRequest.save({ session });
 
@@ -3211,10 +3221,10 @@ const changeStatus = async (req, res) => {
 
             if (status === 'Approved') {
                 notificationTitle = "Withdrawal Request Approved!";
-                notificationMessage = `Your withdrawal request for $${withdrawRequest.amount} has been approved and processed.`;
+                notificationMessage = `Your withdrawal request for ฿${withdrawRequest.amount} has been approved and processed.`;
             } else if (status === 'Rejected') {
                 notificationTitle = "Withdrawal Request Rejected";
-                notificationMessage = `Your withdrawal request for $${withdrawRequest.amount} has been rejected. The amount has been refunded to your wallet.`;
+                notificationMessage = `Your withdrawal request for ฿${withdrawRequest.amount} has been rejected. The amount has been refunded to your wallet.`;
             }
 
             const withdrawalStatusNotifications = [{
@@ -4231,7 +4241,7 @@ router.get('/details/:orderId', perApiLimiter(), upload.none(), getOrderDetails)
 /////////////////////////////******WALLET******///////////////////////////////
 router.get('/getWithdrawalInfo', perApiLimiter(), upload.none(), getWithdrawalInfo);
 router.post('/addrequest', perApiLimiter(), upload.none(), addrequest);
-router.post('/changeStatus', perApiLimiter(), upload.none(), changeStatus);
+router.post('/changeStatus', perApiLimiter(), upload.single('image'), changeStatus);
 router.get('/getAllWithdrawRequests', perApiLimiter(), upload.none(), getAllWithdrawRequests);
 
 //////////////////////////////////////////////////////////////////////////////

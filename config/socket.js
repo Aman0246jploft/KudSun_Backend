@@ -93,6 +93,7 @@ async function setupSocket(server) {
                         message: `You have received a new message in chat.`,
                         meta: createStandardizedNotificationMeta({
                             roomId: roomId,
+                            userName:userName
                         }),
                     }];
 

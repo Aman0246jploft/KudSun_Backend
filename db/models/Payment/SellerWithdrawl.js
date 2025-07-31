@@ -15,6 +15,12 @@ const sellerWithdrawlSchema = new Schema({
     },
     status: { type: String, enum: ['pending', 'Approved', "Rejected"], default: "pending" },
     adminNotes: { type: String, maxlength: 500 },
+    adminImage: [{
+        type: String // URL to Cloudinary or other storage
+    }],
+
+
+
     processedAt: { type: Date },
     notes: { type: String, maxlength: 500 } // For user notes/comments
 }, {
