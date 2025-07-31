@@ -14,23 +14,31 @@ async function sendFirebaseNotification({ token, title, body, imageUrl, ...custo
                 ...(imageUrl && { image: imageUrl }),
             },
             android: {
-                priority: "high"
+                priority: "high",
             },
             apns: {
+                headers: {
+                    "apns-priority": "10",
+                },
                 payload: {
                     aps: {
-                        sound: "default"
+                        sound: "default",
+                        alert: {
+                            title,
+                            body
+                        },
+                        "content-available": 1
                     }
                 }
             },
             data: {
-                // Convert everything to strings because FCM `data` must be string values
                 ...Object.entries(customData).reduce((acc, [key, val]) => {
                     acc[key] = typeof val === 'object' ? JSON.stringify(val) : String(val ?? '');
                     return acc;
                 }, {})
             }
         };
+
 
         const response = await admin.messaging().send(message);
         console.log("Notification sent:", response);
