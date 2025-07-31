@@ -65,7 +65,7 @@ const createOrUpdateReview = async (req, res) => {
                 { userId, 'items.productId': productId },
                 { sellerId: userId, 'items.productId': productId }
             ],
-            status: ORDER_STATUS.CONFIRM_RECEIPT
+            // status: ORDER_||ORDER_STATUS.CONFIRM_RECEIPT
         }).lean();
 
         if (!order) {
@@ -178,7 +178,7 @@ const createOrUpdateReview = async (req, res) => {
         // Create system message for review submission
         const reviewMessage = new ChatMessage({
             chatRoom: room._id,
-            messageType: 'REVIEW_STATUS',
+            messageType: 'TEXT',
             systemMeta: {
                 statusType: 'REVIEW',
                 status: 'SUBMITTED',

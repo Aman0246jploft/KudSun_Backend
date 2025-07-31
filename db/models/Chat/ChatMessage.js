@@ -25,7 +25,7 @@ const ChatMessageSchema = new mongoose.Schema({
         // Type of status update
         statusType: {
             type: String,
-            enum: ['ORDER', 'PAYMENT', 'SHIPPING', 'SYSTEM', 'PRODUCT', 'DISPUTE'],
+            enum: ['ORDER', 'PAYMENT', 'SHIPPING', 'SYSTEM', 'PRODUCT', 'DISPUTE','REVIEW'],
         },
         disputeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Dispute' },
         // The actual status value
@@ -36,7 +36,7 @@ const ChatMessageSchema = new mongoose.Schema({
         },
 
         orderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order' },
-        
+
         productId: { type: mongoose.Schema.Types.ObjectId, ref: 'SellProduct' },
 
         // Product specific fields

@@ -87,7 +87,7 @@ async function setupSocket(server) {
                 if (data.otherUserId) {
                     const notification = [{
                         recipientId: data.otherUserId,
-                        userId: data.otherUserId,
+                        userId: userId,
                         type: NOTIFICATION_TYPES.CHAT,
                         title: `New message from ${userName}`,
                         message: `You have received a new message in chat.`,

@@ -3633,229 +3633,229 @@ const getAllTransactionsForAdmin = async (req, res) => {
     }
 };
 
-const markSellerAsPaid = async (req, res) => {
-    const session = await mongoose.startSession();
+// const markSellerAsPaid = async (req, res) => {
+//     const session = await mongoose.startSession();
 
-    try {
-        const { orderId, notes } = req.body;
+//     try {
+//         const { orderId, notes } = req.body;
 
-        if (!orderId) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Order ID is required");
-        }
+//         if (!orderId) {
+//             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Order ID is required");
+//         }
 
-        await session.withTransaction(async () => {
-            // Find the order and wallet transaction
-            const order = await Order.findById(orderId)
-                .populate('sellerId')
-                .session(session);
+//         await session.withTransaction(async () => {
+//             // Find the order and wallet transaction
+//             const order = await Order.findById(orderId)
+//                 .populate('sellerId')
+//                 .session(session);
 
-            if (!order) {
-                throw new Error("Order not found");
-            }
+//             if (!order) {
+//                 throw new Error("Order not found");
+//             }
 
-            // Find the credit transaction for this order
-            const creditTransaction = await WalletTnx.findOne({
-                orderId: order._id,
-                tnxType: TNX_TYPE.CREDIT,
-                tnxStatus: PAYMENT_STATUS.COMPLETED
-            }).session(session);
+//             // Find the credit transaction for this order
+//             const creditTransaction = await WalletTnx.findOne({
+//                 orderId: order._id,
+//                 tnxType: TNX_TYPE.CREDIT,
+//                 tnxStatus: PAYMENT_STATUS.COMPLETED
+//             }).session(session);
 
-            if (!creditTransaction) {
-                throw new Error("No credit transaction found for this order");
-            }
+//             if (!creditTransaction) {
+//                 throw new Error("No credit transaction found for this order");
+//             }
 
-            // Check if withdrawal already processed
-            const existingWithdrawal = await WalletTnx.findOne({
-                orderId: order._id,
-                tnxType: TNX_TYPE.WITHDRAWL,
-                tnxStatus: PAYMENT_STATUS.COMPLETED
-            }).session(session);
+//             // Check if withdrawal already processed
+//             const existingWithdrawal = await WalletTnx.findOne({
+//                 orderId: order._id,
+//                 tnxType: TNX_TYPE.WITHDRAWL,
+//                 tnxStatus: PAYMENT_STATUS.COMPLETED
+//             }).session(session);
 
-            if (existingWithdrawal) {
-                throw new Error("Withdrawal already processed for this order");
-            }
+//             if (existingWithdrawal) {
+//                 throw new Error("Withdrawal already processed for this order");
+//             }
 
-            // Get withdrawal fee settings
-            const withdrawalFeeSetting = await FeeSetting.findOne({
-                name: "WITHDRAWAL_FEE",
-                isActive: true,
-                isDisable: false,
-                isDeleted: false
-            }).session(session);
+//             // Get withdrawal fee settings
+//             const withdrawalFeeSetting = await FeeSetting.findOne({
+//                 name: "WITHDRAWAL_FEE",
+//                 isActive: true,
+//                 isDisable: false,
+//                 isDeleted: false
+//             }).session(session);
 
-            const amountToWithdraw = creditTransaction.netAmount; // This is the amount seller should receive
-            let withdrawalFee = 0;
-            let withdrawalFeeType = '';
+//             const amountToWithdraw = creditTransaction.netAmount; // This is the amount seller should receive
+//             let withdrawalFee = 0;
+//             let withdrawalFeeType = '';
 
-            if (withdrawalFeeSetting) {
-                if (withdrawalFeeSetting.type === PRICING_TYPE.PERCENTAGE) {
-                    withdrawalFee = (amountToWithdraw * withdrawalFeeSetting.value) / 100;
-                    withdrawalFeeType = PRICING_TYPE.PERCENTAGE;
-                } else {
-                    withdrawalFee = withdrawalFeeSetting.value;
-                    withdrawalFeeType = PRICING_TYPE.FIXED;
-                }
-            }
+//             if (withdrawalFeeSetting) {
+//                 if (withdrawalFeeSetting.type === PRICING_TYPE.PERCENTAGE) {
+//                     withdrawalFee = (amountToWithdraw * withdrawalFeeSetting.value) / 100;
+//                     withdrawalFeeType = PRICING_TYPE.PERCENTAGE;
+//                 } else {
+//                     withdrawalFee = withdrawalFeeSetting.value;
+//                     withdrawalFeeType = PRICING_TYPE.FIXED;
+//                 }
+//             }
 
-            // Check if seller has enough balance for withdrawal amount
-            const seller = await User.findById(order.sellerId._id).session(session);
-            if (seller.walletBalance < amountToWithdraw) {
-                throw new Error(`Insufficient wallet balance. Required: ${amountToWithdraw}, Available: ${seller.walletBalance}`);
-            }
+//             // Check if seller has enough balance for withdrawal amount
+//             const seller = await User.findById(order.sellerId._id).session(session);
+//             if (seller.walletBalance < amountToWithdraw) {
+//                 throw new Error(`Insufficient wallet balance. Required: ${amountToWithdraw}, Available: ${seller.walletBalance}`);
+//             }
 
-            // Create withdrawal transaction
-            const withdrawalTnx = new WalletTnx({
-                orderId: order._id,
-                userId: order.sellerId._id,
-                amount: amountToWithdraw,
-                netAmount: amountToWithdraw - withdrawalFee,
-                withdrawfee: withdrawalFee,
-                withdrawfeeType: withdrawalFeeType,
-                tnxType: TNX_TYPE.WITHDRAWL,
-                tnxStatus: PAYMENT_STATUS.COMPLETED,
-                notes: notes || 'Manual withdrawal by admin'
-            });
+//             // Create withdrawal transaction
+//             const withdrawalTnx = new WalletTnx({
+//                 orderId: order._id,
+//                 userId: order.sellerId._id,
+//                 amount: amountToWithdraw,
+//                 netAmount: amountToWithdraw - withdrawalFee,
+//                 withdrawfee: withdrawalFee,
+//                 withdrawfeeType: withdrawalFeeType,
+//                 tnxType: TNX_TYPE.WITHDRAWL,
+//                 tnxStatus: PAYMENT_STATUS.COMPLETED,
+//                 notes: notes || 'Manual withdrawal by admin'
+//             });
 
-            await withdrawalTnx.save({ session });
+//             await withdrawalTnx.save({ session });
 
-            // Track withdrawal fee in platform revenue
-            if (withdrawalFee > 0) {
-                const platformRevenue = new PlatformRevenue({
-                    orderId: order._id,
-                    revenueType: 'WITHDRAWAL_FEE',
-                    amount: withdrawalFee,
-                    calculationType: withdrawalFeeType,
-                    calculationValue: withdrawalFeeSetting.value,
-                    baseAmount: amountToWithdraw,
-                    status: 'COMPLETED',
-                    completedAt: new Date(),
-                    description: `Withdrawal fee for order ${order._id}`,
-                    metadata: {
-                        withdrawalId: withdrawalTnx._id,
-                        sellerId: order.sellerId._id,
-                        withdrawalAmount: amountToWithdraw,
-                        netAmountPaid: amountToWithdraw - withdrawalFee
-                    }
-                });
-                await platformRevenue.save({ session });
-            }
+//             // Track withdrawal fee in platform revenue
+//             if (withdrawalFee > 0) {
+//                 const platformRevenue = new PlatformRevenue({
+//                     orderId: order._id,
+//                     revenueType: 'WITHDRAWAL_FEE',
+//                     amount: withdrawalFee,
+//                     calculationType: withdrawalFeeType,
+//                     calculationValue: withdrawalFeeSetting.value,
+//                     baseAmount: amountToWithdraw,
+//                     status: 'COMPLETED',
+//                     completedAt: new Date(),
+//                     description: `Withdrawal fee for order ${order._id}`,
+//                     metadata: {
+//                         withdrawalId: withdrawalTnx._id,
+//                         sellerId: order.sellerId._id,
+//                         withdrawalAmount: amountToWithdraw,
+//                         netAmountPaid: amountToWithdraw - withdrawalFee
+//                     }
+//                 });
+//                 await platformRevenue.save({ session });
+//             }
 
-            // Deduct only the withdrawal amount from seller's wallet balance
-            await User.findByIdAndUpdate(
-                order.sellerId._id,
-                {
-                    $inc: { walletBalance: -amountToWithdraw }
-                },
-                { session }
-            );
+//             // Deduct only the withdrawal amount from seller's wallet balance
+//             await User.findByIdAndUpdate(
+//                 order.sellerId._id,
+//                 {
+//                     $inc: { walletBalance: -amountToWithdraw }
+//                 },
+//                 { session }
+//             );
 
-            // Create or get chat room for system message
-            const { room } = await findOrCreateOneOnOneRoom(order.userId, order.sellerId);
+//             // Create or get chat room for system message
+//             const { room } = await findOrCreateOneOnOneRoom(order.userId, order.sellerId);
 
-            // Create system message for manual payout
-            const systemMessage = new ChatMessage({
-                chatRoom: room._id,
-                messageType: 'PAYMENT_STATUS',
-                systemMeta: {
-                    statusType: 'PAYMENT',
-                    status: 'COMPLETED',
-                    orderId: order._id,
-                    productId: order.items[0].productId,
-                    title: 'Manual Withdrawal Completed',
-                    meta: createStandardizedChatMeta({
-                        orderNumber: order._id.toString(),
-                        totalAmount: order.grandTotal,
-                        amount: `$${amountToWithdraw.toFixed(2)}`,
-                        withdrawalFee: `$${withdrawalFee.toFixed(2)}`,
-                        netAmount: `$${(amountToWithdraw - withdrawalFee).toFixed(2)}`,
-                        withdrawalAmount: amountToWithdraw,
-                        itemCount: order.items.length,
-                        paymentMethod: 'Manual Admin Withdrawal',
-                        notes: notes || 'Withdrawal processed by admin',
-                        sellerId: order.sellerId._id,
-                        buyerId: order.userId,
-                        orderStatus: order.status,
-                        paymentStatus: order.paymentStatus,
-                        transactionId: withdrawalTnx._id.toString()
-                    }),
-                    actions: [
-                        {
-                            label: "View Order",
-                            url: `/order/${order._id}`,
-                            type: "primary"
-                        }
-                    ],
-                    theme: 'success'
-                }
-            });
+//             // Create system message for manual payout
+//             const systemMessage = new ChatMessage({
+//                 chatRoom: room._id,
+//                 messageType: 'PAYMENT_STATUS',
+//                 systemMeta: {
+//                     statusType: 'PAYMENT',
+//                     status: 'COMPLETED',
+//                     orderId: order._id,
+//                     productId: order.items[0].productId,
+//                     title: 'Manual Withdrawal Completed',
+//                     meta: createStandardizedChatMeta({
+//                         orderNumber: order._id.toString(),
+//                         totalAmount: order.grandTotal,
+//                         amount: `$${amountToWithdraw.toFixed(2)}`,
+//                         withdrawalFee: `$${withdrawalFee.toFixed(2)}`,
+//                         netAmount: `$${(amountToWithdraw - withdrawalFee).toFixed(2)}`,
+//                         withdrawalAmount: amountToWithdraw,
+//                         itemCount: order.items.length,
+//                         paymentMethod: 'Manual Admin Withdrawal',
+//                         notes: notes || 'Withdrawal processed by admin',
+//                         sellerId: order.sellerId._id,
+//                         buyerId: order.userId,
+//                         orderStatus: order.status,
+//                         paymentStatus: order.paymentStatus,
+//                         transactionId: withdrawalTnx._id.toString()
+//                     }),
+//                     actions: [
+//                         {
+//                             label: "View Order",
+//                             url: `/order/${order._id}`,
+//                             type: "primary"
+//                         }
+//                     ],
+//                     theme: 'success'
+//                 }
+//             });
 
-            await systemMessage.save({ session });
+//             await systemMessage.save({ session });
 
-            // Update chat room's last message
-            await ChatRoom.findByIdAndUpdate(
-                room._id,
-                {
-                    lastMessage: systemMessage._id,
-                    updatedAt: new Date()
-                },
-                { session }
-            );
+//             // Update chat room's last message
+//             await ChatRoom.findByIdAndUpdate(
+//                 room._id,
+//                 {
+//                     lastMessage: systemMessage._id,
+//                     updatedAt: new Date()
+//                 },
+//                 { session }
+//             );
 
-            // Emit socket events
-            const io = req.app.get('io');
-            await emitSystemMessage(io, systemMessage, room, order.userId, order.sellerId);
+//             // Emit socket events
+//             const io = req.app.get('io');
+//             await emitSystemMessage(io, systemMessage, room, order.userId, order.sellerId);
 
-            // Send notification to seller about manual payout
-            const payoutNotifications = [{
-                recipientId: order.sellerId._id,
-                userId: order.userId,
-                orderId: order._id,
-                productId: order.items[0].productId,
-                type: NOTIFICATION_TYPES.ORDER,
-                title: "Payment Processed!",
-                message: `Your earnings of $${(amountToWithdraw - withdrawalFee).toFixed(2)} for order ${order._id.toString().slice(-6)} have been processed and withdrawn from your wallet.`,
-                meta: createStandardizedNotificationMeta({
-                    orderNumber: order._id.toString(),
-                    orderId: order._id.toString(),
-                    withdrawalAmount: amountToWithdraw,
-                    amount: amountToWithdraw,
-                    withdrawalFee: withdrawalFee,
-                    netAmount: amountToWithdraw - withdrawalFee,
-                    netAmountPaid: amountToWithdraw - withdrawalFee,
-                    transactionId: withdrawalTnx._id.toString(),
-                    processedBy: 'admin',
-                    sellerId: order.sellerId._id,
-                    buyerId: order.userId,
-                    totalAmount: order.grandTotal,
-                    itemCount: order.items.length,
-                    paymentMethod: order.paymentMethod,
-                    status: 'COMPLETED',
-                    newStatus: 'COMPLETED'
-                }),
-                redirectUrl: `/wallet/transactions`
-            }];
+//             // Send notification to seller about manual payout
+//             const payoutNotifications = [{
+//                 recipientId: order.sellerId._id,
+//                 userId: order.userId,
+//                 orderId: order._id,
+//                 productId: order.items[0].productId,
+//                 type: NOTIFICATION_TYPES.ORDER,
+//                 title: "Payment Processed!",
+//                 message: `Your earnings of $${(amountToWithdraw - withdrawalFee).toFixed(2)} for order ${order._id.toString().slice(-6)} have been processed and withdrawn from your wallet.`,
+//                 meta: createStandardizedNotificationMeta({
+//                     orderNumber: order._id.toString(),
+//                     orderId: order._id.toString(),
+//                     withdrawalAmount: amountToWithdraw,
+//                     amount: amountToWithdraw,
+//                     withdrawalFee: withdrawalFee,
+//                     netAmount: amountToWithdraw - withdrawalFee,
+//                     netAmountPaid: amountToWithdraw - withdrawalFee,
+//                     transactionId: withdrawalTnx._id.toString(),
+//                     processedBy: 'admin',
+//                     sellerId: order.sellerId._id,
+//                     buyerId: order.userId,
+//                     totalAmount: order.grandTotal,
+//                     itemCount: order.items.length,
+//                     paymentMethod: order.paymentMethod,
+//                     status: 'COMPLETED',
+//                     newStatus: 'COMPLETED'
+//                 }),
+//                 redirectUrl: `/wallet/transactions`
+//             }];
 
-            await saveNotification(payoutNotifications);
+//             await saveNotification(payoutNotifications);
 
-            return apiSuccessRes(HTTP_STATUS.OK, res, "Seller withdrawal processed successfully", {
-                orderId: order._id,
-                sellerId: order.sellerId._id,
-                sellerName: order.sellerId.userName,
-                withdrawalAmount: amountToWithdraw,
-                withdrawalFee: withdrawalFee,
-                netAmount: amountToWithdraw - withdrawalFee,
-                transactionId: withdrawalTnx._id,
-                remainingWalletBalance: seller.walletBalance - amountToWithdraw
-            });
-        });
+//             return apiSuccessRes(HTTP_STATUS.OK, res, "Seller withdrawal processed successfully", {
+//                 orderId: order._id,
+//                 sellerId: order.sellerId._id,
+//                 sellerName: order.sellerId.userName,
+//                 withdrawalAmount: amountToWithdraw,
+//                 withdrawalFee: withdrawalFee,
+//                 netAmount: amountToWithdraw - withdrawalFee,
+//                 transactionId: withdrawalTnx._id,
+//                 remainingWalletBalance: seller.walletBalance - amountToWithdraw
+//             });
+//         });
 
-    } catch (err) {
-        console.error("markSellerAsPaid error:", err);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to process seller withdrawal");
-    } finally {
-        session.endSession();
-    }
-};
+//     } catch (err) {
+//         console.error("markSellerAsPaid error:", err);
+//         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to process seller withdrawal");
+//     } finally {
+//         session.endSession();
+//     }
+// };
 
 const getSellerPayoutStatus = async (req, res) => {
     try {
@@ -4749,7 +4749,7 @@ router.get('/admin/product-financial/:productId', perApiLimiter(), upload.none()
 router.get('/admin/money-flow', perApiLimiter(), upload.none(), getDetailedMoneyFlow);
 
 router.get('/admin/payoutCalculation/:orderId', perApiLimiter(), upload.none(), getSellerPayoutCalculation);
-router.post('/admin/markSellerPaid', perApiLimiter(), upload.none(), markSellerAsPaid);
+// router.post('/admin/markSellerPaid', perApiLimiter(), upload.none(), markSellerAsPaid);
 
 
 // router.get('/admin/payoutStatus/:orderId', perApiLimiter(), upload.none(), getSellerPayoutStatus);
