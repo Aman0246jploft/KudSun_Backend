@@ -4,7 +4,8 @@ const Schema = mongoose.Schema;
 const CarrierSchema = new Schema({
     name: {
         type: String, required: true, trim: true,
-        lowercase: true, unique: true, index: true
+        // lowercase: true,
+         unique: true, index: true
     },
     contact: String,
     website: String,

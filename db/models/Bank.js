@@ -10,7 +10,7 @@ const BankSchema = new Schema({
         required: true,
         unique: true,
         trim: true,
-        lowercase: true
+        // lowercase: true
     },
     isDisable: {
         type: Boolean,

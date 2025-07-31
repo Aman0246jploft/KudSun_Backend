@@ -3423,18 +3423,10 @@ const getProductsWithDraft = async (req, res) => {
 
 
 
-const getProductbycategory = async (req, res) => {
-
-}
-
-
-
 router.post('/addSellerProduct', perApiLimiter(), upload.array('files', 10), addSellerProduct);
 
 router.post('/updateSellerProduct/:id', perApiLimiter(), upload.array('files', 10), updateSellerProduct);
 router.post('/toggleProductDisable/:id', perApiLimiter(), upload.none(), toggleProductDisable);
-
-
 
 
 router.get('/getDraftProducts', perApiLimiter(), getDraftProducts);
