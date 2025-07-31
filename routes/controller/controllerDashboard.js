@@ -102,7 +102,6 @@ const getMonthlyAnalytics = async (req, res) => {
         };
 
 
-        console.log("response", response)
         return apiSuccessRes(HTTP_STATUS.OK, res, "Monthly analytics fetched successfully", response);
     } catch (err) {
         console.error("Get monthly analytics error:", err);
