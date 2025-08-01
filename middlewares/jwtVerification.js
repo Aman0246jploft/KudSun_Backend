@@ -97,7 +97,7 @@ function jwtVerification() {
 
 
                 try {
-                    const user = await User.findById(decoded.userId);
+                    const user = await User.findById(decoded.userId).select("isDeleted isDisable");
                     // console.log(user)
 
                     if (!user || user.isDeleted || user.isDisable) {
