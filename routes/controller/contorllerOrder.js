@@ -4813,7 +4813,7 @@ const cancelOrderByBuyer = async (req, res) => {
         const { orderId } = req.params;
         const { cancellationReason } = req.body;
 
-
+        const buyer = await User.findById(buyerId);
         // Input validation
         if (!buyerId) {
             return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Authentication required");
@@ -5029,6 +5029,7 @@ const cancelOrderByBuyer = async (req, res) => {
                     actionBy: 'buyer',
                     sellerId: order.sellerId,
                     buyerId: buyerId,
+                    userImage: buyer.userImage,
                     totalAmount: order.grandTotal,
                     amount: order.grandTotal,
                     itemCount: order.items.length,
@@ -5038,8 +5039,11 @@ const cancelOrderByBuyer = async (req, res) => {
                 }),
                 redirectUrl: `/order/${order._id}`
             }];
+            if (buyer.alertNotification !== false) {
+                await saveNotification(sellerNotification);
+            }
 
-            await saveNotification(sellerNotification);
+            // await saveNotification(sellerNotification);
 
             // Handle refund logic for paid orders
             let refundStatus = "not_required";
@@ -5091,12 +5095,15 @@ const cancelOrderByBuyer = async (req, res) => {
                         actionBy: 'buyer',
                         sellerId: order.sellerId,
                         buyerId: buyerId,
+                        userImage: buyer.userImage,
                         status: ORDER_STATUS.CANCELLED
                     }),
                     redirectUrl: `/order/${order._id}`
                 }];
+                if (buyer.alertNotification !== false) {
+                    await saveNotification(sellerNotification);
+                }
 
-                await saveNotification(buyerRefundNotification);
             }
 
             // Commit transaction
