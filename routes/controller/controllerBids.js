@@ -10,8 +10,9 @@ const perApiLimiter = require('../../middlewares/rateLimiter');
 const { bidSchema } = require('../services/validations/bidValidation');
 const HTTP_STATUS = require('../../utils/statusCode');
 const { apiErrorRes, apiSuccessRes, toObjectId } = require('../../utils/globalFunction');
-const { SALE_TYPE } = require('../../utils/Role');
+const { SALE_TYPE, NOTIFICATION_TYPES, createStandardizedNotificationMeta } = require('../../utils/Role');
 const { default: mongoose } = require('mongoose');
+const { saveNotification } = require('../services/serviceNotification');
 
 const placeBid = async (req, res) => {
     const session = await mongoose.startSession();
@@ -86,6 +87,8 @@ const placeBid = async (req, res) => {
 
         const isReserveMet = reservePrice != null ? amount >= reservePrice : false;
 
+
+
         const newBid = new Bid({
             userId,
             productId,
@@ -100,6 +103,33 @@ const placeBid = async (req, res) => {
         await product.save({ session });
 
         await session.commitTransaction();
+        const BidderInfo = await User.findById(req.user?.userId).select('userName profileImage');
+
+        const notifications = [{
+            recipientId: product.userId,
+            userId: req.user?.userId,
+            type: NOTIFICATION_TYPES.ACTIVITY,
+            title: "New bid on Your Product",
+            message: `${BidderInfo.userName} bid  on your auction"${product.title.length > 50 ? product.title.substring(0, 50) + '...' : thread.title}"`,
+            meta: createStandardizedNotificationMeta({
+                productImage: product?.productImages[0] || null,
+                productId: product._id,
+                userImage: BidderInfo.profileImage || null,
+                amount,
+                actionBy: 'user',
+                timestamp: new Date().toISOString(),
+            }),
+        }];
+
+        const recipientUser = await User.findOne({
+            _id: toObjectId(product.userId),
+            activityNotification: true
+        }).select('_id');
+
+        if (recipientUser) {
+            await saveNotification(notifications);
+        }
+
         session.endSession();
 
         return apiSuccessRes(HTTP_STATUS.OK, res, 'Bid placed successfully', newBid);

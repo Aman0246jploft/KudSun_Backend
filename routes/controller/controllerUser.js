@@ -14,7 +14,7 @@ const validateRequest = require('../../middlewares/validateRequest');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const { setKeyWithTime, setKeyNoTime, getKey, removeKey } = require('../services/serviceRedis');
 const { uploadImageCloudinary, deleteImageCloudinary } = require('../../utils/cloudinary');
-const { SALE_TYPE, roleId, PAYMENT_STATUS } = require('../../utils/Role');
+const { SALE_TYPE, roleId, PAYMENT_STATUS, NOTIFICATION_TYPES } = require('../../utils/Role');
 const SellProducts = require('../../db/models/SellProducts');
 const { moduleSchemaForId } = require('../services/validations/globalCURDValidation');
 const globalCrudController = require('./globalCrudController');
@@ -23,6 +23,7 @@ const Joi = require('joi');
 // Import Algolia service
 const { indexUser, deleteUser } = require('../services/serviceAlgolia');
 const { OAuth2Client } = require('google-auth-library');
+const { saveNotification } = require('../services/serviceNotification');
 
 const uploadfile = async (req, res) => {
     try {
@@ -770,6 +771,51 @@ const follow = async (req, res) => {
             userId: toObjectId(userId)
         });
         await newFollow.save();
+
+        // Send notification for new follow
+        try {
+            // Get follower and followed user details
+            const follower = await User.findById(followedBy).select('userName profileImage');
+            const followedUser = await User.findById(userId).select('userName profileImage');
+
+            if (follower && followedUser) {
+                const notifications = [{
+                    recipientId: userId,
+                    userId: followedBy,
+                    type: NOTIFICATION_TYPES.ACTIVITY,
+                    title: "New Follower",
+                    message: `${follower.userName} started following you`,
+                    meta: createStandardizedNotificationMeta({
+                        followerId: followedBy,
+                        followerName: follower.userName,
+                        followerImage: follower.profileImage || null,
+                        userImage: follower.profileImage || null,
+                        followedUserId: userId,
+                        followedUserName: followedUser.userName,
+                        actionBy: 'user',
+                        timestamp: new Date().toISOString()
+                    }),
+                    redirectUrl: `/profile/${followedBy}`
+                }];
+                const isActivityEnabled = await User.findOne({
+                    _id: toObjectId(userId),
+                    activityNotification: true
+                }).select('_id');
+
+                if (isActivityEnabled) {
+                    await saveNotification(notifications);
+                    console.log(`✅ Follow notification sent to user ${userId}`);
+                } else {
+                    console.log(`⚠️ User ${userId} has disabled activity notifications, skipping follow notification.`);
+                }
+
+                console.log(`✅ Follow notification sent to user ${userId}`);
+            }
+        } catch (notificationError) {
+            console.error('❌ Failed to send follow notification:', notificationError);
+            // Don't fail the main operation if notifications fail
+        }
+
         return apiSuccessRes(
             HTTP_STATUS.CREATED,
             res,
@@ -2632,7 +2678,7 @@ const getBlockedUsers = async (req, res) => {
         // Step 1: Get blocked users
         const blockedList = await BlockUser.find({ blockBy }).populate({
             path: "userId",
-            select: "name username email profileImage provinceId districtId",
+            select: "name userName email profileImage provinceId districtId",
             populate: [
                 { path: "provinceId", select: "value" },
                 { path: "districtId", select: "value" },
@@ -2670,7 +2716,7 @@ const getBlockedUsers = async (req, res) => {
             return {
                 _id: user?._id,
                 name: user?.name,
-                username: user?.username,
+                username: user?.userName,
                 email: user?.email,
                 profileImage: user?.profileImage,
                 province: user?.provinceId?.value || null,

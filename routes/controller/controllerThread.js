@@ -426,6 +426,8 @@ const closeThread = async (req, res) => {
 
 const addComment = async (req, res) => {
     try {
+
+
         let value = req.body
         let imageList = [];
         if (req.files && req.files.length > 0) {
@@ -434,6 +436,7 @@ const addComment = async (req, res) => {
                 if (image) imageList.push(image);
             }
         }
+
         let productIds = [];
         if (value.associatedProducts) {
             const raw = Array.isArray(value.associatedProducts)
@@ -445,7 +448,7 @@ const addComment = async (req, res) => {
                 .map(id => id.trim?.()) // optional chaining for safety
                 .filter(id => id && /^[a-f\d]{24}$/i.test(id)); // only valid Mongo ObjectIds
         }
-        
+
         const comment = new ThreadComment({
             content: value.content || '',
             thread: value.thread,
@@ -459,10 +462,11 @@ const addComment = async (req, res) => {
         // Get thread and commenter details for notifications
         const thread = await Thread.findById(value.thread).populate('userId', 'userName profileImage');
         const commenter = await User.findById(req.user?.userId).select('userName profileImage');
-        
+
+
         if (thread && commenter) {
             const notifications = [];
-            
+
             // Case 1: Comment on a thread (not a reply)
             if (!value.parent) {
                 // Notify thread author if someone else commented
@@ -470,7 +474,7 @@ const addComment = async (req, res) => {
                     notifications.push({
                         recipientId: thread.userId._id,
                         userId: req.user?.userId,
-                        type: "TEXT",
+                        type: NOTIFICATION_TYPES.ACTIVITY,
                         title: "New Comment on Your Thread",
                         message: `${commenter.userName} commented on your thread "${thread.title.length > 50 ? thread.title.substring(0, 50) + '...' : thread.title}"`,
                         meta: createStandardizedNotificationMeta({
@@ -480,6 +484,8 @@ const addComment = async (req, res) => {
                             commentContent: value.content || '',
                             commenterName: commenter.userName,
                             commenterId: req.user?.userId,
+                            commenterImage: commenter.profileImage || null,
+                            userImage: commenter.profileImage || null,
                             actionBy: 'user',
                             timestamp: new Date().toISOString(),
                             associatedProductsCount: productIds.length || 0
@@ -487,18 +493,18 @@ const addComment = async (req, res) => {
                         redirectUrl: `/threads/${thread._id}#comment-${saved._id}`
                     });
                 }
-            } 
+            }
             // Case 2: Reply to a comment
             else {
                 const parentComment = await ThreadComment.findById(value.parent).populate('author', 'userName profileImage');
-                
+
                 if (parentComment && parentComment.author) {
                     // Notify parent comment author if someone else replied
                     if (parentComment.author._id.toString() !== req.user.userId.toString()) {
                         notifications.push({
                             recipientId: parentComment.author._id,
                             userId: req.user?.userId,
-                            type: "TEXT",
+                            type: NOTIFICATION_TYPES.ACTIVITY,
                             title: "New Reply to Your Comment",
                             message: `${commenter.userName} replied to your comment on "${thread.title.length > 50 ? thread.title.substring(0, 50) + '...' : thread.title}"`,
                             meta: createStandardizedNotificationMeta({
@@ -509,6 +515,8 @@ const addComment = async (req, res) => {
                                 commentContent: value.content || '',
                                 commenterName: commenter.userName,
                                 commenterId: req.user?.userId,
+                                commenterImage: commenter.profileImage || null,
+                                userImage: commenter.profileImage || null,
                                 actionBy: 'user',
                                 timestamp: new Date().toISOString(),
                                 associatedProductsCount: productIds.length || 0
@@ -516,14 +524,14 @@ const addComment = async (req, res) => {
                             redirectUrl: `/threads/${thread._id}#comment-${saved._id}`
                         });
                     }
-                    
+
                     // Also notify thread author if it's a reply and they're not the commenter or parent comment author
-                    if (thread.userId._id.toString() !== req.user.userId.toString() && 
+                    if (thread.userId._id.toString() !== req.user.userId.toString() &&
                         thread.userId._id.toString() !== parentComment.author._id.toString()) {
                         notifications.push({
                             recipientId: thread.userId._id,
                             userId: req.user?.userId,
-                            type: "TEXT",
+                            type: NOTIFICATION_TYPES.ACTIVITY,
                             title: "New Activity on Your Thread",
                             message: `${commenter.userName} replied to a comment on your thread "${thread.title.length > 50 ? thread.title.substring(0, 50) + '...' : thread.title}"`,
                             meta: createStandardizedNotificationMeta({
@@ -534,6 +542,8 @@ const addComment = async (req, res) => {
                                 commentContent: value.content || '',
                                 commenterName: commenter.userName,
                                 commenterId: req.user?.userId,
+                                commenterImage: commenter.profileImage || null,
+                                userImage: commenter.profileImage || null,
                                 actionBy: 'user',
                                 timestamp: new Date().toISOString(),
                                 associatedProductsCount: productIds.length || 0
@@ -548,17 +558,27 @@ const addComment = async (req, res) => {
             if (productIds.length > 0) {
                 try {
                     // Fetch product details and their owners
-                    const associatedProducts = await SellProduct.find({ 
-                        _id: { $in: productIds.map(id => toObjectId(id)) } 
+                    const associatedProducts = await SellProduct.find({
+                        _id: { $in: productIds.map(id => toObjectId(id)) }
                     }).populate('userId', 'userName profileImage').lean();
 
                     for (const product of associatedProducts) {
                         // Notify product owner if someone else associated their product
                         if (product.userId._id.toString() !== req.user.userId.toString()) {
+                            // Get the first product image
+                            const productImage = product.productImages && product.productImages.length > 0
+                                ? product.productImages[0]
+                                : product.photo || null;
+
+                            // Get product price based on sale type
+                            const productPrice = product.saleType === 'auction'
+                                ? (product.auctionSettings?.startingBid || 0)
+                                : (product.fixedPrice || 0);
+
                             notifications.push({
                                 recipientId: product.userId._id,
                                 userId: req.user?.userId,
-                                type: "TEXT",
+                                type: NOTIFICATION_TYPES.ACTIVITY,
                                 title: "Your Product Was Mentioned",
                                 message: `${commenter.userName} mentioned your product "${product.title.length > 40 ? product.title.substring(0, 40) + '...' : product.title}" in a thread comment`,
                                 meta: createStandardizedNotificationMeta({
@@ -568,8 +588,16 @@ const addComment = async (req, res) => {
                                     commentContent: value.content || '',
                                     productId: product._id.toString(),
                                     productTitle: product.title,
+                                    productImage: productImage,
+                                    productPrice: productPrice,
+                                    productFixedPrice: product.fixedPrice || null,
+                                    productDeliveryType: product.deliveryType || null,
+                                    productSaleType: product.saleType || null,
+                                    productCondition: product.condition || null,
                                     commenterName: commenter.userName,
                                     commenterId: req.user?.userId,
+                                    commenterImage: commenter.profileImage || null,
+                                    userImage: commenter.profileImage || null,
                                     sellerId: product.userId._id.toString(),
                                     actionBy: 'user',
                                     timestamp: new Date().toISOString(),
@@ -584,11 +612,21 @@ const addComment = async (req, res) => {
                     if (thread.userId._id.toString() !== req.user.userId.toString() && associatedProducts.length > 0) {
                         const productTitles = associatedProducts.map(p => p.title).join(', ');
                         const truncatedProducts = productTitles.length > 60 ? productTitles.substring(0, 60) + '...' : productTitles;
-                        
+
+                        // Get details for the first product for notification metadata
+                        const firstProduct = associatedProducts[0];
+                        const productImage = firstProduct.productImages && firstProduct.productImages.length > 0
+                            ? firstProduct.productImages[0]
+                            : firstProduct.photo || null;
+
+                        const productPrice = firstProduct.saleType === 'auction'
+                            ? (firstProduct.auctionSettings?.startingBid || 0)
+                            : (firstProduct.fixedPrice || 0);
+
                         notifications.push({
                             recipientId: thread.userId._id,
                             userId: req.user?.userId,
-                            type: "TEXT",
+                            type: NOTIFICATION_TYPES.ACTIVITY,
                             title: "Products Associated with Your Thread",
                             message: `${commenter.userName} associated ${associatedProducts.length} product(s) with your thread: ${truncatedProducts}`,
                             meta: createStandardizedNotificationMeta({
@@ -596,12 +634,22 @@ const addComment = async (req, res) => {
                                 threadTitle: thread.title,
                                 commentId: saved._id.toString(),
                                 commentContent: value.content || '',
+                                productId: firstProduct._id.toString(),
+                                productTitle: firstProduct.title,
+                                productImage: productImage,
+                                productPrice: productPrice,
+                                productFixedPrice: firstProduct.fixedPrice || null,
+                                productDeliveryType: firstProduct.deliveryType || null,
+                                productSaleType: firstProduct.saleType || null,
+                                productCondition: firstProduct.condition || null,
                                 commenterName: commenter.userName,
                                 commenterId: req.user?.userId,
+                                commenterImage: commenter.profileImage || null,
+                                userImage: commenter.profileImage || null,
                                 actionBy: 'user',
                                 timestamp: new Date().toISOString(),
                                 associatedProductsCount: productIds.length,
-                                productTitle: truncatedProducts
+                                productTitles: truncatedProducts
                             }),
                             redirectUrl: `/threads/${thread._id}#comment-${saved._id}`
                         });
@@ -615,8 +663,20 @@ const addComment = async (req, res) => {
             // Send notifications if any
             if (notifications.length > 0) {
                 try {
-                    await saveNotification(notifications);
                     console.log(`✅ ${notifications.length} notification(s) sent for thread comment and product associations`);
+                    // await saveNotification(notifications);
+                    const recipientIds = notifications.map(n => n.recipientId);
+                    const activeUsers = await User.find({
+                        _id: { $in: recipientIds },
+                        activityNotification: true
+                    }, '_id');
+
+                    const allowedRecipientIds = new Set(activeUsers.map(u => u._id.toString()));
+                    const filteredNotifications = notifications.filter(n => allowedRecipientIds.has(n.recipientId.toString()));
+
+                    if (filteredNotifications.length > 0) {
+                        await saveNotification(filteredNotifications);
+                    }
                 } catch (notificationError) {
                     console.error('❌ Failed to send comment notifications:', notificationError);
                     // Don't fail the main operation if notifications fail

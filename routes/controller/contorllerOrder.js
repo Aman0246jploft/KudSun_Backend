@@ -196,6 +196,9 @@ const createOrder = async (req, res) => {
 
             orderItems.push({
                 productId: product._id,
+                productImage: product.productImages?.[0] || '',
+                productTitle: product.title,
+                productSaleType: product.saleType,
                 quantity: Number(item.quantity ?? 1),
                 priceAtPurchase: price
             });
@@ -334,7 +337,9 @@ const createOrder = async (req, res) => {
                     status: ORDER_STATUS.PENDING,
                     newStatus: ORDER_STATUS.PENDING,
                     paymentMethod: order.paymentMethod,
-                    paymentStatus: order.paymentStatus
+                    paymentStatus: order.paymentStatus,
+                    productImage: orderItems[0]?.productImage || '',     // ✅ Added
+                    productTitle: orderItems[0]?.productTitle || '',
                 }),
                 redirectUrl: `/order/${order._id}`
             }
@@ -1852,6 +1857,9 @@ const updateOrderStatusBySeller = async (req, res) => {
         }
 
         const currentStatus = order.status;
+        const firstProduct = order.items[0]?.productId;
+        const productTitle = firstProduct?.title || '';
+        const productImage = firstProduct?.productImages?.[0] || ''
 
         if (currentStatus === newStatus) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Order is already in this status");
@@ -2062,74 +2070,6 @@ const updateOrderStatusBySeller = async (req, res) => {
             // Update order status
             order.status = newStatus;
             await order.save({ session });
-
-            // Use product cost only for seller payout calculation (not grand total)
-            // const productCost = order.totalAmount || 0; // This is the original product cost
-            // let serviceCharge = 0;
-            // let serviceType = '';
-
-            // let taxAmount = 0;
-            // let taxType = '';
-
-
-            // if (newStatus === ORDER_STATUS.DELIVERED || newStatus === ORDER_STATUS.CONFIRMED) {
-            //     const feeSettings = await FeeSetting.find({
-            //         name: { $in: ["SERVICE_CHARGE", "TAX"] },
-            //         isActive: true,
-            //         isDisable: false,
-            //         isDeleted: false
-            //     });
-            //     const serviceChargeSetting = feeSettings.find(f => f.name === "SERVICE_CHARGE");
-            //     const taxSetting = feeSettings.find(f => f.name === "TAX");
-
-            //     if (serviceChargeSetting) {
-            //         if (serviceChargeSetting.type === PRICING_TYPE.PERCENTAGE) {
-            //             serviceCharge = (productCost * serviceChargeSetting.value) / 100;
-            //             serviceType = PRICING_TYPE.PERCENTAGE
-            //         } else if (serviceChargeSetting.type === PRICING_TYPE.FIXED) {
-            //             serviceCharge = serviceChargeSetting.value;
-            //             serviceType = PRICING_TYPE.FIXED
-            //         }
-            //     }
-
-            //     if (taxSetting) {
-            //         if (taxSetting.type === PRICING_TYPE.PERCENTAGE) {
-            //             taxAmount = (productCost * taxSetting.value) / 100;
-            //             taxType = PRICING_TYPE.PERCENTAGE
-            //         } else if (taxSetting.type === PRICING_TYPE.FIXED) {
-            //             taxAmount = taxSetting.value;
-            //             taxType = PRICING_TYPE.FIXED
-            //         }
-            //     }
-
-            //     const netAmount = productCost - serviceCharge - taxAmount;
-
-            //     const sellerWalletTnx = new WalletTnx({
-            //         orderId: order._id,
-            //         userId: sellerId,
-            //         amount: productCost, // Original product cost
-            //         netAmount: netAmount, // After deducting platform fees
-            //         serviceCharge,
-            //         taxCharge: taxAmount,
-            //         tnxType: TNX_TYPE.CREDIT,
-            //         serviceType: serviceType,
-            //         taxType: taxType,
-            //         tnxStatus: PAYMENT_STATUS.COMPLETED
-            //     });
-            //     await sellerWalletTnx.save({ session });
-
-            //     await User.findByIdAndUpdate(
-            //         sellerId,
-            //         {
-            //             $inc: { walletBalance: netAmount } // increment walletBalance by net earnings
-            //         },
-            //         { session }
-            //     );
-
-
-            // }
-
-
             // Create status history
             if (currentStatus !== newStatus) {
                 await OrderStatusHistory.create([{
@@ -2246,6 +2186,8 @@ const updateOrderStatusBySeller = async (req, res) => {
                     totalAmount: order.grandTotal,
                     amount: order.grandTotal,
                     itemCount: order.items.length,
+                    productTitle,
+                    productImage,
                     paymentMethod: order.paymentMethod,
                     status: newStatus,
                     actionBy: 'seller'

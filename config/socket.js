@@ -83,6 +83,11 @@ async function setupSocket(server) {
 
 
                 if (data.otherUserId) {
+                    const usersToNotify = await User.find({
+                        _id: toObjectId(otherUserId),
+                        dealChatnotification: true
+                    }, '_id');
+
                     const notification = [{
                         recipientId: data.otherUserId,
                         userId: userId,
@@ -94,14 +99,22 @@ async function setupSocket(server) {
                             userName: userName
                         }),
                     }];
-
-                    await saveNotification(notification, true);
+                    if (usersToNotify) {
+                        await saveNotification(notification, true);
+                    }
                 } else {
+
                     const room = await ChatRoom.findById(roomId).lean();
+
                     const otherParticipants = room.participants.filter(p => p.toString() !== userId);
-                    for (const recipientId of otherParticipants) {
+                    const usersToNotify = await User.find({
+                        _id: { $in: toObjectId(otherParticipants) },
+
+                        dealChatnotification: true
+                    }, '_id');
+                    for (const user of usersToNotify) {
                         const notification = [{
-                            recipientId,
+                            recipientId:user._id,
                             userId: userId,
                             type: NOTIFICATION_TYPES.CHAT,
                             title: `New message from ${userName}`,

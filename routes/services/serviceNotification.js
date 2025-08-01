@@ -10,7 +10,7 @@ const notificationQueue = createQueue('notificationQueue');
 
 
 
-const saveNotification = async (payload, data) => {
+const saveNotification = async (payload, data = false) => {
     try {
 
         if (!Array.isArray(payload) || payload.length === 0) {
@@ -18,7 +18,8 @@ const saveNotification = async (payload, data) => {
         }
 
         for (const notification of payload) {
-            const notificationWithSkip = { ...notification, skip: data || false };
+            const notificationWithSkip = { ...notification, skip: data };
+            console.log(notificationWithSkip)
             await addJobToQueue(notificationQueue, notificationWithSkip);
         }
 
@@ -53,6 +54,7 @@ const notificationProcessor = async (job) => {
             });
         }
 
+        console.log("skipskip", skip)
         // Save notification in DB
         if (!skip) {
             await Notification.create({

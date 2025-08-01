@@ -8,11 +8,13 @@ const { apiErrorRes, apiSuccessRes, toObjectId, formatTimeRemaining, isNewItem, 
 const HTTP_STATUS = require('../../utils/statusCode');
 const { uploadImageCloudinary, deleteImageCloudinary } = require('../../utils/cloudinary');
 const CONSTANTS_MSG = require('../../utils/constantsMessage');
-const { SALE_TYPE, DeliveryType, ORDER_STATUS, roleId, conditions } = require('../../utils/Role');
+const { SALE_TYPE, DeliveryType, ORDER_STATUS, roleId, conditions, NOTIFICATION_TYPES, createStandardizedNotificationMeta } = require('../../utils/Role');
 const { DateTime } = require('luxon');
 const { default: mongoose } = require('mongoose');
 // Import Algolia service
 const { indexProduct, deleteProducts } = require('../services/serviceAlgolia');
+// Import notification service
+const { saveNotification } = require('../services/serviceNotification');
 
 async function ensureParameterAndValue(categoryId, subCategoryId, key, value, userId = null, role) {
     const category = await Category.findById(categoryId);
@@ -2849,8 +2851,219 @@ const addComment = async (req, res) => {
             author: req.user?.userId
         });
         const saved = await comment.save();
+
+        // Get product and commenter details for notifications
+        const product = await SellProduct.findById(value.product).populate('userId', 'userName profileImage');
+        const commenter = await User.findById(req.user?.userId).select('userName profileImage');
+
+        if (product && commenter) {
+            const notifications = [];
+
+            // Get the first product image
+            const productImage = product.productImages && product.productImages.length > 0
+                ? product.productImages[0]
+                : product.photo || null;
+
+            // Get product price based on sale type
+            const productPrice = product.saleType === 'auction'
+                ? (product.auctionSettings?.startingBid || 0)
+                : (product.fixedPrice || 0);
+
+            // Case 1: Comment on a product (not a reply)
+            if (!value.parent) {
+                // Notify product owner if someone else commented
+                if (product.userId._id.toString() !== req.user.userId.toString()) {
+                    notifications.push({
+                        recipientId: product.userId._id,
+                        userId: req.user?.userId,
+                        type: NOTIFICATION_TYPES.ACTIVITY,
+                        title: "New Comment on Your Product",
+                        message: `${commenter.userName} commented on your product "${product.title.length > 50 ? product.title.substring(0, 50) + '...' : product.title}"`,
+                        meta: createStandardizedNotificationMeta({
+                            productId: product._id.toString(),
+                            productTitle: product.title,
+                            productImage: productImage,
+                            productPrice: productPrice,
+                            productFixedPrice: product.fixedPrice || null,
+                            productDeliveryType: product.deliveryType || null,
+                            productSaleType: product.saleType || null,
+                            productCondition: product.condition || null,
+                            commentId: saved._id.toString(),
+                            commentContent: value.content || '',
+                            commenterName: commenter.userName,
+                            commenterId: req.user?.userId,
+                            commenterImage: commenter.profileImage || null,
+                            userImage: commenter.profileImage || null,
+                            sellerId: product.userId._id.toString(),
+                            actionBy: 'user',
+                            timestamp: new Date().toISOString(),
+                            associatedProductsCount: productIds.length || 0
+                        }),
+                        redirectUrl: `/products/${product._id}#comment-${saved._id}`
+                    });
+                }
+            }
+            // Case 2: Reply to a comment
+            else {
+                const parentComment = await ProductComment.findById(value.parent).populate('author', 'userName profileImage');
+
+                if (parentComment && parentComment.author) {
+                    // Notify parent comment author if someone else replied
+                    if (parentComment.author._id.toString() !== req.user.userId.toString()) {
+                        notifications.push({
+                            recipientId: parentComment.author._id,
+                            userId: req.user?.userId,
+                            type: NOTIFICATION_TYPES.ACTIVITY,
+                            title: "New Reply to Your Comment",
+                            message: `${commenter.userName} replied to your comment on "${product.title.length > 50 ? product.title.substring(0, 50) + '...' : product.title}"`,
+                            meta: createStandardizedNotificationMeta({
+                                productId: product._id.toString(),
+                                productTitle: product.title,
+                                productImage: productImage,
+                                productPrice: productPrice,
+                                productFixedPrice: product.fixedPrice || null,
+                                productDeliveryType: product.deliveryType || null,
+                                productSaleType: product.saleType || null,
+                                productCondition: product.condition || null,
+                                commentId: saved._id.toString(),
+                                parentCommentId: value.parent,
+                                commentContent: value.content || '',
+                                commenterName: commenter.userName,
+                                commenterId: req.user?.userId,
+                                commenterImage: commenter.profileImage || null,
+                                userImage: commenter.profileImage || null,
+                                sellerId: product.userId._id.toString(),
+                                actionBy: 'user',
+                                timestamp: new Date().toISOString(),
+                                associatedProductsCount: productIds.length || 0
+                            }),
+                            redirectUrl: `/products/${product._id}#comment-${saved._id}`
+                        });
+                    }
+
+                    // Also notify product owner if it's a reply and they're not the commenter or parent comment author
+                    if (product.userId._id.toString() !== req.user.userId.toString() &&
+                        product.userId._id.toString() !== parentComment.author._id.toString()) {
+                        notifications.push({
+                            recipientId: product.userId._id,
+                            userId: req.user?.userId,
+                            type: NOTIFICATION_TYPES.ACTIVITY,
+                            title: "New Activity on Your Product",
+                            message: `${commenter.userName} replied to a comment on your product "${product.title.length > 50 ? product.title.substring(0, 50) + '...' : product.title}"`,
+                            meta: createStandardizedNotificationMeta({
+                                productId: product._id.toString(),
+                                productTitle: product.title,
+                                productImage: productImage,
+                                productPrice: productPrice,
+                                productFixedPrice: product.fixedPrice || null,
+                                productDeliveryType: product.deliveryType || null,
+                                productSaleType: product.saleType || null,
+                                productCondition: product.condition || null,
+                                commentId: saved._id.toString(),
+                                parentCommentId: value.parent,
+                                commentContent: value.content || '',
+                                commenterName: commenter.userName,
+                                commenterId: req.user?.userId,
+                                commenterImage: commenter.profileImage || null,
+                                userImage: commenter.profileImage || null,
+                                sellerId: product.userId._id.toString(),
+                                actionBy: 'user',
+                                timestamp: new Date().toISOString(),
+                                associatedProductsCount: productIds.length || 0
+                            }),
+                            redirectUrl: `/products/${product._id}#comment-${saved._id}`
+                        });
+                    }
+                }
+            }
+
+            // Case 3: Associated Products Notifications (if any products are associated with the comment)
+            if (productIds.length > 0) {
+                try {
+                    // Fetch associated product details and their owners
+                    const associatedProducts = await SellProduct.find({
+                        _id: { $in: productIds.map(id => toObjectId(id)) }
+                    }).populate('userId', 'userName profileImage').lean();
+
+                    for (const assocProduct of associatedProducts) {
+                        // Notify associated product owner if someone else mentioned their product
+                        if (assocProduct.userId._id.toString() !== req.user.userId.toString()) {
+                            const assocProductImage = assocProduct.productImages && assocProduct.productImages.length > 0
+                                ? assocProduct.productImages[0]
+                                : assocProduct.photo || null;
+
+                            const assocProductPrice = assocProduct.saleType === 'auction'
+                                ? (assocProduct.auctionSettings?.startingBid || 0)
+                                : (assocProduct.fixedPrice || 0);
+
+                            notifications.push({
+                                recipientId: assocProduct.userId._id,
+                                userId: req.user?.userId,
+                                type: NOTIFICATION_TYPES.ACTIVITY,
+                                title: "Your Product Was Mentioned",
+                                message: `${commenter.userName} mentioned your product "${assocProduct.title.length > 40 ? assocProduct.title.substring(0, 40) + '...' : assocProduct.title}" in a product comment`,
+                                meta: createStandardizedNotificationMeta({
+                                    productId: assocProduct._id.toString(),
+                                    productTitle: assocProduct.title,
+                                    productImage: assocProductImage,
+                                    productPrice: assocProductPrice,
+                                    productFixedPrice: assocProduct.fixedPrice || null,
+                                    productDeliveryType: assocProduct.deliveryType || null,
+                                    productSaleType: assocProduct.saleType || null,
+                                    productCondition: assocProduct.condition || null,
+                                    commentId: saved._id.toString(),
+                                    commentContent: value.content || '',
+                                    commenterName: commenter.userName,
+                                    commenterId: req.user?.userId,
+                                    commenterImage: commenter.profileImage || null,
+                                    userImage: commenter.profileImage || null,
+                                    sellerId: assocProduct.userId._id.toString(),
+                                    actionBy: 'user',
+                                    timestamp: new Date().toISOString(),
+                                    associatedProductsCount: productIds.length
+                                }),
+                                redirectUrl: `/products/${product._id}#comment-${saved._id}`
+                            });
+                        }
+                    }
+                } catch (productError) {
+                    console.error('❌ Failed to fetch associated products for notifications:', productError);
+                    // Don't fail the main operation if product fetching fails
+                }
+            }
+
+            // Send notifications if any
+
+            if (notifications.length > 0) {
+                try {
+                    const recipientIds = notifications.map(n => n.recipientId);
+                    const allowedRecipients = await User.find({
+                        _id: { $in: toObjectId(recipientIds) },
+                        activityNotification: true
+                    }).select('_id');
+
+                    const allowedIdsSet = new Set(allowedRecipients.map(u => u._id.toString()));
+
+                    const filteredNotifications = notifications.filter(n =>
+                        allowedIdsSet.has(n.recipientId.toString())
+                    );
+
+                    if (filteredNotifications.length > 0) {
+                        await saveNotification(filteredNotifications);
+                        console.log(`✅ ${filteredNotifications.length} notification(s) sent for product comment and associations`);
+                    } else {
+                        console.log('⚠️ All users have disabled activity notifications. Skipping notification dispatch.');
+                    }
+                } catch (notificationError) {
+                    console.error('❌ Failed to send product comment notifications:', notificationError);
+                }
+            }
+
+        }
+
         return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, saved);
     } catch (error) {
+        console.error('Error in addComment:', error);
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };

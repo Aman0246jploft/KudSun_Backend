@@ -213,7 +213,27 @@ const createStandardizedNotificationMeta = (data = {}) => {
         commentContent: data.commentContent || null,
         commenterName: data.commenterName || null,
         commenterId: data.commenterId || null,
-        associatedProductsCount: data.associatedProductsCount || null
+        associatedProductsCount: data.associatedProductsCount || null,
+        // Product details for association notifications
+        productImage: data.productImage || null,
+        productPrice: data.productPrice || null,
+        productFixedPrice: data.productFixedPrice || null,
+        productDeliveryType: data.productDeliveryType || null,
+        productSaleType: data.productSaleType || null,
+        productCondition: data.productCondition || null,
+        // User/Commenter image,
+        
+        commenterImage: data.commenterImage || null,
+        userImage: data.userImage || null,
+        // Follow-related metadata
+        followerId: data.followerId || null,
+        followerName: data.followerName || null,
+        followerImage: data.followerImage || null,
+        followedUserId: data.followedUserId || null,
+        followedUserName: data.followedUserName || null,
+        // Like-related metadata
+        likerName: data.likerName || null,
+        likerId: data.likerId || null
     };
 };
 
