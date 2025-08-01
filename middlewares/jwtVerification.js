@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const { apiErrorRes } = require('../utils/globalFunction');
 const HTTP_STATUS = require('../utils/statusCode');
 const CONSTANTS = require('../utils/constants');
+const { User } = require('../db');
 
 
 
@@ -69,7 +70,7 @@ const publicRoutes = [
 ];
 
 function jwtVerification() {
-    return (req, res, next) => {
+    return async (req, res, next) => {
         // const isPublic = publicRoutes.some(route => req.path.startsWith(route));
         const isPublic = publicRoutes.some(route =>
             req.path === route || req.path.startsWith(route + '/')
@@ -82,7 +83,7 @@ function jwtVerification() {
 
         if (authHeader && authHeader.startsWith('Bearer ')) {
             const token = authHeader.split(' ')[1];
-            jwt.verify(token, process.env.JWT_SECRET_KEY, (err, decoded) => {
+            jwt.verify(token, process.env.JWT_SECRET_KEY, async (err, decoded) => {
                 if (err) {
                     return apiErrorRes(
                         HTTP_STATUS.FORBIDDEN,
@@ -93,8 +94,39 @@ function jwtVerification() {
                         CONSTANTS.ERROR_TRUE
                     );
                 }
-                req.user = decoded;
-                next();
+
+
+                try {
+                    const user = await User.findById(decoded.userId);
+                    // console.log(user)
+
+                    if (!user || user.isDeleted || user.isDisable) {
+                        return apiErrorRes(
+                            HTTP_STATUS.FORBIDDEN,
+                            res,
+                            'User is disabled or not authorized',
+                            null,
+                            CONSTANTS.ERROR_CODE_ONE,
+                            CONSTANTS.ERROR_TRUE
+                        );
+                    }
+
+                    req.user = decoded; // You can attach full user object here
+                    next();
+                } catch (dbErr) {
+                    return apiErrorRes(
+                        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+                        res,
+                        'Something went wrong',
+                        null,
+                        CONSTANTS.ERROR_CODE_ONE,
+                        CONSTANTS.ERROR_TRUE
+                    );
+                }
+
+
+                // req.user = decoded;
+                // next();
             });
         } else {
             return apiErrorRes(
