@@ -544,11 +544,79 @@ const addComment = async (req, res) => {
                 }
             }
 
+            // Case 3: Product Association Notifications
+            if (productIds.length > 0) {
+                try {
+                    // Fetch product details and their owners
+                    const associatedProducts = await SellProduct.find({ 
+                        _id: { $in: productIds.map(id => toObjectId(id)) } 
+                    }).populate('userId', 'userName profileImage').lean();
+
+                    for (const product of associatedProducts) {
+                        // Notify product owner if someone else associated their product
+                        if (product.userId._id.toString() !== req.user.userId.toString()) {
+                            notifications.push({
+                                recipientId: product.userId._id,
+                                userId: req.user?.userId,
+                                type: "TEXT",
+                                title: "Your Product Was Mentioned",
+                                message: `${commenter.userName} mentioned your product "${product.title.length > 40 ? product.title.substring(0, 40) + '...' : product.title}" in a thread comment`,
+                                meta: createStandardizedNotificationMeta({
+                                    threadId: thread._id.toString(),
+                                    threadTitle: thread.title,
+                                    commentId: saved._id.toString(),
+                                    commentContent: value.content || '',
+                                    productId: product._id.toString(),
+                                    productTitle: product.title,
+                                    commenterName: commenter.userName,
+                                    commenterId: req.user?.userId,
+                                    sellerId: product.userId._id.toString(),
+                                    actionBy: 'user',
+                                    timestamp: new Date().toISOString(),
+                                    associatedProductsCount: productIds.length
+                                }),
+                                redirectUrl: `/threads/${thread._id}#comment-${saved._id}`
+                            });
+                        }
+                    }
+
+                    // Notify thread owner about product associations (if not the commenter and at least one product was associated)
+                    if (thread.userId._id.toString() !== req.user.userId.toString() && associatedProducts.length > 0) {
+                        const productTitles = associatedProducts.map(p => p.title).join(', ');
+                        const truncatedProducts = productTitles.length > 60 ? productTitles.substring(0, 60) + '...' : productTitles;
+                        
+                        notifications.push({
+                            recipientId: thread.userId._id,
+                            userId: req.user?.userId,
+                            type: "TEXT",
+                            title: "Products Associated with Your Thread",
+                            message: `${commenter.userName} associated ${associatedProducts.length} product(s) with your thread: ${truncatedProducts}`,
+                            meta: createStandardizedNotificationMeta({
+                                threadId: thread._id.toString(),
+                                threadTitle: thread.title,
+                                commentId: saved._id.toString(),
+                                commentContent: value.content || '',
+                                commenterName: commenter.userName,
+                                commenterId: req.user?.userId,
+                                actionBy: 'user',
+                                timestamp: new Date().toISOString(),
+                                associatedProductsCount: productIds.length,
+                                productTitle: truncatedProducts
+                            }),
+                            redirectUrl: `/threads/${thread._id}#comment-${saved._id}`
+                        });
+                    }
+                } catch (productError) {
+                    console.error('❌ Failed to fetch associated products for notifications:', productError);
+                    // Don't fail the main operation if product fetching fails
+                }
+            }
+
             // Send notifications if any
             if (notifications.length > 0) {
                 try {
                     await saveNotification(notifications);
-                    console.log(`✅ ${notifications.length} notification(s) sent for thread comment`);
+                    console.log(`✅ ${notifications.length} notification(s) sent for thread comment and product associations`);
                 } catch (notificationError) {
                     console.error('❌ Failed to send comment notifications:', notificationError);
                     // Don't fail the main operation if notifications fail
