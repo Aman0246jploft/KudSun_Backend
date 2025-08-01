@@ -9,9 +9,11 @@ const HTTP_STATUS = require('../../utils/statusCode');
 const { uploadImageCloudinary } = require('../../utils/cloudinary');
 const CONSTANTS_MSG = require('../../utils/constantsMessage');
 const { default: mongoose } = require('mongoose');
-const { SALE_TYPE, roleId, DeliveryType } = require('../../utils/Role');
+const { SALE_TYPE, roleId, DeliveryType, NOTIFICATION_TYPES, createStandardizedNotificationMeta } = require('../../utils/Role');
 // Import Algolia service
 const { indexThread, deleteThreads } = require('../services/serviceAlgolia');
+// Import notification service
+const { saveNotification } = require('../services/serviceNotification');
 
 // Add a new thread // Draft also
 const addThread = async (req, res) => {
@@ -443,6 +445,7 @@ const addComment = async (req, res) => {
                 .map(id => id.trim?.()) // optional chaining for safety
                 .filter(id => id && /^[a-f\d]{24}$/i.test(id)); // only valid Mongo ObjectIds
         }
+        
         const comment = new ThreadComment({
             content: value.content || '',
             thread: value.thread,
@@ -452,8 +455,110 @@ const addComment = async (req, res) => {
             author: req.user?.userId
         });
         const saved = await comment.save();
+
+        // Get thread and commenter details for notifications
+        const thread = await Thread.findById(value.thread).populate('userId', 'userName profileImage');
+        const commenter = await User.findById(req.user?.userId).select('userName profileImage');
+        
+        if (thread && commenter) {
+            const notifications = [];
+            
+            // Case 1: Comment on a thread (not a reply)
+            if (!value.parent) {
+                // Notify thread author if someone else commented
+                if (thread.userId._id.toString() !== req.user.userId.toString()) {
+                    notifications.push({
+                        recipientId: thread.userId._id,
+                        userId: req.user?.userId,
+                        type: "TEXT",
+                        title: "New Comment on Your Thread",
+                        message: `${commenter.userName} commented on your thread "${thread.title.length > 50 ? thread.title.substring(0, 50) + '...' : thread.title}"`,
+                        meta: createStandardizedNotificationMeta({
+                            threadId: thread._id.toString(),
+                            threadTitle: thread.title,
+                            commentId: saved._id.toString(),
+                            commentContent: value.content || '',
+                            commenterName: commenter.userName,
+                            commenterId: req.user?.userId,
+                            actionBy: 'user',
+                            timestamp: new Date().toISOString(),
+                            associatedProductsCount: productIds.length || 0
+                        }),
+                        redirectUrl: `/threads/${thread._id}#comment-${saved._id}`
+                    });
+                }
+            } 
+            // Case 2: Reply to a comment
+            else {
+                const parentComment = await ThreadComment.findById(value.parent).populate('author', 'userName profileImage');
+                
+                if (parentComment && parentComment.author) {
+                    // Notify parent comment author if someone else replied
+                    if (parentComment.author._id.toString() !== req.user.userId.toString()) {
+                        notifications.push({
+                            recipientId: parentComment.author._id,
+                            userId: req.user?.userId,
+                            type: "TEXT",
+                            title: "New Reply to Your Comment",
+                            message: `${commenter.userName} replied to your comment on "${thread.title.length > 50 ? thread.title.substring(0, 50) + '...' : thread.title}"`,
+                            meta: createStandardizedNotificationMeta({
+                                threadId: thread._id.toString(),
+                                threadTitle: thread.title,
+                                commentId: saved._id.toString(),
+                                parentCommentId: value.parent,
+                                commentContent: value.content || '',
+                                commenterName: commenter.userName,
+                                commenterId: req.user?.userId,
+                                actionBy: 'user',
+                                timestamp: new Date().toISOString(),
+                                associatedProductsCount: productIds.length || 0
+                            }),
+                            redirectUrl: `/threads/${thread._id}#comment-${saved._id}`
+                        });
+                    }
+                    
+                    // Also notify thread author if it's a reply and they're not the commenter or parent comment author
+                    if (thread.userId._id.toString() !== req.user.userId.toString() && 
+                        thread.userId._id.toString() !== parentComment.author._id.toString()) {
+                        notifications.push({
+                            recipientId: thread.userId._id,
+                            userId: req.user?.userId,
+                            type: "TEXT",
+                            title: "New Activity on Your Thread",
+                            message: `${commenter.userName} replied to a comment on your thread "${thread.title.length > 50 ? thread.title.substring(0, 50) + '...' : thread.title}"`,
+                            meta: createStandardizedNotificationMeta({
+                                threadId: thread._id.toString(),
+                                threadTitle: thread.title,
+                                commentId: saved._id.toString(),
+                                parentCommentId: value.parent,
+                                commentContent: value.content || '',
+                                commenterName: commenter.userName,
+                                commenterId: req.user?.userId,
+                                actionBy: 'user',
+                                timestamp: new Date().toISOString(),
+                                associatedProductsCount: productIds.length || 0
+                            }),
+                            redirectUrl: `/threads/${thread._id}#comment-${saved._id}`
+                        });
+                    }
+                }
+            }
+
+            // Send notifications if any
+            if (notifications.length > 0) {
+                try {
+                    await saveNotification(notifications);
+                    console.log(`✅ ${notifications.length} notification(s) sent for thread comment`);
+                } catch (notificationError) {
+                    console.error('❌ Failed to send comment notifications:', notificationError);
+                    // Don't fail the main operation if notifications fail
+                }
+            }
+        }
+
         return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, saved);
     } catch (error) {
+        console.error('Error in addComment:', error);
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };

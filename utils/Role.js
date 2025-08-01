@@ -101,7 +101,10 @@ const NOTIFICATION_TYPES = {
     DEAL_CHAT: 'deal_chat',
     SYSTEM: 'system',
     ACTIVITY: 'activity',
-    ALERT: 'alert'
+    ALERT: 'alert',
+    THREAD: 'thread',
+    REVIEW: 'review',
+    DISPUTE: 'dispute'
 };
 
 const PRICING_TYPE = {
@@ -200,8 +203,17 @@ const createStandardizedNotificationMeta = (data = {}) => {
         taxAmount: data.taxAmount || null,
         serviceCharge: data.serviceCharge || null,
         platformFee: data.platformFee || null,
-        roomId:data.roomId||null,
-        userName:data.userName||null
+        roomId: data.roomId || null,
+        userName: data.userName || null,
+        // Thread-related metadata
+        threadId: data.threadId || null,
+        threadTitle: data.threadTitle || null,
+        commentId: data.commentId || null,
+        parentCommentId: data.parentCommentId || null,
+        commentContent: data.commentContent || null,
+        commenterName: data.commenterName || null,
+        commenterId: data.commenterId || null,
+        associatedProductsCount: data.associatedProductsCount || null
     };
 };
 

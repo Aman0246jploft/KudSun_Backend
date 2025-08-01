@@ -30,10 +30,6 @@ const getMonthlyAnalytics = async (req, res) => {
             },
             { $sort: { '_id.month': 1 } }
         ]);
-
-
-
-
         // Revenue analytics - Monthly revenue from platform revenue
         const monthlyRevenue = await PlatformRevenue.aggregate([
             {
@@ -53,11 +49,12 @@ const getMonthlyAnalytics = async (req, res) => {
         ]);
 
         // Products sold analytics - Monthly products sold (completed orders)
+        
         const monthlyProductsSold = await Order.aggregate([
             {
                 $match: {
                     createdAt: { $gte: startDate, $lte: endDate },
-                    status: 'DELIVERED',
+                    status: 'completed',
                     isDeleted: { $ne: true }
                 }
             },
