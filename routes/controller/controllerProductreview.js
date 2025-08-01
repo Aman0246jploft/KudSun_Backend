@@ -58,6 +58,9 @@ const createOrUpdateReview = async (req, res) => {
     try {
         const { productId, rating, ratingText, reviewText } = req.body;
         const userId = req.user.userId;
+        const raterUser = await User.findById(userId).lean();
+        const recipientId = raterRole === 'buyer' ? order.sellerId : order.userId;
+        const recipientUser = await User.findById(recipientId).lean();
 
         // 2. Find order where user is buyer or seller for this product and order is completed
         const order = await Order.findOne({
@@ -228,7 +231,7 @@ const createOrUpdateReview = async (req, res) => {
         // Emit system message
         const io = req.app.get('io');
         await emitSystemMessage(io, reviewMessage, room, order.userId, order.sellerId);
-
+        const userName = raterUser?.userName || raterUser?.name || raterUser?.fullName || 'User';
         // Send notifications about review submission
         const reviewNotifications = [];
 
@@ -242,7 +245,7 @@ const createOrUpdateReview = async (req, res) => {
                 productId: productId,
                 type: NOTIFICATION_TYPES.REVIEW,
                 title: "New Review Received!",
-                message: `You received a ${rating}-star review from a buyer: "${reviewText || ratingText || 'No comment'}"`,
+                message: `${userName} has left you a ${rating}-star review: "${reviewText || ratingText || 'No comment'}"`,
                 meta: createStandardizedNotificationMeta({
                     orderNumber: order._id.toString(),
                     reviewId: review._id.toString(),
@@ -251,7 +254,8 @@ const createOrUpdateReview = async (req, res) => {
                     raterRole: raterRole,
                     isNewReview: isNewReview,
                     sellerId: order.sellerId,
-                    buyerId: order.userId
+                    buyerId: order.userId,
+                    userImage: raterUser?.profileImage || null
                 }),
                 redirectUrl: `/review/${review._id}`
             });
@@ -265,7 +269,7 @@ const createOrUpdateReview = async (req, res) => {
                 productId: productId,
                 type: NOTIFICATION_TYPES.REVIEW,
                 title: "Seller Review Received!",
-                message: `The seller has left you a ${rating}-star review: "${reviewText || ratingText || 'No comment'}"`,
+                message: `${userName} has left you a ${rating}-star review: "${reviewText || ratingText || 'No comment'}"`,
                 meta: createStandardizedNotificationMeta({
                     orderNumber: order._id.toString(),
                     reviewId: review._id.toString(),
@@ -274,15 +278,17 @@ const createOrUpdateReview = async (req, res) => {
                     raterRole: raterRole,
                     isNewReview: isNewReview,
                     sellerId: order.sellerId,
-                    buyerId: order.userId
+                    buyerId: order.userId,
+                    userImage: raterUser?.profileImage || null
                 }),
                 redirectUrl: `/review/${review._id}`
             });
         }
 
-        if (reviewNotifications.length > 0) {
+        if (reviewNotifications.length > 0 && recipientUser.alertNotification !== false) {
             await saveNotification(reviewNotifications);
         }
+
 
         return apiSuccessRes(HTTP_STATUS.OK, res, 'Review saved successfully', { review });
 

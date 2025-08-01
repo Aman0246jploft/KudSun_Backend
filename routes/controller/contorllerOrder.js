@@ -5100,9 +5100,9 @@ const cancelOrderByBuyer = async (req, res) => {
                     }),
                     redirectUrl: `/order/${order._id}`
                 }];
-                if (buyer.alertNotification !== false) {
-                    await saveNotification(sellerNotification);
-                }
+                // if (buyer.alertNotification !== false) {
+                //     await saveNotification(buyerRefundNotification);
+                // }
 
             }
 
