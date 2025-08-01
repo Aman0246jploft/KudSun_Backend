@@ -596,41 +596,57 @@ const disputeByOrderId = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Order ID is required');
         }
 
-        // Find dispute by order ID
+        // Fetch dispute
         const dispute = await Dispute.findOne({
             orderId: orderId,
             isDeleted: false
         })
-              .populate({
-            path: 'orderId',
-            populate: {
-                path: 'items.productId',
-                select: 'productImages title description',
-            },
-        })
+            .populate({
+                path: 'orderId',
+                populate: {
+                    path: 'items.productId',
+                    select: 'productImages title description',
+                },
+            })
             .populate('raisedBy', 'userName profileImage isLive is_Id_verified is_Verified_Seller is_Preferred_seller averageRatting')
-            .populate('sellerId', 'userName profileImage isLive is_Id_verified is_Verified_Seller is_Preferred_seller averageRatting').lean()
+            .populate('sellerId', 'userName profileImage isLive is_Id_verified is_Verified_Seller is_Preferred_seller averageRatting')
+            .lean();
 
         if (!dispute) {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'No dispute found for this order');
         }
 
-        // Get dispute history
-        const disputeHistory = await DisputeHistory.find({ disputeId: dispute._id })
+        // Get dispute history sorted by latest first
+        const rawHistory = await DisputeHistory.find({ disputeId: dispute._id })
             .populate('actor', 'userName profileImage isLive is_Id_verified is_Verified_Seller is_Preferred_seller averageRatting')
-            .sort({ createdAt: -1 }).lean()
+            .sort({ createdAt: -1 })
+            .lean();
+
+        const groupedHistory = {
+            ADMIN_DECISION: null,
+            SELLER_RESPONSE: null,
+            CREATED: null,
+        };
+
+        for (const item of rawHistory) {
+            const event = item.event;
+            if (!groupedHistory[event]) {
+                groupedHistory[event] = item; // only assign first (latest) entry
+            }
+        }
 
         const response = {
             dispute,
-            history: disputeHistory
+            history: groupedHistory
         };
 
         return apiSuccessRes(HTTP_STATUS.OK, res, 'Dispute details fetched successfully', response);
-
     } catch (err) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
     }
-}
+};
+
+
 
 
 router.post('/create', perApiLimiter(), upload.array('file', 3), createDispute);
