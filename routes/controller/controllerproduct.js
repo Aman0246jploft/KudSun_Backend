@@ -62,6 +62,7 @@ async function ensureParameterAndValue(categoryId, subCategoryId, key, value, us
         valueName: valueRef.value
     };
 }
+
 const addSellerProduct = async (req, res) => {
     try {
         const {
