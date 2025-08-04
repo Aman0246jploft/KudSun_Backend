@@ -784,7 +784,7 @@ const follow = async (req, res) => {
                     userId: followedBy,
                     type: NOTIFICATION_TYPES.ACTIVITY,
                     title: "New Follower",
-                    message: `${follower.userName} started following you`,
+                    message: `${follower?.userName} started following you`,
                     meta: createStandardizedNotificationMeta({
                         followerId: followedBy,
                         followerName: follower.userName,
