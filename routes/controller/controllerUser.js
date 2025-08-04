@@ -784,7 +784,7 @@ const follow = async (req, res) => {
                     userId: followedBy,
                     type: NOTIFICATION_TYPES.ACTIVITY,
                     title: "followed you",
-                    messasge: null,
+                    messasge: '',
                     // message: `${follower.userName} started following you`,
                     meta: createStandardizedNotificationMeta({
                         followerId: followedBy,
@@ -834,6 +834,7 @@ const follow = async (req, res) => {
         );
     }
 }
+
 const threadlike = async (req, res) => {
     try {
         let likeBy = req.user.userId
