@@ -44,6 +44,7 @@ const notificationProcessor = async (job) => {
 
         // Send Firebase notification if token exists
         const userInfo = await User.findById(userId).select('fcmToken');
+        console.log("11111122222",userInfo.fcmToken)
         if (userInfo?.fcmToken) {
             await sendFirebaseNotification({
                 token: userInfo.fcmToken,
@@ -54,7 +55,7 @@ const notificationProcessor = async (job) => {
             });
         }
 
-        console.log("skipskip", skip)
+    
         // Save notification in DB
         if (!skip) {
             await Notification.create({
