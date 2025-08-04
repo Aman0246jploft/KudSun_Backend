@@ -4,7 +4,7 @@ const multer = require('multer');
 const upload = multer();
 const router = express.Router();
 const moment = require("moment");
-const { SellProduct, Bid, Order } = require('../../db');
+const { SellProduct, Bid, Order, User } = require('../../db');
 const validateRequest = require('../../middlewares/validateRequest');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const { bidSchema } = require('../services/validations/bidValidation');
@@ -110,7 +110,7 @@ const placeBid = async (req, res) => {
             userId: req.user?.userId,
             type: NOTIFICATION_TYPES.ACTIVITY,
             title: "New bid on Your Product",
-            message: `${BidderInfo.userName} bid  on your auction"${product.title.length > 50 ? product.title.substring(0, 50) + '...' : thread.title}"`,
+            message: `${BidderInfo.userName} bid  on your auction"${product.title.length > 50 ? product.title.substring(0, 50) + '...' : product.title}"`,
             meta: createStandardizedNotificationMeta({
                 productImage: product?.productImages[0] || null,
                 productId: product._id,
@@ -135,8 +135,8 @@ const placeBid = async (req, res) => {
         return apiSuccessRes(HTTP_STATUS.OK, res, 'Bid placed successfully', newBid);
 
     } catch (err) {
-        await session.abortTransaction();
-        session.endSession();
+        // await session.abortTransaction();
+        // session.endSession();
 
         console.error("Bid placement error:", err);
         return res.status(500).json(apiErrorRes("Something went wrong while placing the bid"));
