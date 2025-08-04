@@ -2856,7 +2856,7 @@ const addComment = async (req, res) => {
         // Get product and commenter details for notifications
         const product = await SellProduct.findById(value.product).populate('userId', 'userName profileImage');
         const commenter = await User.findById(req.user?.userId).select('userName profileImage');
-
+        console.log("product && commenter", product && commenter, product, commenter)
         if (product && commenter) {
             const notifications = [];
 
