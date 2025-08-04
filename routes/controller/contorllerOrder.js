@@ -325,8 +325,8 @@ const createOrder = async (req, res) => {
                     orderId: order._id,
                     productId: orderItems[0].productId,
                     type: NOTIFICATION_TYPES.ORDER,
-                    title: "purchased your Item",
-                    message: `You have received a new order for ${orderItems.length} item(s). Order amount: ฿${order.grandTotal.toFixed(2)}`,
+                    title: "New Order Received!",
+                    message: `You have received a new order for ${orderItems.length} item(s). Order amount: $${order.grandTotal.toFixed(2)}`,
                     meta: createStandardizedNotificationMeta({
                         orderNumber: order._id.toString(),
                         orderId: order._id.toString(),
@@ -3098,7 +3098,7 @@ const addrequest = async (req, res) => {
                     userId: userId,
                     type: NOTIFICATION_TYPES.SYSTEM,
                     title: "Withdrawal Request Submitted",
-                    message: `Your withdrawal request for ฿${amount} has been submitted successfully and is pending approval.`,
+                    message: `Your withdrawal request for $${amount} has been submitted successfully and is pending approval.`,
                     meta: createStandardizedNotificationMeta({
                         withdrawalId: newRequest._id.toString(),
                         amount: amount,
@@ -5084,7 +5084,7 @@ const cancelOrderByBuyer = async (req, res) => {
                     orderId: order._id,
                     productId: order.items[0].productId,
                     type: NOTIFICATION_TYPES.PAYMENT,
-                    title: "refund processed",
+                    title: "Refund Processed",
                     message: `Your refund of ฿${refundAmount.toFixed(2)} has been credited to your wallet for the cancelled order.`,
                     meta: createStandardizedNotificationMeta({
                         orderNumber: order._id.toString(),

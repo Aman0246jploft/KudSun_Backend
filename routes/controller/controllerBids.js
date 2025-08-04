@@ -114,6 +114,7 @@ const placeBid = async (req, res) => {
             meta: createStandardizedNotificationMeta({
                 productImage: product?.productImages[0] || null,
                 productTitle:product?.title||null,
+                productSaleType: product.saleType,
                 productId: product._id,
                 userImage: BidderInfo.profileImage || null,
                 amount,
