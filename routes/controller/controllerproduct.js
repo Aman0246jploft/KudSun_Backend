@@ -1103,7 +1103,7 @@ const showAuctionProducts = async (req, res) => {
                 hitsPerPage: 10
             });
             const algoliaIds = searchResult.hits.map(hit => toObjectId(hit.objectID));
-            console.log("4545454", typeof (algoliaIds),algoliaIds)
+            console.log("4545454", typeof (algoliaIds), algoliaIds)
 
             if (!algoliaIds.length) {
                 return apiSuccessRes(HTTP_STATUS.OK, res, "Auction products fetched successfully", {
@@ -2905,13 +2905,14 @@ const addComment = async (req, res) => {
                         recipientId: product.userId._id,
                         userId: req.user?.userId,
                         type: NOTIFICATION_TYPES.ACTIVITY,
-                        title: "New Comment on Your Product",
-                        message: `${commenter.userName} commented on your product "${product.title.length > 50 ? product.title.substring(0, 50) + '...' : product.title}"`,
+                        title: "commented your product",
+                        message: `"${product.title.length > 50 ? product.title.substring(0, 50) + '...' : product.title}"`,
                         meta: createStandardizedNotificationMeta({
                             productId: product._id.toString(),
                             productTitle: product.title,
                             productImage: productImage,
                             productPrice: productPrice,
+                            userName: product.userId?.userName || null,
                             productFixedPrice: product.fixedPrice || null,
                             productDeliveryType: product.deliveryType || null,
                             productSaleType: product.saleType || null,
@@ -2942,13 +2943,14 @@ const addComment = async (req, res) => {
                             recipientId: parentComment.author._id,
                             userId: req.user?.userId,
                             type: NOTIFICATION_TYPES.ACTIVITY,
-                            title: "New Reply to Your Comment",
-                            message: `${commenter.userName} replied to your comment on "${product.title.length > 50 ? product.title.substring(0, 50) + '...' : product.title}"`,
+                            title: "reply to your comment",
+                            message: `"${product.title.length > 50 ? product.title.substring(0, 50) + '...' : product.title}"`,
                             meta: createStandardizedNotificationMeta({
                                 productId: product._id.toString(),
                                 productTitle: product.title,
                                 productImage: productImage,
                                 productPrice: productPrice,
+                                userName: parentComment.author?.userName || null,
                                 productFixedPrice: product.fixedPrice || null,
                                 productDeliveryType: product.deliveryType || null,
                                 productSaleType: product.saleType || null,
@@ -2976,13 +2978,14 @@ const addComment = async (req, res) => {
                             recipientId: product.userId._id,
                             userId: req.user?.userId,
                             type: NOTIFICATION_TYPES.ACTIVITY,
-                            title: "New Activity on Your Product",
-                            message: `${commenter.userName} replied to a comment on your product "${product.title.length > 50 ? product.title.substring(0, 50) + '...' : product.title}"`,
+                            title: "reply to your comment product",
+                            message: `"${product.title.length > 50 ? product.title.substring(0, 50) + '...' : product.title}"`,
                             meta: createStandardizedNotificationMeta({
                                 productId: product._id.toString(),
                                 productTitle: product.title,
                                 productImage: productImage,
                                 productPrice: productPrice,
+                                userName: commenter?.userName || null,
                                 productFixedPrice: product.fixedPrice || null,
                                 productDeliveryType: product.deliveryType || null,
                                 productSaleType: product.saleType || null,
@@ -3028,8 +3031,8 @@ const addComment = async (req, res) => {
                                 recipientId: assocProduct.userId._id,
                                 userId: req.user?.userId,
                                 type: NOTIFICATION_TYPES.ACTIVITY,
-                                title: "Your Product Was Mentioned",
-                                message: `${commenter.userName} mentioned your product "${assocProduct.title.length > 40 ? assocProduct.title.substring(0, 40) + '...' : assocProduct.title}" in a product comment`,
+                                title: "associated a product",
+                                message: `"${assocProduct.title.length > 40 ? assocProduct.title.substring(0, 40) + '...' : assocProduct.title}" in a product comment`,
                                 meta: createStandardizedNotificationMeta({
                                     productId: assocProduct._id.toString(),
                                     productTitle: assocProduct.title,
@@ -3043,6 +3046,7 @@ const addComment = async (req, res) => {
                                     commentContent: value.content || '',
                                     commenterName: commenter.userName,
                                     commenterId: req.user?.userId,
+                                    userName: assocProduct?.userId?.userName,
                                     commenterImage: commenter.profileImage || null,
                                     userImage: commenter.profileImage || null,
                                     sellerId: assocProduct.userId._id.toString(),
