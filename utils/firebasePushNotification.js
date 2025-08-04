@@ -34,6 +34,7 @@ async function sendFirebaseNotification({ token, title, body, imageUrl, ...custo
         };
 
         const response = await admin.messaging().send(message);
+        console.log("NOTIFICATION", response, title, body)
 
     } catch (error) {
         console.error("Error sending Firebase notification:", error.message);
