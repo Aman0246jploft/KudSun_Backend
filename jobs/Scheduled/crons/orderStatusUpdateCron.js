@@ -47,7 +47,7 @@ let cronStats = {
 
 // Environment variables with defaults
 const PROCESSING_DAY_LIMIT = parseInt(process.env.DAY);
-const CRON_SCHEDULE =  '* * * * *'; // Daily at midnight by default
+const CRON_SCHEDULE = '* * * * *'; // Daily at midnight by default
 const ENABLE_EMAIL_NOTIFICATIONS = process.env.ENABLE_EMAIL_NOTIFICATIONS === 'true';
 const CONFIRM_RECEIPT_TO_COMPLETED_DAY_LIMIT = PROCESSING_DAY_LIMIT;
 
@@ -198,7 +198,7 @@ async function validateSystemState() {
         throw new Error('Database not connected');
     }
 
-    
+
 }
 
 /**
@@ -550,7 +550,7 @@ async function updateConfirmReceiptToCompleted(cutoffDate, session) {
 /**
  * Update orders from DISPUTE to COMPLETED if dispute is resolved
  */
-async function updateDisputedToCompleted(session) { 
+async function updateDisputedToCompleted(session) {
     try {
         console.log('⚖️ Processing DISPUTE → COMPLETED updates...');
 

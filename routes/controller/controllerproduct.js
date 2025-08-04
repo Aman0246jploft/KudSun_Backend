@@ -1248,6 +1248,7 @@ const showAuctionProducts = async (req, res) => {
                 const utcEnd = DateTime.fromJSDate(product.auctionSettings.biddingEndsAt, { zone: 'utc' });
                 const utcDate = DateTime.fromJSDate(product.auctionSettings.biddingEndsAt, { zone: 'utc' });
                 const localDate = utcDate.setZone(product.auctionSettings.timeZone || 'Asia/Kolkata');
+                
                 const utcNow = DateTime.utc();
                 const timeLeftMs = utcEnd.diff(utcNow).toMillis();
                 product.totalBidsPlaced = bidsCountMap[product._id.toString()] || 0;
