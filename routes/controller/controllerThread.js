@@ -462,7 +462,7 @@ const addComment = async (req, res) => {
         // Get thread and commenter details for notifications
         const thread = await Thread.findById(value.thread).populate('userId', 'userName profileImage');
         const commenter = await User.findById(req.user?.userId).select('userName profileImage');
-
+console.log("4444",commenter,thread,thread && commenter)
 
         if (thread && commenter) {
             const notifications = [];
