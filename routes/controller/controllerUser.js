@@ -14,7 +14,7 @@ const validateRequest = require('../../middlewares/validateRequest');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const { setKeyWithTime, setKeyNoTime, getKey, removeKey } = require('../services/serviceRedis');
 const { uploadImageCloudinary, deleteImageCloudinary } = require('../../utils/cloudinary');
-const { SALE_TYPE, roleId, PAYMENT_STATUS, NOTIFICATION_TYPES, createStandardizedNotificationMeta } = require('../../utils/Role');
+const { SALE_TYPE, roleId, PAYMENT_STATUS, NOTIFICATION_TYPES } = require('../../utils/Role');
 const SellProducts = require('../../db/models/SellProducts');
 const { moduleSchemaForId } = require('../services/validations/globalCURDValidation');
 const globalCrudController = require('./globalCrudController');
@@ -783,12 +783,11 @@ const follow = async (req, res) => {
                     recipientId: userId,
                     userId: followedBy,
                     type: NOTIFICATION_TYPES.ACTIVITY,
-                    title: "followed you",
-                    message: `new follower`,
+                    title: "New Follower",
+                    message: `${follower.userName} started following you`,
                     meta: createStandardizedNotificationMeta({
                         followerId: followedBy,
                         followerName: follower.userName,
-                        userName: follower.userName,
                         followerImage: follower.profileImage || null,
                         userImage: follower.profileImage || null,
                         followedUserId: userId,
@@ -833,7 +832,6 @@ const follow = async (req, res) => {
         );
     }
 }
-
 const threadlike = async (req, res) => {
     try {
         let likeBy = req.user.userId
