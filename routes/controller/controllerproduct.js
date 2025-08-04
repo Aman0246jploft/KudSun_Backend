@@ -1098,28 +1098,17 @@ const showAuctionProducts = async (req, res) => {
             const productIndex = client.initIndex(INDICES.PRODUCTS);
 
             const searchResult = await productIndex.search(keyWord, {
-                filters: 'isSold=0 AND isDeleted=0 AND isDisable=0',
-                attributesToRetrieve: ['objectID'],
+                filters: "isSold=0 AND isDeleted=0 AND isDisable=0",
+                attributesToRetrieve: ['objectID', "saleType"],
                 hitsPerPage: 10
             });
             const algoliaIds = searchResult.hits.map(hit => {
-                // If hit.objectID is already an ObjectId, use it directly
-                // If it's a string, convert it
+
                 return typeof hit.objectID === 'string' ? toObjectId(hit.objectID) : hit.objectID;
             });
-            console.log("Algolia search results:", searchResult.hits.length);
-            console.log("4545454", typeof (algoliaIds), algoliaIds)
-
-            if (!algoliaIds.length) {
-                return apiSuccessRes(HTTP_STATUS.OK, res, "Auction products fetched successfully", {
-                    pageNo: page,
-                    size: limit,
-                    total: 0,
-                    products: []
-                });
-            }
 
             filter._id = { $in: algoliaIds.map(id => toObjectId(id)) };
+            console.log(filter)
         }
 
         if (categoryId && categoryId !== "") {

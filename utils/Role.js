@@ -216,6 +216,8 @@ const createStandardizedNotificationMeta = (data = {}) => {
         associatedProductsCount: data.associatedProductsCount || null,
         // Product details for association notifications
         productImage: data.productImage || null,
+        productTitle: data.productTitle || null,
+
         productPrice: data.productPrice || null,
         productFixedPrice: data.productFixedPrice || null,
         productDeliveryType: data.productDeliveryType || null,

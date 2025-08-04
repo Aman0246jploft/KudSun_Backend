@@ -113,6 +113,7 @@ const placeBid = async (req, res) => {
             message: `${BidderInfo.userName} bid  on your auction"${product.title.length > 50 ? product.title.substring(0, 50) + '...' : product.title}"`,
             meta: createStandardizedNotificationMeta({
                 productImage: product?.productImages[0] || null,
+                productTitle:product?.title||null,
                 productId: product._id,
                 userImage: BidderInfo.profileImage || null,
                 amount,
