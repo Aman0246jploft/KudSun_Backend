@@ -2607,7 +2607,8 @@ const getProduct = async (req, res) => {
                 return {
                     ...bid.userId,                 // populated user info
                     bidAmount: bid.amount,
-                    myBid: loginUserId?.toString() === uid
+                    myBid: loginUserId?.toString() === uid,
+                    createdAt: bid.createdAt
                 };
             });
 
@@ -3038,17 +3039,17 @@ const addComment = async (req, res) => {
             if (notifications.length > 0) {
                 try {
                     const recipientIds = notifications.map(n => n.recipientId);
-           
+
                     const allowedRecipients = await User.find({
                         _id: { $in: recipientIds },
                         activityNotification: true
                     }).select('_id');
 
-       
+
 
 
                     const allowedIdsSet = new Set(allowedRecipients.map(u => u._id.toString()));
-   
+
 
                     const filteredNotifications = notifications.filter(n =>
                         allowedIdsSet.has(n.recipientId.toString())
