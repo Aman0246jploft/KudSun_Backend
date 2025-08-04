@@ -467,11 +467,6 @@ async function searchProductsWithAlgolia(query, options = {}) {
         orderBy = 'desc'
     } = options;
 
-    console.log("5555555555", options)
-
-
-
-
 
     // Build filters
     const filters = [];
@@ -535,6 +530,9 @@ async function searchProductsWithAlgolia(query, options = {}) {
     const searchOptions = {
         page,
         hitsPerPage,
+        ignorePlurals: true,
+        removeStopWords: true,
+        typoTolerance: true,
         filters: filters.join(' AND '),
         facetFilters,
         numericFilters,

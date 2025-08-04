@@ -15,6 +15,7 @@ const { default: mongoose } = require('mongoose');
 const { indexProduct, deleteProducts } = require('../services/serviceAlgolia');
 // Import notification service
 const { saveNotification } = require('../services/serviceNotification');
+const { client, INDICES } = require('../../config/algolia');
 
 async function ensureParameterAndValue(categoryId, subCategoryId, key, value, userId = null, role) {
     const category = await Category.findById(categoryId);
@@ -1082,12 +1083,36 @@ const showAuctionProducts = async (req, res) => {
             filter.deliveryType = DeliveryType.CHARGE_SHIPPING;
         }
 
-        if (keyWord) {
-            filter.$or = [
-                { title: { $regex: keyWord, $options: "i" } },
-                { description: { $regex: keyWord, $options: "i" } },
-                { tags: { $regex: keyWord, $options: "i" } }
-            ];
+        // if (keyWord) {
+        //     filter.$or = [
+        //         { title: { $regex: keyWord, $options: "i" } },
+        //         { description: { $regex: keyWord, $options: "i" } },
+        //         { tags: { $regex: keyWord, $options: "i" } }
+        //     ];
+        // }
+        if (keyWord && keyWord.length > 1) {
+
+            const productIndex = client.initIndex(INDICES.PRODUCTS);
+            const algoliaResult = await productIndex.search(keyWord, {
+                filters: 'isSold=0 AND isDeleted=0 AND isDisable=0 ',
+                attributesToRetrieve: ['objectID'],
+                hitsPerPage: 1000, // Large number to cover pagination
+                typoTolerance: true
+            });
+
+            const matchedIds = algoliaResult.hits.map(hit => hit.objectID);
+
+            // If no matches from Algolia, return empty
+            if (matchedIds.length === 0) {
+                return apiSuccessRes(HTTP_STATUS.OK, res, "Products fetched successfully", {
+                    pageNo: page,
+                    size: limit,
+                    total: 0,
+                    products: []
+                });
+            }
+
+            filter._id = { $in: matchedIds.map(toObjectId) };
         }
 
         if (categoryId && categoryId !== "") {

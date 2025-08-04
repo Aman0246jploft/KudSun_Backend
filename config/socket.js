@@ -84,7 +84,7 @@ async function setupSocket(server) {
 
                 if (data.otherUserId) {
                     const usersToNotify = await User.find({
-                        _id: toObjectId(otherUserId),
+                        _id: toObjectId(data.otherUserId),
                         dealChatnotification: true
                     }, '_id');
 
@@ -114,7 +114,7 @@ async function setupSocket(server) {
                     }, '_id');
                     for (const user of usersToNotify) {
                         const notification = [{
-                            recipientId:user._id,
+                            recipientId: user._id,
                             userId: userId,
                             type: NOTIFICATION_TYPES.CHAT,
                             title: `New message from ${userName}`,
