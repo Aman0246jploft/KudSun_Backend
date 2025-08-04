@@ -15,7 +15,7 @@ const { default: mongoose } = require('mongoose');
 const { indexProduct, deleteProducts } = require('../services/serviceAlgolia');
 // Import notification service
 const { saveNotification } = require('../services/serviceNotification');
-const { client, INDICES } = require('../../config/algolia');
+const { client } = require('../../config/algolia');
 
 async function ensureParameterAndValue(categoryId, subCategoryId, key, value, userId = null, role) {
     const category = await Category.findById(categoryId);
@@ -1090,19 +1090,19 @@ const showAuctionProducts = async (req, res) => {
         //         { tags: { $regex: keyWord, $options: "i" } }
         //     ];
         // }
+        // FIX 1: Update Algolia filters to use boolean values instead of numeric
         if (keyWord && keyWord.length > 1) {
-
             const productIndex = client.initIndex(INDICES.PRODUCTS);
             const algoliaResult = await productIndex.search(keyWord, {
-                filters: 'isSold=0 AND isDeleted=0 AND isDisable=0 ',
+                // Use boolean values to match your Algolia data
+                filters: 'isSold:false AND isDeleted:false AND isDisable:false',
                 attributesToRetrieve: ['objectID'],
-                hitsPerPage: 1000, // Large number to cover pagination
+                hitsPerPage: 1000,
                 typoTolerance: true
             });
 
             const matchedIds = algoliaResult.hits.map(hit => hit.objectID);
 
-            // If no matches from Algolia, return empty
             if (matchedIds.length === 0) {
                 return apiSuccessRes(HTTP_STATUS.OK, res, "Products fetched successfully", {
                     pageNo: page,
@@ -1113,6 +1113,38 @@ const showAuctionProducts = async (req, res) => {
             }
 
             filter._id = { $in: matchedIds.map(toObjectId) };
+        }
+
+        // FIX 2: The includeSold logic needs adjustment
+        // Currently you have this logic:
+        if (includeSold == true || includeSold == "true") {
+            // Do not filter isSold — return both sold and unsold
+        } else {
+            filter['auctionSettings.isBiddingOpen'] = true  // This is filtering out your product!
+        }
+
+        // REPLACE WITH:
+        if (includeSold == true || includeSold == "true") {
+            // Do not filter isSold — return both sold and unsold
+            // Remove the auction bidding filter as well for broader search
+        } else {
+            // Only filter if this is specifically for auction products
+            // For general search, you might want to remove this filter
+            if (req.originalUrl.includes('auction')) {
+                filter['auctionSettings.isBiddingOpen'] = true;
+            }
+        }
+
+        // FIX 3: Alternative - Remove the auction-specific filter for keyword searches
+        // If user is searching with keywords, they might want all product types
+        if (keyWord && keyWord.length > 1) {
+            // Don't apply auction-specific filters when searching
+            // Users searching for "Mick" probably want all products with that name
+        } else {
+            // Only apply auction filters when not doing keyword search
+            if (includeSold != true && includeSold != "true") {
+                filter['auctionSettings.isBiddingOpen'] = true;
+            }
         }
 
         if (categoryId && categoryId !== "") {
