@@ -2856,7 +2856,7 @@ const addComment = async (req, res) => {
         // Get product and commenter details for notifications
         const product = await SellProduct.findById(value.product).populate('userId', 'userName profileImage');
         const commenter = await User.findById(req.user?.userId).select('userName profileImage');
-        console.log("product && commenter", product && commenter, product, commenter)
+
         if (product && commenter) {
             const notifications = [];
 
@@ -3038,16 +3038,22 @@ const addComment = async (req, res) => {
             if (notifications.length > 0) {
                 try {
                     const recipientIds = notifications.map(n => n.recipientId);
+           
                     const allowedRecipients = await User.find({
-                        _id: { $in: toObjectId(recipientIds) },
+                        _id: { $in: recipientIds },
                         activityNotification: true
                     }).select('_id');
 
+       
+
+
                     const allowedIdsSet = new Set(allowedRecipients.map(u => u._id.toString()));
+   
 
                     const filteredNotifications = notifications.filter(n =>
                         allowedIdsSet.has(n.recipientId.toString())
                     );
+
 
                     if (filteredNotifications.length > 0) {
                         await saveNotification(filteredNotifications);
