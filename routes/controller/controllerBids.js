@@ -107,13 +107,13 @@ const placeBid = async (req, res) => {
 
         const notifications = [{
             recipientId: product.userId,
-            userId: product.userId,
+            userId: userId,
             type: NOTIFICATION_TYPES.ACTIVITY,
             title: "New bid on Your Product",
             message: `${BidderInfo.userName} bid  on your auction"${product.title.length > 50 ? product.title.substring(0, 50) + '...' : product.title}"`,
             meta: createStandardizedNotificationMeta({
                 productImage: product?.productImages[0] || null,
-                productTitle:product?.title||null,
+                productTitle: product?.title || null,
                 productSaleType: product.saleType,
                 productId: product._id,
                 userImage: BidderInfo.profileImage || null,
