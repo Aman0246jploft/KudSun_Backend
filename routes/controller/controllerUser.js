@@ -7,7 +7,7 @@ const { getDocumentByQuery } = require('../services/serviceGlobalCURD');
 const CONSTANTS_MSG = require('../../utils/constantsMessage');
 const CONSTANTS = require('../../utils/constants')
 const HTTP_STATUS = require('../../utils/statusCode');
-const { apiErrorRes, verifyPassword, apiSuccessRes, generateOTP, generateKey, toObjectId, isNewItem } = require('../../utils/globalFunction');
+const { apiErrorRes, verifyPassword, apiSuccessRes, generateOTP, generateKey, toObjectId, isNewItem, getBlockedUserIds } = require('../../utils/globalFunction');
 const { signToken } = require('../../utils/jwtTokenUtils');
 const { loginSchema, followSchema, threadLikeSchema, productLikeSchema, requestResetOtpSchema, verifyResetOtpSchema, resetPasswordSchema, loginStepOneSchema, loginStepTwoSchema, loginStepThreeSchema, otpTokenSchema, resendResetOtpSchema, resendOtpSchema, googleSignInSchema } = require('../services/validations/userValidation');
 const validateRequest = require('../../middlewares/validateRequest');
@@ -941,6 +941,13 @@ const getLikedProducts = async (req, res) => {
             isDeleted: false,
         };
 
+
+        const blockedUserIds = await getBlockedUserIds(req.user?.userId);
+
+        if (blockedUserIds.length) {
+            query.likeBy = { $nin: blockedUserIds };
+        }
+
         if (keyword) {
             query.$or = [
                 { title: { $regex: keyword, $options: "i" } },
@@ -1068,15 +1075,27 @@ const getLikedThreads = async (req, res) => {
         const keyword = req.query.keyWord ? req.query.keyWord.trim() : null;
 
 
-
-        // 1. Find liked thread IDs
-        const likedThreadDocs = await ThreadLike.find({
+        const blockedUserIds = await getBlockedUserIds(req.user?.userId);
+        let obje = {
             likeBy: toObjectId(userId),
             isDisable: false,
             isDeleted: false,
-        }).select("threadId");
+        }
+
+        if (blockedUserIds.length) {
+            obje.likeBy = { $nin: blockedUserIds }
+
+        }
+
+
+        // 1. Find liked thread IDs
+        const likedThreadDocs = await ThreadLike.find(obje).select("threadId");
 
         const likedThreadIds = likedThreadDocs.map(doc => doc.threadId);
+
+
+
+
 
 
         if (likedThreadIds.length === 0) {
@@ -1085,6 +1104,9 @@ const getLikedThreads = async (req, res) => {
                 pagination: { total: 0, page, limit, totalPages: 0 },
             });
         }
+
+
+
 
 
         // 2. Build match condition for liked threads and keyword search
