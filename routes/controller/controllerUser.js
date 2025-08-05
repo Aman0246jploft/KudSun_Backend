@@ -2351,7 +2351,6 @@ const getOtherProfile = async (req, res) => {
             Follow.countDocuments({ followedBy: userId, isDeleted: false, isDisable: false })
         ]);
 
-
         // 3. Check if currentUser follows the profile user
         const isFollow = await Follow.exists({
             userId: userId,
@@ -2359,7 +2358,6 @@ const getOtherProfile = async (req, res) => {
             isDeleted: false,
             isDisable: false
         });
-
 
         const [totalThreads, totalProducts, totalReviews] = await Promise.all([
             Thread.countDocuments({ userId, isDeleted: false, isDisable: false }),
