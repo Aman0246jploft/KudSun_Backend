@@ -942,8 +942,6 @@ const getLikedProducts = async (req, res) => {
             isDeleted: false,
             ...(blockedUserIds.length && { userId: { $nin: blockedUserIds } })
         };
-        console.log("blockedUserIdsblockedUserIdsblockedUserIds", blockedUserIds)
-
 
         if (keyword) {
             query.$or = [
@@ -1108,6 +1106,7 @@ const getLikedThreads = async (req, res) => {
         }
 
 
+
         // 1. Find liked thread IDs
         const likedThreadDocs = await ThreadLike.find(obje).select("threadId");
 
@@ -1147,26 +1146,54 @@ const getLikedThreads = async (req, res) => {
         const pipeline = [
             { $match: matchCondition },
 
+            // {
+            //     $lookup: {
+            //         from: "User",
+            //         let: { userId: "$userId" },
+            //         pipeline: [
+            //             { $match: { $expr: { $eq: ["$_id", "$$userId"] } } },
+            //             { $project: { _id: 0, userName: 1, profileImage: 1 } }
+            //         ],
+            //         as: "user"
+            //     }
+            // },
+            // {
+            //     $addFields: {
+            //         userId: { $arrayElemAt: ["$user", 0] }  // Replace user array with single object in userId field
+            //     }
+            // },
+            // {
+            //     $unset: "user"  // Remove the original array
+            // },
             {
                 $lookup: {
                     from: "User",
-                    let: { userId: "$userId" },
-                    pipeline: [
-                        { $match: { $expr: { $eq: ["$_id", "$$userId"] } } },
-                        { $project: { _id: 0, userName: 1, profileImage: 1 } }
-                    ],
+                    localField: "userId",
+                    foreignField: "_id",
                     as: "user"
                 }
             },
             {
                 $addFields: {
-                    userId: { $arrayElemAt: ["$user", 0] }  // Replace user array with single object in userId field
+                    userIdObj: { $arrayElemAt: ["$user", 0] }
                 }
             },
             {
-                $unset: "user"  // Remove the original array
+                $match: {
+                    "userIdObj._id": { $nin: blockedUserIds.map(id => toObjectId(id)) }
+                }
             },
-
+            {
+                $addFields: {
+                    userId: {
+                        userName: "$userIdObj.userName",
+                        profileImage: "$userIdObj.profileImage"
+                    }
+                }
+            },
+            {
+                $unset: ["user", "userIdObj"]
+            },
 
 
             {
