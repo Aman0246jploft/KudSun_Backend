@@ -935,18 +935,14 @@ const getLikedProducts = async (req, res) => {
             });
         }
 
+        const blockedUserIds = await getBlockedUserIds(req.user?.userId);
         const query = {
             _id: { $in: likedProductIds },
             isDisable: false,
             isDeleted: false,
+            ...(blockedUserIds.length && { userId: { $nin: blockedUserIds } })
         };
 
-
-        const blockedUserIds = await getBlockedUserIds(req.user?.userId);
-
-        if (blockedUserIds.length) {
-            query.likeBy = { $nin: blockedUserIds };
-        }
 
         if (keyword) {
             query.$or = [
@@ -1082,11 +1078,6 @@ const getLikedThreads = async (req, res) => {
             isDeleted: false,
         }
 
-        if (blockedUserIds.length) {
-            obje.likeBy = { $nin: blockedUserIds }
-
-        }
-
 
         // 1. Find liked thread IDs
         const likedThreadDocs = await ThreadLike.find(obje).select("threadId");
@@ -1111,8 +1102,8 @@ const getLikedThreads = async (req, res) => {
 
         // 2. Build match condition for liked threads and keyword search
         const matchCondition = {
-            _id: { $in: likedThreadIds }
-
+            _id: { $in: likedThreadIds },
+            ...(blockedUserIds.length && { userId: { $nin: blockedUserIds } })
         };
 
         if (keyword) {
