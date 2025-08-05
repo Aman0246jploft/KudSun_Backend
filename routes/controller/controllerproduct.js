@@ -3465,7 +3465,7 @@ const getProductsWithDraft = async (req, res) => {
         const sortOrder = orderBy.toLowerCase() === 'desc' ? -1 : 1;
         const sortOptions = {};
         sortOptions[sortField] = sortOrder;
-        console.log("sortOptions", sortOptions)
+
 
         // Build filter object
         const filter = {
@@ -3612,33 +3612,35 @@ const getProductsWithDraft = async (req, res) => {
             pageNo: parseInt(page),
             total,
             size: parseInt(limit),
-            products: filteredProducts.map(product => ({
-                ...product,
-                _id: product._id,
-                title: product.title,
-                description: product.description,
-                price: product.fixedPrice,
-                saleType: product.saleType,
-                productImages: product.productImages,
-                category: product.categoryId?.name,
-                subCategory: product.subCategoryId?.name,
-                location: product.location,
-                condition: product.condition,
-                seller: {
-                    _id: product.userId?._id,
-                    name: product.userId?.userName,
-                    image: product.userId?.profileImage,
-                    rating: product.userId?.averageRatting,
-                    isVerified: product.userId?.is_Verified_Seller,
-                    isLive: product.userId?.isLive
-                },
+            products: filteredProducts.map(product => {
+                return {
+                    ...product,
+                    _id: product._id,
+                    title: product.title,
+                    description: product.description,
+                    price: product.fixedPrice,
+                    saleType: product.saleType,
+                    productImages: product.productImages,
+                    category: product.categoryId?.name,
+                    subCategory: product.subCategoryId?.name,
+                    location: product.location,
+                    condition: product.condition,
+                    seller: {
+                        _id: product.userId?._id,
+                        name: product.userId?.userName,
+                        image: product.userId?.profileImage,
+                        rating: product.userId?.averageRatting,
+                        isVerified: product.userId?.is_Verified_Seller,
+                        isLive: product.userId?.isLive
+                    },
 
-                isSold: product.isSold,
+                    isSold: product.isSold,
 
-                auctionSettings: product.auctionSettings,
-                createdAt: product.createdAt,
-                updatedAt: product.updatedAt
-            })),
+                    auctionSettings: product.auctionSettings,
+                    createdAt: product.createdAt,
+                    updatedAt: product.updatedAt
+                }
+            }),
 
         };
 
