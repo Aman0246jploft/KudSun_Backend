@@ -942,6 +942,7 @@ const getLikedProducts = async (req, res) => {
             isDeleted: false,
             ...(blockedUserIds.length && { userId: { $nin: blockedUserIds } })
         };
+        console.log("blockedUserIdsblockedUserIdsblockedUserIds", blockedUserIds)
 
 
         if (keyword) {
@@ -960,20 +961,48 @@ const getLikedProducts = async (req, res) => {
             { $limit: limit },
 
             // Lookup user info
+            // {
+            //     $lookup: {
+            //         from: "User",
+            //         localField: "userId",
+            //         foreignField: "_id",
+            //         as: "user"
+            //     }
+            // },
+            // {
+            //     $addFields: {
+            //         userId: { $arrayElemAt: ["$user", 0] }
+            //     }
+            // },
+            // { $unset: "user" },
+
+
+
+
+
+
             {
                 $lookup: {
                     from: "User",
                     localField: "userId",
                     foreignField: "_id",
-                    as: "user"
+                    as: "userRaw"
+                }
+            },
+            {
+                $match: {
+                    "userRaw._id": {
+                        $not: { $in: blockedUserIds.map(id => toObjectId(id)) }
+                    }
                 }
             },
             {
                 $addFields: {
-                    userId: { $arrayElemAt: ["$user", 0] }
+                    userId: { $arrayElemAt: ["$userRaw", 0] }
                 }
             },
-            { $unset: "user" },
+            { $unset: "userRaw" },
+
 
             // Lookup comments and associated products
             {
