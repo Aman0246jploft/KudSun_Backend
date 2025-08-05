@@ -347,6 +347,7 @@ const addSellerProduct = async (req, res) => {
 
 const updateSellerProduct = async (req, res) => {
     try {
+
         const productId = req.params.id;
         const isDraftUpdate = req?.body?.isDraft === 'true' || req?.body?.isDraft === true || false
 
@@ -392,6 +393,8 @@ const updateSellerProduct = async (req, res) => {
                 return apiErrorRes(400, res, "Specifics must be a key-value object.");
             }
 
+
+
             for (const [key, value] of Object.entries(parsedSpecifics)) {
                 if (!key || !value) continue;
                 const spec = await ensureParameterAndValue(
@@ -410,6 +413,8 @@ const updateSellerProduct = async (req, res) => {
         }
 
 
+
+
         // Optional: do the same for auctionSettings
         try {
             if (typeof auctionSettings === 'string') {
@@ -418,6 +423,7 @@ const updateSellerProduct = async (req, res) => {
         } catch (err) {
             return apiErrorRes(400, res, "Invalid JSON in auctionSettings field.");
         }
+        specifics = processedSpecifics
 
         // Validate required fields ONLY for published (non-draft) products
         if (!isDraftUpdate) {
@@ -435,7 +441,7 @@ const updateSellerProduct = async (req, res) => {
                 return apiErrorRes(400, res, "Missing or invalid field: specifics must be a non-empty array.");
             }
 
-            specifics = processedSpecifics
+
             // specifics: each item must have required keys
             for (const spec of processedSpecifics) {
                 const keys = ['parameterId', 'parameterName', 'valueId', 'valueName'];
@@ -805,7 +811,7 @@ const showNormalProducts = async (req, res) => {
             }
         }
 
-
+        console.log(filter.userId)
 
 
 
@@ -1248,7 +1254,7 @@ const showAuctionProducts = async (req, res) => {
                 const utcEnd = DateTime.fromJSDate(product.auctionSettings.biddingEndsAt, { zone: 'utc' });
                 const utcDate = DateTime.fromJSDate(product.auctionSettings.biddingEndsAt, { zone: 'utc' });
                 const localDate = utcDate.setZone(product.auctionSettings.timeZone || 'Asia/Kolkata');
-                
+
                 const utcNow = DateTime.utc();
                 const timeLeftMs = utcEnd.diff(utcNow).toMillis();
                 product.totalBidsPlaced = bidsCountMap[product._id.toString()] || 0;

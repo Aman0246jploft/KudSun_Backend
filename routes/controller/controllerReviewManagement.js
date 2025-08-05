@@ -489,8 +489,6 @@ async function recalculateUserRatings(userId, raterRole, session) {
                 { session }
             );
 
-            console.log(`✅ Seller ratings recalculated for user ${userId}: ${stats.averageRating.toFixed(2)} (${stats.totalRatingCount} reviews)`);
-
         } else if (raterRole === 'seller') {
             // Recalculate buyer ratings (sellers rate buyers)
             const buyerRatingStats = await ProductReview.aggregate([
