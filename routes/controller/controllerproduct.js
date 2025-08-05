@@ -3326,6 +3326,59 @@ const deleteProduct = async (req, res) => {
 };
 
 
+const deleteProductDraft = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const loginUserId = req.user?.userId;
+        const roleIds = req.user?.roleId;
+
+        if (!id) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Product ID is required.");
+        }
+
+        // Find product and check existence
+        const product = await SellProductDraft.findOne({ _id: id, isDeleted: false });
+        if (!product) {
+            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Product not found.");
+        }
+
+        // Check if user is owner or super admin
+        const isOwner = product.userId.toString() === loginUserId;
+        const isSuperAdmin = roleIds === roleId.SUPER_ADMIN;
+
+        if (!isOwner && !isSuperAdmin) {
+            return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, "You are not authorized to delete this product.");
+        }
+
+        // Delete images from Cloudinary
+        if (product.photos && product.photos.length > 0) {
+            for (const url of product.photos) {
+                try {
+                    await deleteImageCloudinary(url);
+                } catch (err) {
+                    console.error("Failed to delete image from Cloudinary:", url, err);
+                }
+            }
+        }
+
+        // Soft delete the product
+        product.isDeleted = true;
+        await product.save();
+
+        // 🔍 Remove from Algolia index after successful deletion
+        try {
+            await deleteProducts(product._id);
+        } catch (algoliaError) {
+            console.error('Algolia deletion failed for product:', product._id, algoliaError);
+            // Don't fail the main operation if Algolia fails
+        }
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Product deleted successfully.");
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
+    }
+};
+
 
 const trending = async (req, res) => {
     try {
@@ -3652,6 +3705,38 @@ const getProductsWithDraft = async (req, res) => {
 };
 
 
+const adminSearchProducts = async (req, res) => {
+    try {
+        const { q = '', limit = 10 } = req.query;
+
+        if (!q || q.length < 2) {
+            return apiSuccessRes(HTTP_STATUS.OK, res, "Search results", []);
+        }
+
+        const searchFilter = {
+            isDeleted: false,
+            $or: [
+                { title: { $regex: q, $options: 'i' } },
+                { description: { $regex: q, $options: 'i' } },
+                { _id: q.match(/^[0-9a-fA-F]{24}$/) ? toObjectId(q) : null }
+            ].filter(Boolean)
+        };
+
+        const products = await SellProduct.find(searchFilter)
+            .select('title productImages fixedPrice saleType isSold createdAt userId')
+            .populate('userId', 'userName')
+            .limit(parseInt(limit))
+            .sort({ createdAt: -1 })
+            .lean();
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Products found", products);
+    } catch (error) {
+        console.error('Admin product search error:', error);
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to search products");
+    }
+};
+
+
 
 router.post('/addSellerProduct', perApiLimiter(), upload.array('files', 10), addSellerProduct);
 
@@ -3661,6 +3746,8 @@ router.post('/toggleProductDisable/:id', perApiLimiter(), upload.none(), toggleP
 
 router.get('/getDraftProducts', perApiLimiter(), getDraftProducts);
 router.get('/deleteProduct/:id', perApiLimiter(), deleteProduct);
+router.get('/deleteProductDraft/:id', perApiLimiter(), deleteProductDraft);
+
 router.post('/trending/:id', perApiLimiter(), trending);
 router.post('/update-all-trending', perApiLimiter(), updateAllTrending);
 
@@ -3701,36 +3788,6 @@ router.get('/getProductComment/:productId', perApiLimiter(), getProductComment);
 router.get('/getCommentByParentId/:parentId', perApiLimiter(), getCommentByParentId);
 
 // Admin search endpoint for financial dashboard
-const adminSearchProducts = async (req, res) => {
-    try {
-        const { q = '', limit = 10 } = req.query;
-
-        if (!q || q.length < 2) {
-            return apiSuccessRes(HTTP_STATUS.OK, res, "Search results", []);
-        }
-
-        const searchFilter = {
-            isDeleted: false,
-            $or: [
-                { title: { $regex: q, $options: 'i' } },
-                { description: { $regex: q, $options: 'i' } },
-                { _id: q.match(/^[0-9a-fA-F]{24}$/) ? toObjectId(q) : null }
-            ].filter(Boolean)
-        };
-
-        const products = await SellProduct.find(searchFilter)
-            .select('title productImages fixedPrice saleType isSold createdAt userId')
-            .populate('userId', 'userName')
-            .limit(parseInt(limit))
-            .sort({ createdAt: -1 })
-            .lean();
-
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Products found", products);
-    } catch (error) {
-        console.error('Admin product search error:', error);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to search products");
-    }
-};
 
 router.get('/search', perApiLimiter(), adminSearchProducts);
 
