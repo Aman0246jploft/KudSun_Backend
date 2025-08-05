@@ -11,9 +11,9 @@ const { setupSocket } = require('./config/socket');
 const path = require('path');
 
 // Import cron jobs
-// require('./jobs/Scheduled/crons/orderStatusUpdateCron');
-// require('./jobs/Scheduled/crons/trendingUpdateCron');
-// require('./jobs/Scheduled/crons/threadTrendingUpdateCron');
+require('./jobs/Scheduled/crons/orderStatusUpdateCron');
+require('./jobs/Scheduled/crons/trendingUpdateCron');
+require('./jobs/Scheduled/crons/threadTrendingUpdateCron');
 
 const server = http.createServer(app); // Add this
 setupSocket(server)
