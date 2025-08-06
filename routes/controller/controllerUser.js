@@ -184,8 +184,6 @@ const saveEmailPassword = async (req, res) => {
     });
 };
 
-
-
 const saveCategories = async (req, res) => {
     const { phoneNumber, categories } = req.body;
 
