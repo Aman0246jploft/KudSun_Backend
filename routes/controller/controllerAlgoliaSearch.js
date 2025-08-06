@@ -385,7 +385,7 @@ const getSearchSuggestions = async (req, res) => {
             const results = await searchUsers(q, searchOptions);
             return results.hits.map(hit => ({
                 id: hit.objectID,
-                name: hit.userName,
+                title: hit.userName,
                 type: 'user',
                 highlight: hit._highlightResult?.userName?.value || hit.userName
             }));
