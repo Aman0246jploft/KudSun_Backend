@@ -187,17 +187,21 @@ const saveEmailPassword = async (req, res) => {
 const saveCategories = async (req, res) => {
     const { phoneNumber, categories } = req.body;
 
-    const user = await User.findOne({ phoneNumber });
-    if (!user || user.step !== 3) {
+    const tempUser = await TempUser.findOne({ phoneNumber });
+    if (!tempUser || tempUser.step !== 3) {
         return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Complete previous step first");
     }
 
-    user.categories = Array.isArray(categories) ? categories : [categories];
-    user.step = 4;
-    await user.save();
+    tempUser.categories = Array.isArray(categories) ? categories : [categories];
+    tempUser.step = 4;
+    await tempUser.save();
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Categories saved", getUserResponse(user));
+    return apiSuccessRes(HTTP_STATUS.OK, res, "Categories saved", {
+        phoneNumber,
+        step: 4
+    });
 };
+
 const getOnboardingStep = async (req, res) => {
     const { phoneNumber } = req.query;
     const user = await User.findOne({ phoneNumber });

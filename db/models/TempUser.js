@@ -4,8 +4,12 @@ const mongoose = require('mongoose');
 const tempUserSchema = new mongoose.Schema({
     phoneNumber: { type: String, unique: true, required: true },
     language: String,
-    email:String,
+    email: String,
     password: String,
+    categories: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Category"
+    }],
     tempOtp: String,
     tempOtpExpiresAt: Date,
     step: { type: Number, default: 1 },
