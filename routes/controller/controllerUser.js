@@ -213,7 +213,7 @@ const getOnboardingStep = async (req, res) => {
     });
 };
 const completeRegistration = async (req, res) => {
-    const { phoneNumber, fcmToken } = req.body;
+    const { phoneNumber, fcmToken,userName,gender,dob } = req.body;
 
     const tempUser = await TempUser.findOne({ phoneNumber });
     if (!tempUser || tempUser.step !== 4) {
@@ -232,10 +232,12 @@ const completeRegistration = async (req, res) => {
     }
 
 
-
     const user = new User({
         phoneNumber: tempUser.phoneNumber,
         email: tempUser.email,
+        userName:userName,
+        gender:gender,
+        dob:dob,
         password: tempUser.password,
         language: tempUser.language,
         categories: tempUser.categories || [],
