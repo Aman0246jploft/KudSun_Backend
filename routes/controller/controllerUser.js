@@ -112,25 +112,15 @@ const verifyOtp = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Invalid OTP");
     }
 
-    // OTP verified - move data to User collection
-    let user = await User.findOne({ phoneNumber });
-    if (!user) {
-        user = new User({
-            phoneNumber,
-            language: tempUser.language,
-            step: 2
-        });
-    } else {
-        user.step = 2;
-    }
+    tempUser.step = 2;
+    await tempUser.save();
 
-    await user.save();
-
-    // Delete temp user data after successful verification
-    await TempUser.deleteOne({ phoneNumber });
-
-    return apiSuccessRes(HTTP_STATUS.OK, res, "OTP verified", getUserResponse(user));
+    return apiSuccessRes(HTTP_STATUS.OK, res, "OTP verified", {
+        phoneNumber,
+        step: 2
+    });
 };
+
 
 const resendOtp = async (req, res) => {
     const { phoneNumber } = req.body;
@@ -173,23 +163,27 @@ const resendOtp = async (req, res) => {
 const saveEmailPassword = async (req, res) => {
     const { phoneNumber, email, password } = req.body;
 
-    const user = await User.findOne({ phoneNumber });
-    if (!user || user.step !== 2) {
+    const tempUser = await TempUser.findOne({ phoneNumber });
+    if (!tempUser || tempUser.step !== 2) {
         return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "OTP not verified");
     }
 
-    const emailExists = await User.findOne({ email });
-    if (emailExists && emailExists._id.toString() !== user._id.toString()) {
+    const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
+    if (existingUser) {
         return apiErrorRes(HTTP_STATUS.CONFLICT, res, "Email already in use");
     }
 
-    user.email = email.toLowerCase().trim();
-    user.password = password;
-    user.step = 3;
-    await user.save();
+    tempUser.email = email.toLowerCase().trim();
+    tempUser.password = password;
+    tempUser.step = 3;
+    await tempUser.save();
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Email and password saved", getUserResponse(user));
+    return apiSuccessRes(HTTP_STATUS.OK, res, "Email and password saved", {
+        phoneNumber,
+        step: 3
+    });
 };
+
 
 
 const saveCategories = async (req, res) => {
@@ -217,64 +211,38 @@ const getOnboardingStep = async (req, res) => {
     });
 };
 const completeRegistration = async (req, res) => {
-    let { phoneNumber, userName, gender, dob, fcmToken } = req.body;
+    const { phoneNumber } = req.body;
 
-    const user = await User.findOne({ phoneNumber });
-    if (!user) {
-        return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Incomplete onboarding");
+    const tempUser = await TempUser.findOne({ phoneNumber });
+    if (!tempUser || tempUser.step !== 3) {
+        return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Incomplete registration steps");
     }
 
-    if (userName.length < 3) {
-        return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Username must be at least 3 characters long.");
-    }
-    userName = userName.trim().toLowerCase();
-    const usernameRegex = /^(?=.*[a-zA-Z])[a-zA-Z0-9@._]+$/;
-    if (!usernameRegex.test(userName)) {
-        return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Username must contain at least one letter and only include letters, numbers, '.', '_', or '@'.");
-    }
+    const existingUser = await User.findOne({ $or: [
+        { email: tempUser.email },
+        { phoneNumber: tempUser.phoneNumber }
+    ] });
 
-    const existingUser = await User.findOne({ userName, _id: { $ne: user._id } });
     if (existingUser) {
-        return apiErrorRes(HTTP_STATUS.CONFLICT, res, "Username is already in use.");
+        return apiErrorRes(HTTP_STATUS.CONFLICT, res, "User already exists");
     }
 
+    const hashedPassword = await bcrypt.hash(tempUser.password, 10);
 
-    if (req.file) {
-        const imageUrl = await uploadImageCloudinary(req.file, 'profile-images');
-        user.profileImage = imageUrl;
-    }
-
-    user.userName = userName;
-    user.gender = gender;
-    user.dob = dob;
-    user.fcmToken = fcmToken || null;
-    user.step = 5;
+    const user = new User({
+        phoneNumber: tempUser.phoneNumber,
+        email: tempUser.email,
+        password: hashedPassword,
+        language: tempUser.language,
+        step: 4
+    });
 
     await user.save();
+    await TempUser.deleteOne({ phoneNumber });
 
-    // 🔍 Index the user in Algolia after successful registration
-    try {
-        await indexUser(user);
-    } catch (algoliaError) {
-        console.error('Algolia indexing failed for user:', user._id, algoliaError);
-        // Don't fail the main operation if Algolia fails
-    }
-
-    const payload = {
-        userId: user._id,
-        email: user.email,
-        roleId: user.roleId,
-        role: user.role,
-        userName: user.userName
-    };
-
-    const token = signToken(payload);
-
-    return apiSuccessRes(HTTP_STATUS.CREATED, res, "Registration completed", {
-        token,
-        ...user.toJSON()
-    });
+    return apiSuccessRes(HTTP_STATUS.OK, res, "Registration completed", getUserResponse(user));
 };
+
 
 
 
