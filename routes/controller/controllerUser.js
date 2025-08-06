@@ -213,17 +213,19 @@ const getOnboardingStep = async (req, res) => {
     });
 };
 const completeRegistration = async (req, res) => {
-    const { phoneNumber } = req.body;
+    const { phoneNumber, fcmToken } = req.body;
 
     const tempUser = await TempUser.findOne({ phoneNumber });
     if (!tempUser || tempUser.step !== 4) {
         return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Incomplete registration steps");
     }
 
-    const existingUser = await User.findOne({ $or: [
-        { email: tempUser.email },
-        { phoneNumber: tempUser.phoneNumber }
-    ] });
+    const existingUser = await User.findOne({
+        $or: [
+            { email: tempUser.email },
+            { phoneNumber: tempUser.phoneNumber }
+        ]
+    });
 
     if (existingUser) {
         return apiErrorRes(HTTP_STATUS.CONFLICT, res, "User already exists");
@@ -237,7 +239,8 @@ const completeRegistration = async (req, res) => {
         password: hashedPassword,
         language: tempUser.language,
         categories: tempUser.categories || [],
-        step: 5  // registration complete
+        step: 5,
+        fcmToken: fcmToken || null
     });
 
     await user.save();
@@ -405,13 +408,13 @@ const loginStepTwoPassword = async (req, res) => {
             await user.save();
             let sentVia = null;
             const isPhone = /^[+\d][\d\s\-().]+$/.test(identifier);
-            if (isPhone ) {
+            if (isPhone) {
                 const smsResult = await sendOtpSMS(identifier, otp);
                 // if (!smsResult.success) {
                 //     return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to send OTP via SMS");
                 // }
                 sentVia = 'SMS';
-            } else  {
+            } else {
                 const emailResult = await sendEmail({
                     to: identifier,
                     subject: "Your Kadsun Login OTP",
