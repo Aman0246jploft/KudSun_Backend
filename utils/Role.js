@@ -123,11 +123,11 @@ const CHARGE_TYPE = {
 const createStandardizedChatMeta = (data = {}) => {
     return {
         orderNumber: data.orderNumber || null,
-        rating:data.rating||null,
-        ratingText:data.ratingText||null,
-        reviewText:data.reviewText||null,
-        raterRole:data.raterRole||null,
-        raterName:data.raterName||null,
+        rating: data.rating || null,
+        ratingText: data.ratingText || null,
+        reviewText: data.reviewText || null,
+        raterRole: data.raterRole || null,
+        raterName: data.raterName || null,
 
         totalAmount: data.totalAmount || null,
         amount: data.amount || null,
@@ -154,10 +154,10 @@ const createStandardizedChatMeta = (data = {}) => {
         shippingStatus: data.shippingStatus || null,
         disputeId: data.disputeId || null,
         disputeStatus: data.disputeStatus || null,
-        decision:data.decision||null,
-        resolvedBy:data.resolvedBy||null,
-        decisionNote:data.decision||null,
-        disputeAmountPercent:data.disputeAmountPercent||null,
+        decision: data.decision || null,
+        resolvedBy: data.resolvedBy || null,
+        decisionNote: data.decision || null,
+        disputeAmountPercent: data.disputeAmountPercent || null,
 
 
         refundAmount: data.refundAmount || null,
@@ -208,6 +208,8 @@ const createStandardizedNotificationMeta = (data = {}) => {
         // Thread-related metadata
         threadId: data.threadId || null,
         threadTitle: data.threadTitle || null,
+        threadImage: data.threadImage || null,
+
         commentId: data.commentId || null,
         parentCommentId: data.parentCommentId || null,
         commentContent: data.commentContent || null,
@@ -224,7 +226,7 @@ const createStandardizedNotificationMeta = (data = {}) => {
         productSaleType: data.productSaleType || null,
         productCondition: data.productCondition || null,
         // User/Commenter image,
-        
+
         commenterImage: data.commenterImage || null,
         userImage: data.userImage || null,
         // Follow-related metadata

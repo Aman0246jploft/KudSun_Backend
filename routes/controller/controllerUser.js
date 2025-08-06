@@ -24,6 +24,8 @@ const Joi = require('joi');
 const { indexUser, deleteUser } = require('../services/serviceAlgolia');
 const { OAuth2Client } = require('google-auth-library');
 const { saveNotification } = require('../services/serviceNotification');
+const { sendOtpSMS } = require('../services/twilioService');
+const { sendEmail } = require('../../utils/emailService');
 
 const uploadfile = async (req, res) => {
     try {
@@ -151,6 +153,11 @@ const resendOtp = async (req, res) => {
     tempUser.tempOtp = newOtp;
     tempUser.tempOtpExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
     await tempUser.save();
+    const smsResult = await sendOtpSMS(phoneNumber, newOtp);
+    if (!smsResult.success) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to resend OTP via SMS");
+    }
+
 
     // Send OTP via SMS/email here...
 
@@ -424,6 +431,27 @@ const loginStepTwoPassword = async (req, res) => {
             user.loginOtp = otp;
             user.loginOtpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 mins
             await user.save();
+            let sentVia = null;
+            const isPhone = /^[+\d][\d\s\-().]+$/.test(identifier);
+            if (isPhone && process.env.NODE_ENV !== 'production') {
+                const smsResult = await sendOtpSMS(identifier, otp);
+                if (!smsResult.success) {
+                    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to send OTP via SMS");
+                }
+                sentVia = 'SMS';
+            } else if (process.env.NODE_ENV !== 'production') {
+                const emailResult = await sendEmail({
+                    to: identifier,
+                    subject: "Your Kadsun Login OTP",
+                    text: `Your OTP code is: ${otp}`,
+                    html: `<p>Your OTP code is: <strong>${otp}</strong></p>`
+                });
+                if (!emailResult.success) {
+                    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to send OTP via Email");
+                }
+                sentVia = 'Email';
+            }
+
 
             // console.log(`OTP for ${user.phoneNumber}: ${otp}`);
 

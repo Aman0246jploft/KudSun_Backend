@@ -1131,7 +1131,7 @@ const originalPaymentCallback = async (req, res) => {
                 productId: order.items[0].productId,
                 type: NOTIFICATION_TYPES.ORDER,
                 title: "Payment Successful!",
-                message: `Your payment of $${order.grandTotal.toFixed(2)} has been processed successfully. Your order is now being prepared.`,
+                message: `Your payment of ฿${order.grandTotal.toFixed(2)} has been processed successfully. Your order is now being prepared.`,
                 meta: createStandardizedNotificationMeta({
                     orderNumber: order._id.toString(),
                     orderId: order._id.toString(),
