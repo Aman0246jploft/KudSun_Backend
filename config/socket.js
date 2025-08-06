@@ -291,7 +291,16 @@ async function setupSocket(server) {
                     const unreadCount = await ChatMessage.countDocuments({
                         chatRoom: roomId,
                         seenBy: { $nin: [toObjectId(data.otherUserId)] },
-                        sender: { $ne: toObjectId(data.otherUserId) }
+                        sender: { $ne: toObjectId(data.otherUserId) },
+                        $and: [
+                            { isDeleted: false },
+                            {
+                                $or: [
+                                    { deleteBy: { $size: 0 } },
+                                    { 'deleteBy.userId': { $ne: toObjectId(data.otherUserId) } }
+                                ]
+                            }
+                        ]
                     });
                     io.to(`user_${data.otherUserId}`).emit('newChatRoom', {
                         ...roomForReceiver,
@@ -305,7 +314,16 @@ async function setupSocket(server) {
                     const unreadCount = await ChatMessage.countDocuments({
                         chatRoom: roomId,
                         seenBy: { $ne: toObjectId(data.otherUserId) },
-                        sender: { $ne: toObjectId(data.otherUserId) }
+                        sender: { $ne: toObjectId(data.otherUserId) },
+                        $and: [
+                            { isDeleted: false },
+                            {
+                                $or: [
+                                    { deleteBy: { $size: 0 } },
+                                    { 'deleteBy.userId': { $ne: toObjectId(data.otherUserId) } }
+                                ]
+                            }
+                        ]
                     });
 
                     io.to(`user_${data.otherUserId}`).emit('roomUpdated', {
@@ -412,10 +430,19 @@ async function setupSocket(server) {
                 const limit = Math.min(100, parseInt(size));
                 const skip = (page - 1) * limit;
 
-                // Find existing one-on-one room
+                // Find existing one-on-one room (check if deleted for user)
                 const room = await ChatRoom.findOne({
                     isGroup: false,
-                    participants: { $all: [toObjectId(userId), toObjectId(otherUserId)], $size: 2 }
+                    participants: { $all: [toObjectId(userId), toObjectId(otherUserId)], $size: 2 },
+                    $and: [
+                        { isDeleted: false },
+                        {
+                            $or: [
+                                { deleteBy: { $size: 0 } },
+                                { 'deleteBy.userId': { $ne: toObjectId(userId) } }
+                            ]
+                        }
+                    ]
                 });
 
                 if (!room) {
@@ -432,14 +459,29 @@ async function setupSocket(server) {
 
                 const chatRoomId = room._id.toString();
 
-                let messages = await ChatMessage.find({ chatRoom: chatRoomId })
+                // Get messages visible to this user
+                let messages = await ChatMessage.getVisibleMessages(
+                    { chatRoom: toObjectId(chatRoomId) },
+                    toObjectId(userId)
+                )
                     .populate('sender', 'userName profileImage')
                     .sort({ createdAt: -1 }) // newest first
                     .skip(skip)
                     .limit(limit)
                     .lean();
 
-                const totalMessages = await ChatMessage.countDocuments({ chatRoom: chatRoomId });
+                const totalMessages = await ChatMessage.countDocuments({
+                    chatRoom: toObjectId(chatRoomId),
+                    $and: [
+                        { isDeleted: false },
+                        {
+                            $or: [
+                                { deleteBy: { $size: 0 } },
+                                { 'deleteBy.userId': { $ne: toObjectId(userId) } }
+                            ]
+                        }
+                    ]
+                });
 
                 // Optional: reverse to send oldest first
                 messages = messages.reverse();
@@ -628,6 +670,441 @@ async function setupSocket(server) {
             }
         });
 
+        // Delete a specific message for the current user
+        socket.on('deleteMessage', async ({ messageId, deleteForEveryone = false }) => {
+            try {
+                const userId = socket.user?.userId;
+                if (!userId || !messageId) {
+                    return socket.emit('error', { message: 'messageId is required' });
+                }
+
+                // Find the message
+                const message = await ChatMessage.findById(messageId);
+                if (!message) {
+                    return socket.emit('error', { message: 'Message not found' });
+                }
+
+                // Check if user is the sender (for delete for everyone)
+                const isSender = message.sender?.toString() === userId;
+
+                let deletedMessage;
+
+                if (deleteForEveryone && isSender) {
+                    // Permanently delete for everyone (only sender can do this)
+                    deletedMessage = await ChatMessage.permanentDelete(messageId);
+                    
+                    // Notify all participants in the room
+                    io.to(message.chatRoom.toString()).emit('messageDeletedForEveryone', {
+                        messageId,
+                        deletedBy: userId,
+                        timestamp: new Date().toISOString()
+                    });
+                } else {
+                    // Delete for current user only
+                    deletedMessage = await ChatMessage.deleteForUser(messageId, userId, 'MESSAGE_DELETE');
+                    
+                    // Only notify the user who deleted it
+                    socket.emit('messageDeletedForMe', {
+                        messageId,
+                        deletedBy: userId,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+
+                // Update last message if this was the last message in the room
+                const room = await ChatRoom.findById(message.chatRoom);
+                if (room && room.lastMessage?.toString() === messageId) {
+                    // Find the latest non-deleted message for each user
+                    const latestMessage = await ChatMessage.findOne({
+                        chatRoom: message.chatRoom,
+                        $and: [
+                            { isDeleted: false },
+                            {
+                                $or: [
+                                    { deleteBy: { $size: 0 } },
+                                    // At least one participant can see it
+                                    { 'deleteBy.userId': { $nin: room.participants } }
+                                ]
+                            }
+                        ]
+                    }).sort({ createdAt: -1 });
+
+                    await ChatRoom.findByIdAndUpdate(message.chatRoom, {
+                        lastMessage: latestMessage?._id || null
+                    });
+
+                    // Notify room participants about room update
+                    const updatedRoom = await ChatRoom.findById(message.chatRoom)
+                        .populate('lastMessage')
+                        .populate('participants', 'userName profileImage');
+
+                    if (updatedRoom) {
+                        await Promise.all(updatedRoom.participants.map(async (participant) => {
+                            const participantId = participant._id?.toString();
+                            
+                            // Calculate unread count for this participant
+                            const unreadCount = await ChatMessage.countDocuments({
+                                chatRoom: message.chatRoom,
+                                seenBy: { $ne: toObjectId(participantId) },
+                                sender: { $ne: toObjectId(participantId) },
+                                $and: [
+                                    { isDeleted: false },
+                                    {
+                                        $or: [
+                                            { deleteBy: { $size: 0 } },
+                                            { 'deleteBy.userId': { $ne: toObjectId(participantId) } }
+                                        ]
+                                    }
+                                ]
+                            });
+
+                            const roomForParticipant = {
+                                ...updatedRoom.toObject(),
+                                participants: updatedRoom.participants.filter(p => p._id?.toString() !== participantId),
+                                unreadCount
+                            };
+
+                            io.to(`user_${participantId}`).emit('roomUpdated', roomForParticipant);
+                        }));
+                    }
+                }
+
+                socket.emit('messageDeleted', {
+                    success: true,
+                    messageId,
+                    deleteForEveryone,
+                    timestamp: new Date().toISOString()
+                });
+
+            } catch (error) {
+                console.error('❌ Error in deleteMessage:', error);
+                socket.emit('error', { message: 'Failed to delete message' });
+            }
+        });
+
+        // Delete entire chat room/conversation for the current user
+        socket.on('deleteRoom', async ({ roomId, otherUserId, clearHistory = true }) => {
+            try {
+                const userId = socket.user?.userId;
+                if (!userId) return;
+
+                let targetRoomId = roomId;
+
+                // If roomId not provided, find room using otherUserId
+                if (!targetRoomId && otherUserId) {
+                    const room = await ChatRoom.findOne({
+                        isGroup: false,
+                        participants: { $all: [toObjectId(userId), toObjectId(otherUserId)], $size: 2 }
+                    });
+
+                    if (!room) {
+                        return socket.emit('error', { message: 'Chat room not found' });
+                    }
+
+                    targetRoomId = room._id.toString();
+                }
+
+                if (!targetRoomId) {
+                    return socket.emit('error', { message: 'roomId or otherUserId is required' });
+                }
+
+                // Delete room for user
+                await ChatRoom.deleteForUser(targetRoomId, userId, clearHistory);
+
+                if (clearHistory) {
+                    // Mark all messages in this room as deleted for this user
+                    await ChatMessage.updateMany(
+                        { chatRoom: toObjectId(targetRoomId) },
+                        {
+                            $addToSet: {
+                                deleteBy: {
+                                    userId: toObjectId(userId),
+                                    deletedAt: new Date(),
+                                    deleteType: 'ROOM_DELETE'
+                                }
+                            }
+                        }
+                    );
+                }
+
+                // Remove user from room socket
+                socket.leave(targetRoomId);
+
+                socket.emit('roomDeleted', {
+                    success: true,
+                    roomId: targetRoomId,
+                    clearHistory,
+                    timestamp: new Date().toISOString()
+                });
+
+                // Update total unread count
+                await emitTotalUnreadCount(io, userId);
+
+            } catch (error) {
+                console.error('❌ Error in deleteRoom:', error);
+                socket.emit('error', { message: 'Failed to delete room' });
+            }
+        });
+
+        // Delete multiple chat rooms/conversations for the current user
+        socket.on('deleteMultipleRooms', async ({ roomIds = [], otherUserIds = [], clearHistory = true }) => {
+            try {
+                const userId = socket.user?.userId;
+                if (!userId) return;
+
+                const targetRoomIds = [];
+                const errors = [];
+                const results = [];
+
+                // Process roomIds if provided
+                if (roomIds && roomIds.length > 0) {
+                    for (const roomId of roomIds) {
+                        try {
+                            // Verify room exists and user is a participant
+                            const room = await ChatRoom.findOne({
+                                _id: toObjectId(roomId),
+                                participants: toObjectId(userId)
+                            });
+
+                            if (!room) {
+                                errors.push({ roomId, error: 'Room not found or access denied' });
+                                continue;
+                            }
+
+                            targetRoomIds.push(roomId);
+                        } catch (error) {
+                            errors.push({ roomId, error: 'Invalid room ID' });
+                        }
+                    }
+                }
+
+                // Process otherUserIds if provided
+                if (otherUserIds && otherUserIds.length > 0) {
+                    for (const otherUserId of otherUserIds) {
+                        try {
+                            const room = await ChatRoom.findOne({
+                                isGroup: false,
+                                participants: { $all: [toObjectId(userId), toObjectId(otherUserId)], $size: 2 }
+                            });
+
+                            if (!room) {
+                                errors.push({ otherUserId, error: 'Chat room not found' });
+                                continue;
+                            }
+
+                            targetRoomIds.push(room._id.toString());
+                        } catch (error) {
+                            errors.push({ otherUserId, error: 'Invalid user ID' });
+                        }
+                    }
+                }
+
+                if (targetRoomIds.length === 0) {
+                    return socket.emit('error', { 
+                        message: 'No valid rooms found to delete',
+                        errors 
+                    });
+                }
+
+                // Use bulk operations for better performance
+                try {
+                    // Bulk update rooms - delete for user
+                    const roomBulkOps = targetRoomIds.map(roomId => ({
+                        updateOne: {
+                            filter: { _id: toObjectId(roomId) },
+                            update: {
+                                $addToSet: {
+                                    deleteBy: {
+                                        userId: toObjectId(userId),
+                                        deletedAt: new Date(),
+                                        clearHistory: clearHistory
+                                    }
+                                }
+                            }
+                        }
+                    }));
+
+                    const roomBulkResult = await ChatRoom.bulkWrite(roomBulkOps);
+                    console.log(`✅ Bulk deleted ${roomBulkResult.modifiedCount} rooms for user ${userId}`);
+
+                    // Bulk update messages if clearHistory is true
+                    if (clearHistory && targetRoomIds.length > 0) {
+                        const messageBulkOps = targetRoomIds.map(roomId => ({
+                            updateMany: {
+                                filter: { chatRoom: toObjectId(roomId) },
+                                update: {
+                                    $addToSet: {
+                                        deleteBy: {
+                                            userId: toObjectId(userId),
+                                            deletedAt: new Date(),
+                                            deleteType: 'ROOM_DELETE'
+                                        }
+                                    }
+                                }
+                            }
+                        }));
+
+                        const messageBulkResult = await ChatMessage.bulkWrite(messageBulkOps);
+                        console.log(`✅ Bulk deleted ${messageBulkResult.modifiedCount} messages for user ${userId}`);
+                    }
+
+                    // Remove user from all room sockets
+                    targetRoomIds.forEach(roomId => {
+                        socket.leave(roomId);
+                    });
+
+                    // Prepare results
+                    results.push(...targetRoomIds.map(roomId => ({
+                        roomId,
+                        success: true,
+                        clearHistory
+                    })));
+
+                } catch (bulkError) {
+                    console.error('❌ Bulk operation failed:', bulkError);
+                    
+                    // Fallback to individual operations
+                    console.log('🔄 Falling back to individual operations...');
+                    
+                    const deletePromises = targetRoomIds.map(async (roomId) => {
+                        try {
+                            // Delete room for user
+                            await ChatRoom.deleteForUser(roomId, userId, clearHistory);
+
+                            if (clearHistory) {
+                                // Mark all messages in this room as deleted for this user
+                                await ChatMessage.updateMany(
+                                    { chatRoom: toObjectId(roomId) },
+                                    {
+                                        $addToSet: {
+                                            deleteBy: {
+                                                userId: toObjectId(userId),
+                                                deletedAt: new Date(),
+                                                deleteType: 'ROOM_DELETE'
+                                            }
+                                        }
+                                    }
+                                );
+                            }
+
+                            // Remove user from room socket
+                            socket.leave(roomId);
+
+                            results.push({
+                                roomId,
+                                success: true,
+                                clearHistory
+                            });
+
+                            return { roomId, success: true };
+                        } catch (error) {
+                            console.error(`❌ Error deleting room ${roomId}:`, error);
+                            errors.push({ roomId, error: 'Failed to delete room' });
+                            return { roomId, success: false, error: error.message };
+                        }
+                    });
+
+                    // Wait for all deletions to complete
+                    await Promise.all(deletePromises);
+                }
+
+                // Update total unread count
+                await emitTotalUnreadCount(io, userId);
+
+                socket.emit('multipleRoomsDeleted', {
+                    success: true,
+                    totalRooms: targetRoomIds.length,
+                    successfulDeletions: results.length,
+                    failedDeletions: errors.length,
+                    results,
+                    errors,
+                    timestamp: new Date().toISOString()
+                });
+
+            } catch (error) {
+                console.error('❌ Error in deleteMultipleRooms:', error);
+                socket.emit('error', { message: 'Failed to delete multiple rooms' });
+            }
+        });
+
+        // Get deleted messages (for recovery or admin purposes)
+        socket.on('getDeletedMessages', async ({ roomId, pageNo = 1, size = 20 }) => {
+            try {
+                const userId = socket.user?.userId;
+                if (!userId || !roomId) {
+                    return socket.emit('error', { message: 'roomId is required' });
+                }
+
+                const page = Math.max(1, parseInt(pageNo));
+                const limit = Math.min(100, parseInt(size));
+                const skip = (page - 1) * limit;
+
+                // Get messages deleted by this user
+                const deletedMessages = await ChatMessage.find({
+                    chatRoom: toObjectId(roomId),
+                    'deleteBy.userId': toObjectId(userId)
+                })
+                    .populate('sender', 'userName profileImage')
+                    .sort({ createdAt: -1 })
+                    .skip(skip)
+                    .limit(limit)
+                    .lean();
+
+                const total = await ChatMessage.countDocuments({
+                    chatRoom: toObjectId(roomId),
+                    'deleteBy.userId': toObjectId(userId)
+                });
+
+                socket.emit('deletedMessagesList', {
+                    roomId,
+                    total,
+                    pageNo: page,
+                    size: limit,
+                    messages: deletedMessages.reverse(),
+                    hasMore: total > page * limit
+                });
+
+            } catch (error) {
+                console.error('❌ Error in getDeletedMessages:', error);
+                socket.emit('error', { message: 'Failed to get deleted messages' });
+            }
+        });
+
+        // Restore a deleted message for the current user
+        socket.on('restoreMessage', async ({ messageId }) => {
+            try {
+                const userId = socket.user?.userId;
+                if (!userId || !messageId) {
+                    return socket.emit('error', { message: 'messageId is required' });
+                }
+
+                // Remove user from deleteBy array
+                const restoredMessage = await ChatMessage.findByIdAndUpdate(
+                    messageId,
+                    {
+                        $pull: {
+                            deleteBy: { userId: toObjectId(userId) }
+                        }
+                    },
+                    { new: true }
+                ).populate('sender', 'userName profileImage');
+
+                if (!restoredMessage) {
+                    return socket.emit('error', { message: 'Message not found' });
+                }
+
+                socket.emit('messageRestored', {
+                    success: true,
+                    message: restoredMessage,
+                    timestamp: new Date().toISOString()
+                });
+
+            } catch (error) {
+                console.error('❌ Error in restoreMessage:', error);
+                socket.emit('error', { message: 'Failed to restore message' });
+            }
+        });
+
         socket.on('disconnect', () => {
             console.log(`🔴 User ${userId} disconnected`);
             delete connectedUsers[socket.id];
@@ -679,18 +1156,36 @@ async function setupSocket(server) {
 
 async function calculateTotalChatUnreadCount(userId) {
     try {
-        // Get all chat rooms for this user
+        // Get all chat rooms visible to this user
         const userRooms = await ChatRoom.find({
-            participants: toObjectId(userId)
+            participants: toObjectId(userId),
+            $and: [
+                { isDeleted: false },
+                {
+                    $or: [
+                        { deleteBy: { $size: 0 } },
+                        { 'deleteBy.userId': { $ne: toObjectId(userId) } }
+                    ]
+                }
+            ]
         }).select('_id');
 
         const roomIds = userRooms.map(room => room._id);
 
-        // Count all unread messages across all rooms
+        // Count all unread messages across all rooms (excluding deleted messages)
         const totalChatUnread = await ChatMessage.countDocuments({
             chatRoom: { $in: roomIds },
             seenBy: { $ne: toObjectId(userId) },
-            sender: { $ne: toObjectId(userId) }
+            sender: { $ne: toObjectId(userId) },
+            $and: [
+                { isDeleted: false },
+                {
+                    $or: [
+                        { deleteBy: { $size: 0 } },
+                        { 'deleteBy.userId': { $ne: toObjectId(userId) } }
+                    ]
+                }
+            ]
         });
 
         return totalChatUnread;

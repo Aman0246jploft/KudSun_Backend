@@ -25,7 +25,7 @@ const ChatMessageSchema = new mongoose.Schema({
         // Type of status update
         statusType: {
             type: String,
-            enum: ['ORDER', 'PAYMENT', 'SHIPPING', 'SYSTEM', 'PRODUCT', 'DISPUTE','REVIEW'],
+            enum: ['ORDER', 'PAYMENT', 'SHIPPING', 'SYSTEM', 'PRODUCT', 'DISPUTE', 'REVIEW'],
         },
         disputeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Dispute' },
         // The actual status value
@@ -68,6 +68,21 @@ const ChatMessageSchema = new mongoose.Schema({
         }
     },
 
+    // Enhanced deletion tracking
+    deleteBy: [{
+        userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        deletedAt: { type: Date, default: Date.now },
+        deleteType: { 
+            type: String, 
+            enum: ['MESSAGE_DELETE', 'ROOM_DELETE'], 
+            default: 'MESSAGE_DELETE' 
+        }
+    }],
+
+    // Soft delete flag for complete message removal
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date },
+
     // Read status
     seenBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 
@@ -81,6 +96,64 @@ const ChatMessageSchema = new mongoose.Schema({
 ChatMessageSchema.index({ chatRoom: 1, createdAt: -1 });
 ChatMessageSchema.index({ 'systemMeta.orderId': 1 });
 ChatMessageSchema.index({ 'systemMeta.productId': 1 });
+ChatMessageSchema.index({ 'deleteBy.userId': 1 });
+ChatMessageSchema.index({ isDeleted: 1 });
+
+// Instance method to check if message is deleted for a specific user
+ChatMessageSchema.methods.isDeletedForUser = function(userId) {
+    if (this.isDeleted) return true;
+    return this.deleteBy.some(del => del.userId.toString() === userId.toString());
+};
+
+// Instance method to get delete info for a user
+ChatMessageSchema.methods.getDeleteInfoForUser = function(userId) {
+    return this.deleteBy.find(del => del.userId.toString() === userId.toString());
+};
+
+// Static method to get messages visible to a specific user
+ChatMessageSchema.statics.getVisibleMessages = function(query, userId) {
+    return this.find({
+        ...query,
+        $and: [
+            { isDeleted: false },
+            {
+                $or: [
+                    { deleteBy: { $size: 0 } },
+                    { 'deleteBy.userId': { $ne: userId } }
+                ]
+            }
+        ]
+    });
+};
+
+// Static method to delete message for specific user
+ChatMessageSchema.statics.deleteForUser = function(messageId, userId, deleteType = 'MESSAGE_DELETE') {
+    return this.findByIdAndUpdate(
+        messageId,
+        {
+            $addToSet: {
+                deleteBy: {
+                    userId: userId,
+                    deletedAt: new Date(),
+                    deleteType: deleteType
+                }
+            }
+        },
+        { new: true }
+    );
+};
+
+// Static method to permanently delete message
+ChatMessageSchema.statics.permanentDelete = function(messageId) {
+    return this.findByIdAndUpdate(
+        messageId,
+        {
+            isDeleted: true,
+            deletedAt: new Date()
+        },
+        { new: true }
+    );
+};
 
 ChatMessageSchema.options.toJSON = {
     transform: function (doc, ret, options) {
