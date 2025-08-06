@@ -256,6 +256,13 @@ const completeRegistration = async (req, res) => {
     const token = signToken(payload);
 
     await user.save();
+    try {
+        await indexUser(user);
+    } catch (algoliaError) {
+        console.error('Algolia indexing failed for user:', user._id, algoliaError);
+        // Don't fail the main operation if Algolia fails
+    }
+
     await TempUser.deleteOne({ phoneNumber });
 
     return apiSuccessRes(HTTP_STATUS.OK, res, "Registration completed", {
