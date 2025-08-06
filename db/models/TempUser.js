@@ -4,6 +4,8 @@ const mongoose = require('mongoose');
 const tempUserSchema = new mongoose.Schema({
     phoneNumber: { type: String, unique: true, required: true },
     language: String,
+    email:String,
+    password: String,
     tempOtp: String,
     tempOtpExpiresAt: Date,
     step: { type: Number, default: 1 },
