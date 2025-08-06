@@ -231,12 +231,12 @@ const completeRegistration = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.CONFLICT, res, "User already exists");
     }
 
-    const hashedPassword = await bcrypt.hash(tempUser.password, 10);
+
 
     const user = new User({
         phoneNumber: tempUser.phoneNumber,
         email: tempUser.email,
-        password: hashedPassword,
+        password: tempUser.password,
         language: tempUser.language,
         categories: tempUser.categories || [],
         step: 5,
