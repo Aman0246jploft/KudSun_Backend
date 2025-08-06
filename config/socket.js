@@ -692,7 +692,7 @@ async function setupSocket(server) {
                 if (deleteForEveryone && isSender) {
                     // Permanently delete for everyone (only sender can do this)
                     deletedMessage = await ChatMessage.permanentDelete(messageId);
-                    
+
                     // Notify all participants in the room
                     io.to(message.chatRoom.toString()).emit('messageDeletedForEveryone', {
                         messageId,
@@ -702,7 +702,7 @@ async function setupSocket(server) {
                 } else {
                     // Delete for current user only
                     deletedMessage = await ChatMessage.deleteForUser(messageId, userId, 'MESSAGE_DELETE');
-                    
+
                     // Only notify the user who deleted it
                     socket.emit('messageDeletedForMe', {
                         messageId,
@@ -741,7 +741,7 @@ async function setupSocket(server) {
                     if (updatedRoom) {
                         await Promise.all(updatedRoom.participants.map(async (participant) => {
                             const participantId = participant._id?.toString();
-                            
+
                             // Calculate unread count for this participant
                             const unreadCount = await ChatMessage.countDocuments({
                                 chatRoom: message.chatRoom,
@@ -856,57 +856,71 @@ async function setupSocket(server) {
                 const errors = [];
                 const results = [];
 
+                // Performance optimization: Batch validation queries
+                const validationPromises = [];
+
                 // Process roomIds if provided
                 if (roomIds && roomIds.length > 0) {
-                    for (const roomId of roomIds) {
+                    // Batch validation for roomIds
+                    const roomValidationPromises = roomIds.map(async (roomId) => {
                         try {
-                            // Verify room exists and user is a participant
                             const room = await ChatRoom.findOne({
                                 _id: toObjectId(roomId),
                                 participants: toObjectId(userId)
                             });
-
-                            if (!room) {
-                                errors.push({ roomId, error: 'Room not found or access denied' });
-                                continue;
-                            }
-
-                            targetRoomIds.push(roomId);
+                            return { roomId, room, error: null };
                         } catch (error) {
-                            errors.push({ roomId, error: 'Invalid room ID' });
+                            return { roomId, room: null, error: 'Invalid room ID' };
                         }
-                    }
+                    });
+                    validationPromises.push(...roomValidationPromises);
                 }
 
                 // Process otherUserIds if provided
                 if (otherUserIds && otherUserIds.length > 0) {
-                    for (const otherUserId of otherUserIds) {
+                    // Batch validation for otherUserIds
+                    const userValidationPromises = otherUserIds.map(async (otherUserId) => {
                         try {
                             const room = await ChatRoom.findOne({
                                 isGroup: false,
                                 participants: { $all: [toObjectId(userId), toObjectId(otherUserId)], $size: 2 }
                             });
-
-                            if (!room) {
-                                errors.push({ otherUserId, error: 'Chat room not found' });
-                                continue;
-                            }
-
-                            targetRoomIds.push(room._id.toString());
+                            return { otherUserId, room, error: null };
                         } catch (error) {
-                            errors.push({ otherUserId, error: 'Invalid user ID' });
+                            return { otherUserId, room: null, error: 'Invalid user ID' };
                         }
-                    }
+                    });
+                    validationPromises.push(...userValidationPromises);
                 }
 
+                // Wait for all validations to complete
+                const validationResults = await Promise.all(validationPromises);
+
+                // Process validation results
+                validationResults.forEach(result => {
+                    if (result.error) {
+                        errors.push({ 
+                            [result.roomId ? 'roomId' : 'otherUserId']: result.roomId || result.otherUserId, 
+                            error: result.error 
+                        });
+                    } else if (result.room) {
+                        targetRoomIds.push(result.room._id.toString());
+                    } else {
+                        errors.push({ 
+                            [result.roomId ? 'roomId' : 'otherUserId']: result.roomId || result.otherUserId, 
+                            error: 'Room not found or access denied' 
+                        });
+                    }
+                });
+
                 if (targetRoomIds.length === 0) {
-                    return socket.emit('error', { 
+                    return socket.emit('error', {
                         message: 'No valid rooms found to delete',
-                        errors 
+                        errors
                     });
                 }
 
-                // Use bulk operations for better performance
+                // Performance optimization: Use bulk operations for better performance
                 try {
                     // Bulk update rooms - delete for user
                     const roomBulkOps = targetRoomIds.map(roomId => ({
@@ -948,7 +962,7 @@ async function setupSocket(server) {
                         console.log(`✅ Bulk deleted ${messageBulkResult.modifiedCount} messages for user ${userId}`);
                     }
 
-                    // Remove user from all room sockets
+                    // Remove user from all room sockets (optimized)
                     targetRoomIds.forEach(roomId => {
                         socket.leave(roomId);
                     });
@@ -1008,7 +1022,7 @@ async function setupSocket(server) {
                     await Promise.all(deletePromises);
                 }
 
-                // Update total unread count
+                // Update total unread count (optimized - only once after all deletions)
                 await emitTotalUnreadCount(io, userId);
 
                 socket.emit('multipleRoomsDeleted', {
