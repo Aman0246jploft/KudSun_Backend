@@ -216,7 +216,7 @@ const completeRegistration = async (req, res) => {
     const { phoneNumber } = req.body;
 
     const tempUser = await TempUser.findOne({ phoneNumber });
-    if (!tempUser || tempUser.step !== 3) {
+    if (!tempUser || tempUser.step !== 4) {
         return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Incomplete registration steps");
     }
 
@@ -236,7 +236,8 @@ const completeRegistration = async (req, res) => {
         email: tempUser.email,
         password: hashedPassword,
         language: tempUser.language,
-        step: 4
+        categories: tempUser.categories || [],
+        step: 5  // registration complete
     });
 
     await user.save();
@@ -244,6 +245,7 @@ const completeRegistration = async (req, res) => {
 
     return apiSuccessRes(HTTP_STATUS.OK, res, "Registration completed", getUserResponse(user));
 };
+
 
 
 
