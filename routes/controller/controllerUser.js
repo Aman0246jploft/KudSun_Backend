@@ -433,22 +433,22 @@ const loginStepTwoPassword = async (req, res) => {
             await user.save();
             let sentVia = null;
             const isPhone = /^[+\d][\d\s\-().]+$/.test(identifier);
-            if (isPhone && process.env.NODE_ENV !== 'production') {
+            if (isPhone ) {
                 const smsResult = await sendOtpSMS(identifier, otp);
-                if (!smsResult.success) {
-                    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to send OTP via SMS");
-                }
+                // if (!smsResult.success) {
+                //     return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to send OTP via SMS");
+                // }
                 sentVia = 'SMS';
-            } else if (process.env.NODE_ENV !== 'production') {
+            } else  {
                 const emailResult = await sendEmail({
                     to: identifier,
                     subject: "Your Kadsun Login OTP",
                     text: `Your OTP code is: ${otp}`,
                     html: `<p>Your OTP code is: <strong>${otp}</strong></p>`
                 });
-                if (!emailResult.success) {
-                    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to send OTP via Email");
-                }
+                // if (!emailResult.success) {
+                //     return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to send OTP via Email");
+                // }
                 sentVia = 'Email';
             }
 
