@@ -213,7 +213,7 @@ const getOnboardingStep = async (req, res) => {
     });
 };
 const completeRegistration = async (req, res) => {
-    const { phoneNumber, fcmToken,userName,gender,dob } = req.body;
+    const { phoneNumber, fcmToken, userName, gender, dob } = req.body;
 
     const tempUser = await TempUser.findOne({ phoneNumber });
     if (!tempUser || tempUser.step !== 4) {
@@ -235,9 +235,9 @@ const completeRegistration = async (req, res) => {
     const user = new User({
         phoneNumber: tempUser.phoneNumber,
         email: tempUser.email,
-        userName:userName,
-        gender:gender,
-        dob:dob,
+        userName: userName,
+        gender: gender,
+        dob: dob,
         password: tempUser.password,
         language: tempUser.language,
         categories: tempUser.categories || [],
@@ -245,10 +245,23 @@ const completeRegistration = async (req, res) => {
         fcmToken: fcmToken || null
     });
 
+
+    const payload = {
+        userId: user._id,
+        email: user.email,
+        roleId: user.roleId,
+        role: user.role,
+        userName: user.userName
+    };
+    const token = signToken(payload);
+
     await user.save();
     await TempUser.deleteOne({ phoneNumber });
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Registration completed", getUserResponse(user));
+    return apiSuccessRes(HTTP_STATUS.OK, res, "Registration completed", {
+        token,
+        ...user.toJSON()
+    });
 };
 
 
