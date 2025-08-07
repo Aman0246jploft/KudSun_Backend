@@ -875,6 +875,7 @@ async function setupSocket(server) {
 
         // Delete multiple chat rooms/conversations for the current user
         socket.on('deleteMultipleRooms', async ({ roomIds = [], otherUserIds = [], clearHistory = true }) => {
+            console.log("5555555",roomIds)
             try {
                 const userId = socket.user?.userId;
                 if (!userId) return;
