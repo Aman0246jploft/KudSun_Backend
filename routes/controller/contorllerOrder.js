@@ -1505,32 +1505,39 @@ const getBoughtProducts = async (req, res) => {
             [ORDER_STATUS.CONFIRM_RECEIPT]: ORDER_STATUS.REVIEW,
         };
 
-        let { paymentStatus, status, keyWord, fromDate, toDate, dateFilter } = req.query;
+        let {
+            paymentStatus,
+            status,
+            keyWord,
+            fromDate,
+            toDate,
+            dateFilter,
+        } = req.query;
 
-        const matchQuery = {
+        // Base query
+        const query = {
             userId: new mongoose.Types.ObjectId(userId),
             isDeleted: false,
             isDisable: false,
         };
 
-        if (paymentStatus ) {
-            matchQuery.paymentStatus = paymentStatus || PAYMENT_STATUS.COMPLETED;
+        if (paymentStatus) {
+            query.paymentStatus = paymentStatus || PAYMENT_STATUS.COMPLETED;
         }
 
         if (status && status !== "") {
-            matchQuery.status = status;
+            query.status = status;
         }
 
-
-
+        // Date filters (fromDate, toDate)
         if ((fromDate && fromDate.trim() !== "") || (toDate && toDate.trim() !== "")) {
-            matchQuery.createdAt = {};
-            if (fromDate && fromDate.trim() !== "") matchQuery.createdAt.$gte = new Date(fromDate);
-            if (toDate && toDate.trim() !== "") matchQuery.createdAt.$lte = new Date(toDate);
+            query.createdAt = {};
+            if (fromDate && fromDate.trim() !== "") query.createdAt.$gte = new Date(fromDate);
+            if (toDate && toDate.trim() !== "") query.createdAt.$lte = new Date(toDate);
         }
 
-
-        if (dateFilter && dateFilter !== "") {
+        // dateFilter: '1month', '3months', '9months', 'thisyear'
+        if (dateFilter && dateFilter.trim() !== "") {
             const now = new Date();
             const startOfYear = new Date(now.getFullYear(), 0, 1);
             let startDate;
@@ -1556,133 +1563,51 @@ const getBoughtProducts = async (req, res) => {
             }
 
             if (startDate) {
-                matchQuery.createdAt = matchQuery.createdAt || {};
-                matchQuery.createdAt.$gte = startDate;
-                matchQuery.createdAt.$lte = now;
+                query.createdAt = query.createdAt || {};
+                query.createdAt.$gte = startDate;
+                query.createdAt.$lte = now;
             }
         }
 
-        // Build aggregation pipeline
-        const pipeline = [
-            { $match: matchQuery },
+        // Total count with base filters only (keyword filter applies after populate, so counted separately)
+        const total = await Order.countDocuments(query);
 
-            // Unwind items to lookup products individually
-            { $unwind: '$items' },
-
-            // Lookup product info for each item
-            {
-                $lookup: {
-                    from: 'sellproducts',
-                    localField: 'items.productId',
-                    foreignField: '_id',
-                    as: 'product',
+        // Find orders with pagination & populate
+        let orders = await Order.find(query)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(pageSize)
+            .populate([
+                {
+                    path: 'items.productId',
+                    model: 'SellProduct',
+                    select: 'title productImages fixedPrice status saleType auctionSettings',
                 },
-            },
-            { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } },
-
-            // Lookup seller info
-            {
-                $lookup: {
-                    from: 'users',
-                    localField: 'sellerId',
-                    foreignField: '_id',
-                    as: 'seller',
+                {
+                    path: 'sellerId',
+                    select: 'userName profileImage isLive is_Id_verified is_Verified_Seller averageRatting',
                 },
-            },
-            { $unwind: { path: '$seller', preserveNullAndEmptyArrays: true } },
+            ])
+            .lean();
 
-            // If keyWord filter exists, match on product title or seller userName
-            ...(keyWord && keyWord.trim() !== ''
-                ? [{
-                    $match: {
-                        $or: [
-                            { 'product.title': { $regex: keyWord.trim(), $options: 'i' } },
-                            { 'seller.userName': { $regex: keyWord.trim(), $options: 'i' } },
-                        ],
-                    },
-                }]
-                : []),
+        // Apply keyWord filter (client wants search on product title or seller userName)
+        if (keyWord && keyWord.trim() !== '') {
+            const lowerKey = keyWord.trim().toLowerCase();
+            orders = orders.filter(order => {
+                // check if any product title matches
+                const productMatch = order.items.some(item => 
+                    item.productId?.title?.toLowerCase().includes(lowerKey)
+                );
+                // check if seller username matches
+                const sellerMatch = order.sellerId?.userName?.toLowerCase().includes(lowerKey);
+                return productMatch || sellerMatch;
+            });
+        }
 
-            // Group back orders with items array
-            {
-                $group: {
-                    _id: '$_id',
-                    userId: { $first: '$userId' },
-                    paymentStatus: { $first: '$paymentStatus' },
-                    status: { $first: '$status' },
-                    isDeleted: { $first: '$isDeleted' },
-                    isDisable: { $first: '$isDisable' },
-                    createdAt: { $first: '$createdAt' },
-                    sellerId: { $first: '$sellerId' },
-                    seller: { $first: '$seller' },
-                    items: {
-                        $push: {
-                            ...'$items',
-                            productId: '$product',
-                        },
-                    },
-                },
-            },
-
-            // Sort, paginate
-            { $sort: { createdAt: -1 } },
-            { $skip: skip },
-            { $limit: pageSize },
-        ];
-
-        // Count pipeline for total count (same match and keyWord filters)
-        const countPipeline = [
-            { $match: matchQuery },
-            { $unwind: '$items' },
-            {
-                $lookup: {
-                    from: 'sellproducts',
-                    localField: 'items.productId',
-                    foreignField: '_id',
-                    as: 'product',
-                },
-            },
-            { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } },
-            {
-                $lookup: {
-                    from: 'users',
-                    localField: 'sellerId',
-                    foreignField: '_id',
-                    as: 'seller',
-                },
-            },
-            { $unwind: { path: '$seller', preserveNullAndEmptyArrays: true } },
-            ...(keyWord && keyWord.trim() !== ''
-                ? [{
-                    $match: {
-                        $or: [
-                            { 'product.title': { $regex: keyWord.trim(), $options: 'i' } },
-                            { 'seller.userName': { $regex: keyWord.trim(), $options: 'i' } },
-                        ],
-                    },
-                }]
-                : []),
-            {
-                $group: {
-                    _id: '$_id',
-                },
-            },
-            {
-                $count: 'total',
-            },
-        ];
-
-        const countResult = await Order.aggregate(countPipeline);
-        const total = countResult.length > 0 ? countResult[0].total : 0;
-
-        const orders = await Order.aggregate(pipeline);
-
-        // Map sellerId back like your original API response
+        // Set isReviewed, labalStatuses, allowedNextStatuses on each order
         for (const order of orders) {
-            order.sellerId = order.seller;
-            delete order.seller;
-
             order.isReviewed = false;
+
             for (const item of order.items || []) {
                 const productId = item.productId?._id;
                 if (order.status === ORDER_STATUS.CONFIRM_RECEIPT && productId) {
@@ -1693,6 +1618,7 @@ const getBoughtProducts = async (req, res) => {
                         isDisable: false,
                     });
                     order.isReviewed = !!reviewExists;
+                    if (order.isReviewed) break;
                 }
             }
 
@@ -1700,13 +1626,13 @@ const getBoughtProducts = async (req, res) => {
                 order.labalStatuses = 'Unpaid';
                 order.allowedNextStatuses = 'Pay now';
             } else if (!order.isReviewed) {
-                if (order.status == ORDER_STATUS.SHIPPED || order.status == ORDER_STATUS.DELIVERED) {
+                if (order.status === ORDER_STATUS.SHIPPED || order.status === ORDER_STATUS.DELIVERED) {
                     order.labalStatuses = 'Shipped';
                     order.allowedNextStatuses = 'Confirm Receipt';
-                } else if (order.status == ORDER_STATUS.CONFIRM_RECEIPT) {
+                } else if (order.status === ORDER_STATUS.CONFIRM_RECEIPT) {
                     order.labalStatuses = 'Unreviewed';
                     order.allowedNextStatuses = ALLOWED_BUYER_NEXT_STATUSES[order.status] || '';
-                } else if (order.status == ORDER_STATUS.DISPUTE) {
+                } else if (order.status === ORDER_STATUS.DISPUTE) {
                     order.labalStatuses = 'Disputed';
                     order.allowedNextStatuses = "";
                 }
@@ -1714,15 +1640,15 @@ const getBoughtProducts = async (req, res) => {
                 order.allowedNextStatuses = '';
             }
 
-            if (order.status == ORDER_STATUS.PENDING || order.status == ORDER_STATUS.CONFIRMED) {
+            if (order.status === ORDER_STATUS.PENDING || order.status === ORDER_STATUS.CONFIRMED) {
                 order.labalStatuses = 'Unsent';
             }
 
-            if (order.status == ORDER_STATUS.COMPLETED) {
+            if (order.status === ORDER_STATUS.COMPLETED) {
                 order.labalStatuses = 'Completed';
             }
 
-            if (order.status == ORDER_STATUS.CANCELLED) {
+            if (order.status === ORDER_STATUS.CANCELLED) {
                 order.labalStatuses = 'Cancelled';
             }
         }
@@ -1743,6 +1669,7 @@ const getBoughtProducts = async (req, res) => {
         );
     }
 };
+
 
 
 
@@ -2101,34 +2028,32 @@ const getSoldProducts = async (req, res) => {
         const pageSize = Math.min(100, Math.max(1, parseInt(req.query.size) || 10));
         const skip = (pageNo - 1) * pageSize;
 
-        // Extract filters from query
+        // Extract filters
         let { paymentStatus, status, keyWord, fromDate, toDate, dateFilter } = req.query;
 
-        // Build query object
+        // Build base query
         const query = {
             sellerId,
             isDeleted: false,
             isDisable: false,
         };
 
-        if (paymentStatus ) {
-            query["paymentStatus"] = paymentStatus || PAYMENT_STATUS.COMPLETED;
+        if (paymentStatus) {
+            query.paymentStatus = paymentStatus || PAYMENT_STATUS.COMPLETED;
         }
 
         if (status && status !== "") {
-            query["status"] = status;
+            query.status = status;
         }
 
-
-
+        // Date range filter (fromDate, toDate)
         if ((fromDate && fromDate.trim() !== "") || (toDate && toDate.trim() !== "")) {
             query.createdAt = {};
             if (fromDate && fromDate.trim() !== "") query.createdAt.$gte = new Date(fromDate);
             if (toDate && toDate.trim() !== "") query.createdAt.$lte = new Date(toDate);
         }
 
-
-        // Predefined date filters
+        // Predefined dateFilter
         if (dateFilter && dateFilter !== "") {
             const now = new Date();
             const startOfYear = new Date(now.getFullYear(), 0, 1);
@@ -2161,9 +2086,10 @@ const getSoldProducts = async (req, res) => {
             }
         }
 
-        // Initial total count before keyWord filtering
+        // Initial total count before keyword filter
         let total = await Order.countDocuments(query);
 
+        // Fetch orders with pagination & populate
         let orders = await Order.find(query)
             .sort({ createdAt: -1 })
             .skip(skip)
@@ -2181,25 +2107,22 @@ const getSoldProducts = async (req, res) => {
             ])
             .lean();
 
-        // Keyword filter applied after fetching because it involves populated fields
+        // Keyword filter applied after fetching (on populated fields)
         if (keyWord && keyWord.trim() !== '') {
             const lowerKeyword = keyWord.toLowerCase();
-
             orders = orders.filter(order => {
                 const productMatch = order.items.some(item =>
                     item.productId?.title?.toLowerCase().includes(lowerKeyword)
                 );
-
                 const userMatch = order.userId?.userName?.toLowerCase().includes(lowerKeyword);
-
                 return productMatch || userMatch;
             });
 
-            // Update total count to reflect keyWord filtering
+            // Update total count after filtering
             total = orders.length;
         }
 
-        // Gather all product IDs from orders for review check
+        // Gather productIds for review check
         const productIds = [];
         for (const order of orders) {
             for (const item of order.items) {
@@ -2207,7 +2130,7 @@ const getSoldProducts = async (req, res) => {
             }
         }
 
-        // Fetch existing reviews by seller on those products
+        // Fetch reviews by seller on those products
         const existingReviews = productIds.length
             ? await ProductReview.find({
                 userId: sellerId,
@@ -2218,16 +2141,15 @@ const getSoldProducts = async (req, res) => {
             }).select("productId").lean()
             : [];
 
-        const reviewedSet = new Set(existingReviews.map(r => r.productId.toString()));
+        const reviewedSet = new Set(existingReviews.map((r) => r.productId.toString()));
 
         for (const order of orders) {
             const currentStatus = order.status;
             const paymentStatuss = order.paymentStatus;
 
-            // Check if all items have deliveryType = 'local pickup'
             const allLocalPickup = order.items.every(item => item.productId?.deliveryType === "local pickup");
 
-            // Determine if order is reviewed based on items
+            // Determine if order is reviewed
             order.isReviewed = false;
             order.items.forEach(item => {
                 if (item.productId?._id && reviewedSet.has(item.productId._id.toString())) {
@@ -2250,12 +2172,12 @@ const getSoldProducts = async (req, res) => {
                 }
             }
 
-            if (!order.isReviewed && (order.status == ORDER_STATUS.DELIVERED || order.status == ORDER_STATUS.CONFIRM_RECEIPT)) {
+            if (!order.isReviewed && (order.status === ORDER_STATUS.DELIVERED || order.status === ORDER_STATUS.CONFIRM_RECEIPT)) {
                 labalStatuses = "Unreviewed";
                 allowedNextStatuses = "REVIEW";
             }
 
-            if (order.status == ORDER_STATUS.DISPUTE) {
+            if (order.status === ORDER_STATUS.DISPUTE) {
                 let disputeData = await Dispute.findOne({ orderId: order._id });
                 if (disputeData?.sellerResponse?.responseType) {
                     labalStatuses = "Disputed";
@@ -2266,12 +2188,12 @@ const getSoldProducts = async (req, res) => {
                 }
             }
 
-            if (order.status == ORDER_STATUS.COMPLETED) {
+            if (order.status === ORDER_STATUS.COMPLETED) {
                 labalStatuses = "Completed";
                 allowedNextStatuses = "";
             }
 
-            if (order.status == ORDER_STATUS.CANCELLED) {
+            if (order.status === ORDER_STATUS.CANCELLED) {
                 labalStatuses = 'Cancelled';
                 allowedNextStatuses = "";
             }
@@ -2301,6 +2223,7 @@ const getSoldProducts = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to get sold products", err);
     }
 };
+
 
 
 
