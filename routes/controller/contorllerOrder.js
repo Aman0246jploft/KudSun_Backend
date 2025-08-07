@@ -1505,7 +1505,7 @@ const getBoughtProducts = async (req, res) => {
             [ORDER_STATUS.CONFIRM_RECEIPT]: ORDER_STATUS.REVIEW,
         };
 
-        let { paymentStatus, status, keyword, fromDate, toDate, dateFilter } = req.query;
+        let { paymentStatus, status, keyWord, fromDate, toDate, dateFilter } = req.query;
 
         const matchQuery = {
             userId: mongoose.Types.ObjectId(userId),
@@ -1521,13 +1521,16 @@ const getBoughtProducts = async (req, res) => {
             matchQuery.status = status;
         }
 
-        if (fromDate || toDate) {
+
+
+        if ((fromDate && fromDate.trim() !== "") || (toDate && toDate.trim() !== "")) {
             matchQuery.createdAt = {};
-            if (fromDate) matchQuery.createdAt.$gte = new Date(fromDate);
-            if (toDate) matchQuery.createdAt.$lte = new Date(toDate);
+            if (fromDate && fromDate.trim() !== "") matchQuery.createdAt.$gte = new Date(fromDate);
+            if (toDate && toDate.trim() !== "") matchQuery.createdAt.$lte = new Date(toDate);
         }
 
-        if (dateFilter&&dateFilter!=="") {
+
+        if (dateFilter && dateFilter !== "") {
             const now = new Date();
             const startOfYear = new Date(now.getFullYear(), 0, 1);
             let startDate;
@@ -1588,13 +1591,13 @@ const getBoughtProducts = async (req, res) => {
             },
             { $unwind: { path: '$seller', preserveNullAndEmptyArrays: true } },
 
-            // If keyword filter exists, match on product title or seller userName
-            ...(keyword && keyword.trim() !== ''
+            // If keyWord filter exists, match on product title or seller userName
+            ...(keyWord && keyWord.trim() !== ''
                 ? [{
                     $match: {
                         $or: [
-                            { 'product.title': { $regex: keyword.trim(), $options: 'i' } },
-                            { 'seller.userName': { $regex: keyword.trim(), $options: 'i' } },
+                            { 'product.title': { $regex: keyWord.trim(), $options: 'i' } },
+                            { 'seller.userName': { $regex: keyWord.trim(), $options: 'i' } },
                         ],
                     },
                 }]
@@ -1627,7 +1630,7 @@ const getBoughtProducts = async (req, res) => {
             { $limit: pageSize },
         ];
 
-        // Count pipeline for total count (same match and keyword filters)
+        // Count pipeline for total count (same match and keyWord filters)
         const countPipeline = [
             { $match: matchQuery },
             { $unwind: '$items' },
@@ -1649,12 +1652,12 @@ const getBoughtProducts = async (req, res) => {
                 },
             },
             { $unwind: { path: '$seller', preserveNullAndEmptyArrays: true } },
-            ...(keyword && keyword.trim() !== ''
+            ...(keyWord && keyWord.trim() !== ''
                 ? [{
                     $match: {
                         $or: [
-                            { 'product.title': { $regex: keyword.trim(), $options: 'i' } },
-                            { 'seller.userName': { $regex: keyword.trim(), $options: 'i' } },
+                            { 'product.title': { $regex: keyWord.trim(), $options: 'i' } },
+                            { 'seller.userName': { $regex: keyWord.trim(), $options: 'i' } },
                         ],
                     },
                 }]
@@ -2099,7 +2102,7 @@ const getSoldProducts = async (req, res) => {
         const skip = (pageNo - 1) * pageSize;
 
         // Extract filters from query
-        let { paymentStatus, status, keyword, fromDate, toDate, dateFilter } = req.query;
+        let { paymentStatus, status, keyWord, fromDate, toDate, dateFilter } = req.query;
 
         // Build query object
         const query = {
@@ -2116,15 +2119,17 @@ const getSoldProducts = async (req, res) => {
             query["status"] = status;
         }
 
-        // Date range filters
-        if (fromDate || toDate) {
+
+
+        if ((fromDate && fromDate.trim() !== "") || (toDate && toDate.trim() !== "")) {
             query.createdAt = {};
-            if (fromDate) query.createdAt.$gte = new Date(fromDate);
-            if (toDate) query.createdAt.$lte = new Date(toDate);
+            if (fromDate && fromDate.trim() !== "") query.createdAt.$gte = new Date(fromDate);
+            if (toDate && toDate.trim() !== "") query.createdAt.$lte = new Date(toDate);
         }
 
+
         // Predefined date filters
-        if (dateFilter&&dateFilter!=="") {
+        if (dateFilter && dateFilter !== "") {
             const now = new Date();
             const startOfYear = new Date(now.getFullYear(), 0, 1);
             let startDate;
@@ -2156,7 +2161,7 @@ const getSoldProducts = async (req, res) => {
             }
         }
 
-        // Initial total count before keyword filtering
+        // Initial total count before keyWord filtering
         let total = await Order.countDocuments(query);
 
         let orders = await Order.find(query)
@@ -2177,8 +2182,8 @@ const getSoldProducts = async (req, res) => {
             .lean();
 
         // Keyword filter applied after fetching because it involves populated fields
-        if (keyword && keyword.trim() !== '') {
-            const lowerKeyword = keyword.toLowerCase();
+        if (keyWord && keyWord.trim() !== '') {
+            const lowerKeyword = keyWord.toLowerCase();
 
             orders = orders.filter(order => {
                 const productMatch = order.items.some(item =>
@@ -2190,7 +2195,7 @@ const getSoldProducts = async (req, res) => {
                 return productMatch || userMatch;
             });
 
-            // Update total count to reflect keyword filtering
+            // Update total count to reflect keyWord filtering
             total = orders.length;
         }
 
