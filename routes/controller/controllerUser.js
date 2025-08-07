@@ -1764,7 +1764,7 @@ const getProfile = async (req, res) => {
 
 
 
-        const [myThreadCount, productListed, boughtCount, sellCount, ThreadDraftCount, ProductDraftCount, ThreadLikes, productLike, sellerVerification] = await Promise.all([
+        const [myThreadCount, productListed, boughtCount, sellCount, ThreadDraftCount, ProductDraftCount, sellerVerification] = await Promise.all([
 
             Thread.countDocuments({ userId, isDeleted: false }),
             SellProducts.countDocuments({ userId, isDeleted: false }),
@@ -1778,12 +1778,37 @@ const getProfile = async (req, res) => {
             ThreadDraft.countDocuments({ userId, isDeleted: false }),
             SellProductDraft.countDocuments({ userId, isDeleted: false }),
 
-            ThreadLike.countDocuments({ likeBy: toObjectId(userId), isDeleted: false, ...(blockedUserIds.length ? { threadId: { $nin: blockedUserIds } } : {}) }),
-            ProductLike.countDocuments({ likeBy: toObjectId(userId), isDeleted: false, ...(blockedUserIds.length ? { productId: { $nin: blockedUserIds } } : {}) }),
+
             SellerVerification.findOne({
                 userId: toObjectId(userId)
             }).sort({ createdAt: -1 })
         ]);
+        const likedProducts = await ProductLike.find({
+            likeBy: toObjectId(userId),
+            isDeleted: false
+        }).select("productId").lean();
+
+        const likedProductIds = likedProducts.map(lp => lp.productId);
+        const productLikeCount = await SellProduct.countDocuments({
+            _id: { $in: likedProductIds },
+            isDeleted: false,
+            isDisable: false,
+            ...(blockedUserIds.length ? { userId: { $nin: blockedUserIds } } : {})
+        });
+
+
+        const likedThreads = await ThreadLike.find({
+            likeBy: toObjectId(userId),
+            isDeleted: false
+        }).select("threadId").lean();
+
+        const likedThreadIds = likedThreads.map(lt => lt.threadId);
+
+        const threadLikeCount = await Thread.countDocuments({
+            _id: { $in: likedThreadIds },
+            isDeleted: false,
+            ...(blockedUserIds.length ? { userId: { $nin: blockedUserIds } } : {})
+        });
 
         const sellerVerificationStatus = !sellerVerification || sellerVerification.verificationStatus !== "Approved";
 
@@ -1807,8 +1832,8 @@ const getProfile = async (req, res) => {
             sellCount,
             ThreadDraftCount,
             ProductDraftCount,
-            ThreadLikes,
-            productLike,
+            ThreadLikes:threadLikeCount,
+            productLike: productLikeCount,
             provinceId: user?.provinceId,
             districtId: user?.districtId,
             dealChatnotification: user?.dealChatnotification,
