@@ -1156,6 +1156,8 @@ const getLikedThreads = async (req, res) => {
         // 2. Build match condition for liked threads and keyword search
         const matchCondition = {
             _id: { $in: likedThreadIds },
+            isDeleted: false,
+            isDisable: false,
             ...(blockedUserIds.length && { userId: { $nin: blockedUserIds } })
         };
 
