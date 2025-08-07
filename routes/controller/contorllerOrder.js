@@ -1630,9 +1630,9 @@ const getBoughtProducts = async (req, res) => {
                 if (order.status === ORDER_STATUS.SHIPPED || order.status === ORDER_STATUS.DELIVERED) {
                     order.labalStatuses = 'Shipped';
                     order.allowedNextStatuses = 'Confirm Receipt';
-                } else if (order.status === ORDER_STATUS.CONFIRM_RECEIPT) {
+                } else if (order.status === ORDER_STATUS.CONFIRM_RECEIPT || order.status === ORDER_STATUS.COMPLETED) {
                     order.labalStatuses = 'Unreviewed';
-                    order.allowedNextStatuses = ALLOWED_BUYER_NEXT_STATUSES[order.status] || '';
+                    order.allowedNextStatuses = 'REVIEW';
                 } else if (order.status === ORDER_STATUS.DISPUTE) {
                     order.labalStatuses = 'Disputed';
                     order.allowedNextStatuses = "";
@@ -1645,7 +1645,7 @@ const getBoughtProducts = async (req, res) => {
                 order.labalStatuses = 'Unsent';
             }
 
-            if (order.status === ORDER_STATUS.COMPLETED) {
+            if (order.status === ORDER_STATUS.COMPLETED && order.isReviewed) {
                 order.labalStatuses = 'Completed';
             }
 
@@ -2180,7 +2180,7 @@ const getSoldProducts = async (req, res) => {
                 }
             }
 
-            if (!order.isReviewed && (order.status === ORDER_STATUS.DELIVERED || order.status === ORDER_STATUS.CONFIRM_RECEIPT)) {
+            if (!order.isReviewed && (order.status === ORDER_STATUS.DELIVERED || order.status === ORDER_STATUS.CONFIRM_RECEIPT || order.status === ORDER_STATUS.COMPLETED)) {
                 labalStatuses = "Unreviewed";
                 allowedNextStatuses = "REVIEW";
             }
@@ -2196,7 +2196,7 @@ const getSoldProducts = async (req, res) => {
                 }
             }
 
-            if (order.status === ORDER_STATUS.COMPLETED) {
+            if (order.status === ORDER_STATUS.COMPLETED && order.isReviewed) {
                 labalStatuses = "Completed";
                 allowedNextStatuses = "";
             }
@@ -2667,7 +2667,6 @@ const updateOrderStatusByBuyer = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Order not found for this buyer");
         }
 
-
         const firstProduct = order.items[0]?.productId; // populated product object
         const productTitle = firstProduct?.title || '';
         const productImage = firstProduct?.productImages?.[0] || '';
@@ -2693,7 +2692,7 @@ const updateOrderStatusByBuyer = async (req, res) => {
             return apiErrorRes(
                 HTTP_STATUS.BAD_REQUEST,
                 res,
-                `Buyers can only update orders after they are shipped or delivered`
+                "Buyers can only update orders after they are shipped or delivered"
             );
         }
 
@@ -2785,14 +2784,13 @@ const updateOrderStatusByBuyer = async (req, res) => {
             }
         });
 
-        // Start transaction
         const session = await mongoose.startSession();
-        session.startTransaction();
 
         try {
+            session.startTransaction();
+
             // If auto-delivering, first update to DELIVERED status
             if (shouldAutoDeliver) {
-                // First create DELIVERED status entry
                 await OrderStatusHistory.create([{
                     orderId: order._id,
                     oldStatus: currentStatus,
@@ -2801,7 +2799,6 @@ const updateOrderStatusByBuyer = async (req, res) => {
                     note: 'Auto-delivered during confirm receipt'
                 }], { session });
 
-                // Update order to DELIVERED first
                 order.status = ORDER_STATUS.DELIVERED;
                 await order.save({ session });
 
@@ -2820,7 +2817,7 @@ const updateOrderStatusByBuyer = async (req, res) => {
                             orderNumber: order._id.toString(),
                             previousStatus: currentStatus,
                             newStatus: ORDER_STATUS.DELIVERED,
-                            totalAmount: `${(order.grandTotal || 0).toFixed(2)}`,
+                            totalAmount: (order.grandTotal || 0).toFixed(2),
                             amount: order.grandTotal,
                             itemCount: order.items.length,
                             sellerId: order.sellerId,
@@ -2843,16 +2840,13 @@ const updateOrderStatusByBuyer = async (req, res) => {
 
                 await deliveredMessage.save({ session });
 
-                // Emit socket event for delivered status
                 const io = req.app.get('io');
                 await emitSystemMessage(io, deliveredMessage, room, order.sellerId, buyerId);
             }
 
-            // Now handle the final status (CONFIRM_RECEIPT)
             // Save the system message for final status
             await systemMessage.save({ session });
 
-            // Update chat room's last message
             await ChatRoom.findByIdAndUpdate(
                 room._id,
                 {
@@ -2862,11 +2856,9 @@ const updateOrderStatusByBuyer = async (req, res) => {
                 { session }
             );
 
-            // Save final status
             order.status = newStatus;
             await order.save({ session });
 
-            // Create status history for final status
             await OrderStatusHistory.create([{
                 orderId: order._id,
                 oldStatus: shouldAutoDeliver ? ORDER_STATUS.DELIVERED : currentStatus,
@@ -2876,133 +2868,129 @@ const updateOrderStatusByBuyer = async (req, res) => {
             }], { session });
 
             await session.commitTransaction();
-
-            // Emit socket events for final status
-            const io = req.app.get('io');
-            await emitSystemMessage(io, systemMessage, room, order.sellerId, buyerId);
-
-            // Send review pending message for both buyer and seller if order is confirmed receipt
-            if (newStatus === ORDER_STATUS.CONFIRM_RECEIPT) {
-                const reviewPendingMessage = new ChatMessage({
-                    chatRoom: room._id,
-                    messageType: 'REVIEW_STATUS',
-                    systemMeta: {
-                        statusType: 'REVIEW',
-                        status: 'PENDING',
-                        orderId: order._id,
-                        productId: order.items[0].productId,
-                        title: 'Reviews Pending',
-                        meta: createStandardizedChatMeta({
-                            orderNumber: order._id.toString(),
-                            totalAmount: order.grandTotal,
-                            amount: order.grandTotal,
-                            itemCount: order.items.length,
-                            sellerId: order.sellerId,
-                            buyerId: buyerId,
-                            orderStatus: newStatus,
-                            paymentStatus: order.paymentStatus,
-                            paymentMethod: order.paymentMethod
-                        }),
-                        actions: [
-                            {
-                                label: "Leave Review",
-                                url: `/order/${order._id}/review`,
-                                type: "primary"
-                            },
-                            {
-                                label: "View Order",
-                                url: `/order/${order._id}`,
-                                type: "secondary"
-                            }
-                        ],
-                        theme: 'info',
-                        content: 'Reviews are pending. Both buyer and seller can now leave reviews for this completed transaction.'
-                    }
-                });
-
-                await reviewPendingMessage.save();
-                await ChatRoom.findByIdAndUpdate(
-                    room._id,
-                    {
-                        lastMessage: reviewPendingMessage._id,
-                        updatedAt: new Date()
-                    }
-                );
-                await emitSystemMessage(io, reviewPendingMessage, room, order.sellerId, buyerId);
-            }
-
-            // Send notification to seller about buyer action
-            let notificationTitle = '';
-            let notificationMessage = '';
-
-            switch (newStatus) {
-                case ORDER_STATUS.CONFIRM_RECEIPT:
-                    notificationTitle = "Order Confirmed by Buyer!";
-                    notificationMessage = `The buyer has confirmed receipt of the order. Transaction completed successfully!`;
-                    break;
-                case ORDER_STATUS.RETURNED:
-                    notificationTitle = "Return Requested";
-                    notificationMessage = `The buyer has requested a return for this order. Please review the return request.`;
-                    break;
-                default:
-                    notificationTitle = "Order Status Updated by Buyer";
-                    notificationMessage = `The buyer has updated the order status to ${newStatus}.`;
-            }
-
-            const sellerUser = await User.findById(order.sellerId).lean();
-            if (sellerUser?.alertNotification !== false) {
-                const buyerActionNotifications = [{
-                    recipientId: order.sellerId,
-                    userId: buyerId,
-                    orderId: order._id,
-                    productId: order.items[0].productId,
-                    type: NOTIFICATION_TYPES.ORDER,
-                    title: notificationTitle,
-                    message: notificationMessage,
-                    meta: createStandardizedNotificationMeta({
-                        orderNumber: order._id.toString(),
-                        orderId: order._id.toString(),
-                        newStatus: newStatus,
-                        oldStatus: currentStatus,
-                        actionBy: 'buyer',
-                        sellerId: order.sellerId,
-                        buyerId: buyerId,
-                        totalAmount: order.grandTotal,
-                        amount: order.grandTotal,
-                        itemCount: order.items.length,
-                        paymentMethod: order.paymentMethod,
-                        status: newStatus,
-                        productTitle,
-                        productImage
-                    }),
-                    redirectUrl: `/order/${order._id}`
-                }];
-
-                await saveNotification(buyerActionNotifications);
-            }
-
-
-            // Prepare success message
-            let successMessage = "Order status updated successfully";
-            if (newStatus === ORDER_STATUS.CONFIRM_RECEIPT) {
-                successMessage = "Order marked as received. Thank you for confirming receipt!";
-            }
-
-            return apiSuccessRes(
-                HTTP_STATUS.OK,
-                res,
-                successMessage,
-                {
-                    orderId: order._id,
-                    status: order.status,
-                }
-            );
         } catch (err) {
             await session.abortTransaction();
             throw err;
         } finally {
             session.endSession();
         }
+
+        const io = req.app.get('io');
+        await emitSystemMessage(io, systemMessage, room, order.sellerId, buyerId);
+
+        if (newStatus === ORDER_STATUS.CONFIRM_RECEIPT) {
+            const reviewPendingMessage = new ChatMessage({
+                chatRoom: room._id,
+                messageType: 'REVIEW_STATUS',
+                systemMeta: {
+                    statusType: 'REVIEW',
+                    status: 'PENDING',
+                    orderId: order._id,
+                    productId: order.items[0].productId,
+                    title: 'Reviews Pending',
+                    meta: createStandardizedChatMeta({
+                        orderNumber: order._id.toString(),
+                        totalAmount: order.grandTotal,
+                        amount: order.grandTotal,
+                        itemCount: order.items.length,
+                        sellerId: order.sellerId,
+                        buyerId: buyerId,
+                        orderStatus: newStatus,
+                        paymentStatus: order.paymentStatus,
+                        paymentMethod: order.paymentMethod
+                    }),
+                    actions: [
+                        {
+                            label: "Leave Review",
+                            url: `/order/${order._id}/review`,
+                            type: "primary"
+                        },
+                        {
+                            label: "View Order",
+                            url: `/order/${order._id}`,
+                            type: "secondary"
+                        }
+                    ],
+                    theme: 'info',
+                    content: 'Reviews are pending. Both buyer and seller can now leave reviews for this completed transaction.'
+                }
+            });
+
+            await reviewPendingMessage.save();
+            await ChatRoom.findByIdAndUpdate(
+                room._id,
+                {
+                    lastMessage: reviewPendingMessage._id,
+                    updatedAt: new Date()
+                }
+            );
+            await emitSystemMessage(io, reviewPendingMessage, room, order.sellerId, buyerId);
+        }
+
+        // Send notification to seller about buyer action
+        let notificationTitle = '';
+        let notificationMessage = '';
+
+        switch (newStatus) {
+            case ORDER_STATUS.CONFIRM_RECEIPT:
+                notificationTitle = "Order Confirmed by Buyer!";
+                notificationMessage = "The buyer has confirmed receipt of the order. Transaction completed successfully!";
+                break;
+            case ORDER_STATUS.RETURNED:
+                notificationTitle = "Return Requested";
+                notificationMessage = "The buyer has requested a return for this order. Please review the return request.";
+                break;
+            default:
+                notificationTitle = "Order Status Updated by Buyer";
+                notificationMessage = `The buyer has updated the order status to ${newStatus}.`;
+        }
+
+        const sellerUser = await User.findById(order.sellerId).lean();
+        if (sellerUser?.alertNotification !== false) {
+            const buyerActionNotifications = [{
+                recipientId: order.sellerId,
+                userId: buyerId,
+                orderId: order._id,
+                productId: order.items[0].productId,
+                type: NOTIFICATION_TYPES.ORDER,
+                title: notificationTitle,
+                message: notificationMessage,
+                meta: createStandardizedNotificationMeta({
+                    orderNumber: order._id.toString(),
+                    orderId: order._id.toString(),
+                    newStatus: newStatus,
+                    oldStatus: currentStatus,
+                    actionBy: 'buyer',
+                    sellerId: order.sellerId,
+                    buyerId: buyerId,
+                    totalAmount: order.grandTotal,
+                    amount: order.grandTotal,
+                    itemCount: order.items.length,
+                    paymentMethod: order.paymentMethod,
+                    status: newStatus,
+                    productTitle,
+                    productImage
+                }),
+                redirectUrl: `/order/${order._id}`
+            }];
+
+            await saveNotification(buyerActionNotifications);
+        }
+
+        let successMessage = "Order status updated successfully";
+        if (newStatus === ORDER_STATUS.CONFIRM_RECEIPT) {
+            successMessage = "Order marked as received. Thank you for confirming receipt!";
+        }
+
+        return apiSuccessRes(
+            HTTP_STATUS.OK,
+            res,
+            successMessage,
+            {
+                orderId: order._id,
+                status: order.status,
+            }
+        );
     } catch (err) {
         console.error("Update order status by buyer error:", err);
         return apiErrorRes(
