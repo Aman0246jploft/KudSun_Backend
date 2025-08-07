@@ -1525,7 +1525,7 @@ const getBoughtProducts = async (req, res) => {
             query.paymentStatus = paymentStatus || PAYMENT_STATUS.COMPLETED;
         }
 
-        if (status && status !== "") {
+        if (status && status !== "" && status !== "Unreviewed") {
             query.status = status;
         }
 
@@ -1595,7 +1595,7 @@ const getBoughtProducts = async (req, res) => {
             const lowerKey = keyWord.trim().toLowerCase();
             orders = orders.filter(order => {
                 // check if any product title matches
-                const productMatch = order.items.some(item => 
+                const productMatch = order.items.some(item =>
                     item.productId?.title?.toLowerCase().includes(lowerKey)
                 );
                 // check if seller username matches
@@ -1603,6 +1603,7 @@ const getBoughtProducts = async (req, res) => {
                 return productMatch || sellerMatch;
             });
         }
+        const filteredOrders = [];
 
         // Set isReviewed, labalStatuses, allowedNextStatuses on each order
         for (const order of orders) {
@@ -1651,13 +1652,16 @@ const getBoughtProducts = async (req, res) => {
             if (order.status === ORDER_STATUS.CANCELLED) {
                 order.labalStatuses = 'Cancelled';
             }
+
+            if (status === "Unreviewed" && order.isReviewed) continue;
+            filteredOrders.push(order);
         }
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Bought products fetched successfully", {
             pageNo,
             size: pageSize,
-            total,
-            orders,
+            total: filteredOrders.length,
+            orders: filteredOrders,
         });
     } catch (err) {
         console.error("Get Bought Product Error:", err);
@@ -2042,9 +2046,13 @@ const getSoldProducts = async (req, res) => {
             query.paymentStatus = paymentStatus || PAYMENT_STATUS.COMPLETED;
         }
 
-        if (status && status !== "") {
+        // if (status && status !== "") {
+        //     query.status = status;
+        // }
+        if (status && status !== "" && status !== "Unreviewed") {
             query.status = status;
         }
+
 
         // Date range filter (fromDate, toDate)
         if ((fromDate && fromDate.trim() !== "") || (toDate && toDate.trim() !== "")) {
@@ -2211,12 +2219,23 @@ const getSoldProducts = async (req, res) => {
             order.allowedNextStatuses = allowedNextStatuses;
             order.labalStatuses = labalStatuses;
         }
+        let filteredOrders = orders;
+
+        if (status === "Unreviewed") {
+            filteredOrders = orders.filter(order =>
+                !order.isReviewed &&
+                (order.status === ORDER_STATUS.DELIVERED || order.status === ORDER_STATUS.CONFIRM_RECEIPT)
+            );
+
+            // Optional: update total count to reflect filtered records
+            total = filteredOrders.length;
+        }
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Sold products fetched successfully", {
             pageNo,
             size: pageSize,
             total,
-            orders,
+            orders: filteredOrders,
         });
     } catch (err) {
         console.error("Get Sold Products Error:", err);
