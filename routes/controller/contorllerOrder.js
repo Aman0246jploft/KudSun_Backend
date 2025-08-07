@@ -1334,9 +1334,163 @@ const updateOrderById = async (req, res) => {
     }
 };
 
+// const getBoughtProducts = async (req, res) => {
+//     try {
+//         let userId = req.query.userId || req.user.userId
+//         if (!userId) {
+//             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "userId is required");
+//         }
+
+//         const pageNo = Math.max(1, parseInt(req.query.pageNo) || 1);
+//         const pageSize = Math.min(100, Math.max(1, parseInt(req.query.size) || 10));
+//         const skip = (pageNo - 1) * pageSize;
+//         const ALLOWED_BUYER_NEXT_STATUSES = {
+//             [ORDER_STATUS.SHIPPED]: ORDER_STATUS.CONFIRM_RECEIPT,  // Buyer confirms delivery
+//             [ORDER_STATUS.DELIVERED]: ORDER_STATUS.CONFIRM_RECEIPT,  // Buyer confirms delivery
+//             [ORDER_STATUS.CONFIRM_RECEIPT]: ORDER_STATUS.REVIEW,  // Buyer confirms delivery
+
+//         };
+//         // Query for active orders by user
+//         const query = {
+//             userId,
+//             isDeleted: false,
+//             isDisable: false
+//         };
+
+//         let { paymentStatus, status, } = req.query
+//         if (paymentStatus && paymentStatus !== "") {
+
+//             query["paymentStatus"] = paymentStatus || PAYMENT_STATUS.COMPLETED
+//         }
+//         // ORDER_STATUS
+//         if (status && status !== "") {
+//             query["status"] = status
+
+//         }
+
+//         const total = await Order.countDocuments(query);
+
+
+//         const orders = await Order.find(query)
+//             .sort({ createdAt: -1 })
+//             .skip(skip)
+//             .limit(pageSize)
+//             .populate([{
+//                 path: 'items.productId',
+//                 model: 'SellProduct',
+//                 select: 'title productImages fixedPrice status saleType auctionSettings'
+//             },
+//             {
+//                 path: 'sellerId',
+//                 select: 'userName profileImage isLive is_Id_verified is_Verified_Seller averageRatting'
+//             }])
+//             .lean();
+
+
+//         const orderIds = orders.map(o => o._id);
+
+
+//         for (const order of orders) {
+
+
+//             for (const item of order.items || []) {
+//                 const productId = item.productId?._id;
+//                 order.isReviewed = false;
+//                 if (order.status === ORDER_STATUS.CONFIRM_RECEIPT && productId) {
+//                     const reviewExists = await ProductReview.exists({
+//                         userId,
+//                         productId,
+
+//                         isDeleted: false,
+//                         isDisable: false
+//                     });
+
+//                     order.isReviewed = !!reviewExists;
+//                 }
+//             }
+
+//             /** -------- 2. Work out the next step (or none) -------- */
+//             if (order.paymentStatus === PAYMENT_STATUS.PENDING) {
+//                 // Still waiting for payment ⇒ always show "Pay now"
+//                 order.labalStatuses = 'Unpaid';
+//                 order.allowedNextStatuses = 'Pay now';
+//             } else if (!order.isReviewed) {
+//                 // order.labalStatuses = 'Unreviewed';
+
+//                 if (order.status == ORDER_STATUS.SHIPPED) {
+//                     order.labalStatuses = 'Shipped';
+
+//                     order.allowedNextStatuses =
+//                         'Confirm Receipt';
+
+//                 } else if (order.status == ORDER_STATUS.DELIVERED) {
+//                     order.labalStatuses = 'Shipped';
+
+//                     order.allowedNextStatuses =
+//                         "Confirm Receipt";
+
+//                 } else if (ORDER_STATUS.CONFIRM_RECEIPT) {
+//                     order.labalStatuses = 'Unreviewed';
+
+//                     order.allowedNextStatuses =
+//                         ALLOWED_BUYER_NEXT_STATUSES[order.status] || '';
+
+//                 }
+
+//                 if (order.status == ORDER_STATUS.DISPUTE) {
+//                     order.labalStatuses = 'Disputed';
+//                     order.allowedNextStatuses = "";
+
+//                 }
+//                 // No payment due and not reviewed yet ⇒ show normal progression
+
+//             } else {
+//                 // Already reviewed ⇒ no further action
+//                 order.allowedNextStatuses = '';
+//             }
+//             if (order.status == ORDER_STATUS.PENDING || order.status == ORDER_STATUS.CONFIRMED) {
+//                 order.labalStatuses = 'Unsent';
+
+
+//             }
+
+
+//             if (order.status == ORDER_STATUS.COMPLETED) {
+//                 order.labalStatuses = 'Completed';
+
+
+//             }
+
+//             if (order.status == ORDER_STATUS.CANCELLED) {
+//                 order.labalStatuses = 'Cancelled';
+
+
+//             }
+
+//         }
+
+//         return apiSuccessRes(HTTP_STATUS.OK, res, "Bought products fetched successfully", {
+//             pageNo,
+//             size: pageSize,
+//             total,
+//             orders
+//         });
+
+//     } catch (err) {
+//         console.error("Get Bought Product Error:", err);
+//         return apiErrorRes(
+//             HTTP_STATUS.INTERNAL_SERVER_ERROR,
+//             res,
+//             err.message || "Failed to get bought products",
+//             err
+//         );
+//     }
+// };
+
+
 const getBoughtProducts = async (req, res) => {
     try {
-        let userId = req.query.userId || req.user.userId
+        let userId = req.query.userId || req.user.userId;
         if (!userId) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "userId is required");
         }
@@ -1344,138 +1498,238 @@ const getBoughtProducts = async (req, res) => {
         const pageNo = Math.max(1, parseInt(req.query.pageNo) || 1);
         const pageSize = Math.min(100, Math.max(1, parseInt(req.query.size) || 10));
         const skip = (pageNo - 1) * pageSize;
+
         const ALLOWED_BUYER_NEXT_STATUSES = {
-            [ORDER_STATUS.SHIPPED]: ORDER_STATUS.CONFIRM_RECEIPT,  // Buyer confirms delivery
-            [ORDER_STATUS.DELIVERED]: ORDER_STATUS.CONFIRM_RECEIPT,  // Buyer confirms delivery
-            [ORDER_STATUS.CONFIRM_RECEIPT]: ORDER_STATUS.REVIEW,  // Buyer confirms delivery
-
+            [ORDER_STATUS.SHIPPED]: ORDER_STATUS.CONFIRM_RECEIPT,
+            [ORDER_STATUS.DELIVERED]: ORDER_STATUS.CONFIRM_RECEIPT,
+            [ORDER_STATUS.CONFIRM_RECEIPT]: ORDER_STATUS.REVIEW,
         };
-        // Query for active orders by user
-        const query = {
-            userId,
+
+        let { paymentStatus, status, keyword, fromDate, toDate, dateFilter } = req.query;
+
+        const matchQuery = {
+            userId: mongoose.Types.ObjectId(userId),
             isDeleted: false,
-            isDisable: false
+            isDisable: false,
         };
 
-        let { paymentStatus, status } = req.query
         if (paymentStatus && paymentStatus !== "") {
-
-            query["paymentStatus"] = paymentStatus || PAYMENT_STATUS.COMPLETED
+            matchQuery.paymentStatus = paymentStatus || PAYMENT_STATUS.COMPLETED;
         }
-        // ORDER_STATUS
+
         if (status && status !== "") {
-            query["status"] = status
-
+            matchQuery.status = status;
         }
 
-        const total = await Order.countDocuments(query);
+        if (fromDate || toDate) {
+            matchQuery.createdAt = {};
+            if (fromDate) matchQuery.createdAt.$gte = new Date(fromDate);
+            if (toDate) matchQuery.createdAt.$lte = new Date(toDate);
+        }
 
+        if (dateFilter) {
+            const now = new Date();
+            const startOfYear = new Date(now.getFullYear(), 0, 1);
+            let startDate;
 
-        const orders = await Order.find(query)
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(pageSize)
-            .populate([{
-                path: 'items.productId',
-                model: 'SellProduct',
-                select: 'title productImages fixedPrice status saleType auctionSettings'
+            switch (dateFilter.toLowerCase()) {
+                case '1month':
+                    startDate = new Date(now);
+                    startDate.setMonth(now.getMonth() - 1);
+                    break;
+                case '3months':
+                    startDate = new Date(now);
+                    startDate.setMonth(now.getMonth() - 3);
+                    break;
+                case '9months':
+                    startDate = new Date(now);
+                    startDate.setMonth(now.getMonth() - 9);
+                    break;
+                case 'thisyear':
+                    startDate = startOfYear;
+                    break;
+                default:
+                    startDate = null;
+            }
+
+            if (startDate) {
+                matchQuery.createdAt = matchQuery.createdAt || {};
+                matchQuery.createdAt.$gte = startDate;
+                matchQuery.createdAt.$lte = now;
+            }
+        }
+
+        // Build aggregation pipeline
+        const pipeline = [
+            { $match: matchQuery },
+
+            // Unwind items to lookup products individually
+            { $unwind: '$items' },
+
+            // Lookup product info for each item
+            {
+                $lookup: {
+                    from: 'sellproducts',
+                    localField: 'items.productId',
+                    foreignField: '_id',
+                    as: 'product',
+                },
+            },
+            { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } },
+
+            // Lookup seller info
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'sellerId',
+                    foreignField: '_id',
+                    as: 'seller',
+                },
+            },
+            { $unwind: { path: '$seller', preserveNullAndEmptyArrays: true } },
+
+            // If keyword filter exists, match on product title or seller userName
+            ...(keyword && keyword.trim() !== ''
+                ? [{
+                    $match: {
+                        $or: [
+                            { 'product.title': { $regex: keyword.trim(), $options: 'i' } },
+                            { 'seller.userName': { $regex: keyword.trim(), $options: 'i' } },
+                        ],
+                    },
+                }]
+                : []),
+
+            // Group back orders with items array
+            {
+                $group: {
+                    _id: '$_id',
+                    userId: { $first: '$userId' },
+                    paymentStatus: { $first: '$paymentStatus' },
+                    status: { $first: '$status' },
+                    isDeleted: { $first: '$isDeleted' },
+                    isDisable: { $first: '$isDisable' },
+                    createdAt: { $first: '$createdAt' },
+                    sellerId: { $first: '$sellerId' },
+                    seller: { $first: '$seller' },
+                    items: {
+                        $push: {
+                            ...'$items',
+                            productId: '$product',
+                        },
+                    },
+                },
+            },
+
+            // Sort, paginate
+            { $sort: { createdAt: -1 } },
+            { $skip: skip },
+            { $limit: pageSize },
+        ];
+
+        // Count pipeline for total count (same match and keyword filters)
+        const countPipeline = [
+            { $match: matchQuery },
+            { $unwind: '$items' },
+            {
+                $lookup: {
+                    from: 'sellproducts',
+                    localField: 'items.productId',
+                    foreignField: '_id',
+                    as: 'product',
+                },
+            },
+            { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'sellerId',
+                    foreignField: '_id',
+                    as: 'seller',
+                },
+            },
+            { $unwind: { path: '$seller', preserveNullAndEmptyArrays: true } },
+            ...(keyword && keyword.trim() !== ''
+                ? [{
+                    $match: {
+                        $or: [
+                            { 'product.title': { $regex: keyword.trim(), $options: 'i' } },
+                            { 'seller.userName': { $regex: keyword.trim(), $options: 'i' } },
+                        ],
+                    },
+                }]
+                : []),
+            {
+                $group: {
+                    _id: '$_id',
+                },
             },
             {
-                path: 'sellerId',
-                select: 'userName profileImage isLive is_Id_verified is_Verified_Seller averageRatting'
-            }])
-            .lean();
+                $count: 'total',
+            },
+        ];
 
+        const countResult = await Order.aggregate(countPipeline);
+        const total = countResult.length > 0 ? countResult[0].total : 0;
 
-        const orderIds = orders.map(o => o._id);
+        const orders = await Order.aggregate(pipeline);
 
-
+        // Map sellerId back like your original API response
         for (const order of orders) {
+            order.sellerId = order.seller;
+            delete order.seller;
 
-
+            order.isReviewed = false;
             for (const item of order.items || []) {
                 const productId = item.productId?._id;
-                order.isReviewed = false;
                 if (order.status === ORDER_STATUS.CONFIRM_RECEIPT && productId) {
                     const reviewExists = await ProductReview.exists({
                         userId,
                         productId,
-
                         isDeleted: false,
-                        isDisable: false
+                        isDisable: false,
                     });
-
                     order.isReviewed = !!reviewExists;
                 }
             }
 
-            /** -------- 2. Work out the next step (or none) -------- */
             if (order.paymentStatus === PAYMENT_STATUS.PENDING) {
-                // Still waiting for payment ⇒ always show "Pay now"
                 order.labalStatuses = 'Unpaid';
                 order.allowedNextStatuses = 'Pay now';
             } else if (!order.isReviewed) {
-                // order.labalStatuses = 'Unreviewed';
-
-                if (order.status == ORDER_STATUS.SHIPPED) {
+                if (order.status == ORDER_STATUS.SHIPPED || order.status == ORDER_STATUS.DELIVERED) {
                     order.labalStatuses = 'Shipped';
-
-                    order.allowedNextStatuses =
-                        'Confirm Receipt';
-
-                } else if (order.status == ORDER_STATUS.DELIVERED) {
-                    order.labalStatuses = 'Shipped';
-
-                    order.allowedNextStatuses =
-                        "Confirm Receipt";
-
-                } else if (ORDER_STATUS.CONFIRM_RECEIPT) {
+                    order.allowedNextStatuses = 'Confirm Receipt';
+                } else if (order.status == ORDER_STATUS.CONFIRM_RECEIPT) {
                     order.labalStatuses = 'Unreviewed';
-
-                    order.allowedNextStatuses =
-                        ALLOWED_BUYER_NEXT_STATUSES[order.status] || '';
-
-                }
-
-                if (order.status == ORDER_STATUS.DISPUTE) {
+                    order.allowedNextStatuses = ALLOWED_BUYER_NEXT_STATUSES[order.status] || '';
+                } else if (order.status == ORDER_STATUS.DISPUTE) {
                     order.labalStatuses = 'Disputed';
                     order.allowedNextStatuses = "";
-
                 }
-                // No payment due and not reviewed yet ⇒ show normal progression
-
             } else {
-                // Already reviewed ⇒ no further action
                 order.allowedNextStatuses = '';
             }
+
             if (order.status == ORDER_STATUS.PENDING || order.status == ORDER_STATUS.CONFIRMED) {
                 order.labalStatuses = 'Unsent';
-
-
             }
-
 
             if (order.status == ORDER_STATUS.COMPLETED) {
                 order.labalStatuses = 'Completed';
-
-
             }
 
             if (order.status == ORDER_STATUS.CANCELLED) {
                 order.labalStatuses = 'Cancelled';
-
-
             }
-
         }
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Bought products fetched successfully", {
             pageNo,
             size: pageSize,
             total,
-            orders
+            orders,
         });
-
     } catch (err) {
         console.error("Get Bought Product Error:", err);
         return apiErrorRes(
@@ -1486,6 +1740,9 @@ const getBoughtProducts = async (req, res) => {
         );
     }
 };
+
+
+
 
 const previewOrder = async (req, res) => {
     try {
@@ -1643,6 +1900,193 @@ const previewOrder = async (req, res) => {
     }
 };
 
+// const getSoldProducts = async (req, res) => {
+//     try {
+//         const sellerId = req.user?.userId;
+//         if (!sellerId) {
+//             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Seller ID is required");
+//         }
+
+//         const pageNo = Math.max(1, parseInt(req.query.pageNo) || 1);
+//         const pageSize = Math.min(100, Math.max(1, parseInt(req.query.size) || 10));
+//         const skip = (pageNo - 1) * pageSize;
+
+//         // Only include confirmed, shipped, delivered orders
+//         // const allowedStatuses = [ORDER_STATUS.CONFIRMED, ORDER_STATUS.SHIPPED, ORDER_STATUS.DELIVERED];
+
+//         // Query orders where sellerId is matched and status is in allowedStatuses
+//         const query = {
+//             sellerId,
+//             isDeleted: false,
+//             isDisable: false,
+//             // paymentStatus: PAYMENT_STATUS.COMPLETED
+//         };
+
+//         let { paymentStatus, status } = req.query
+//         if (paymentStatus && paymentStatus !== "") {
+
+//             query["paymentStatus"] = paymentStatus || PAYMENT_STATUS.COMPLETED
+//         }
+//         // ORDER_STATUS
+//         if (status && status !== "") {
+//             query["status"] = status
+
+//         }
+//         const total = await Order.countDocuments(query);
+
+//         const orders = await Order.find(query)
+//             .sort({ createdAt: -1 })
+//             .skip(skip)
+//             .limit(pageSize)
+//             .populate([
+//                 {
+//                     path: 'items.productId',
+//                     model: 'SellProduct',
+//                     select: 'title productImages fixedPrice saleType auctionSettings userId deliveryType'
+//                 },
+//                 {
+//                     path: 'userId',
+//                     select: 'userName profileImage isLive is_Id_verified is_Verified_Seller'
+//                 }
+//             ])
+//             .lean();
+
+//         const orderIds = orders.map(o => o._id);
+
+
+
+
+
+//         // Filter each order's items to only include the seller's products (defensive step)
+//         const productIds = [];
+//         for (const order of orders) {
+//             for (const item of order.items) {
+//                 if (item?.productId?._id) productIds.push(item.productId._id);
+//             }
+//         }
+
+//         const existingReviews = productIds.length
+//             ? await ProductReview.find({
+//                 userId: sellerId,
+//                 raterRole: "seller",
+//                 productId: { $in: productIds },
+//                 isDeleted: false,
+//                 isDisable: false
+//             }).select("productId").lean()
+//             : [];
+
+//         const reviewedSet = new Set(existingReviews.map((r) => r.productId.toString()));
+
+//         for (const order of orders) {
+
+
+
+//             // Compute allowed next statuses based on current order status and delivery types
+//             const currentStatus = order.status;
+//             const paymentStatuss = order.paymentStatus;
+
+
+//             const allLocalPickup = order.items.every(item => item.productId?.deliveryType === "local pickup");
+
+//             order.items.forEach((item) => {
+//                 order.isReviewed = reviewedSet.has(item.productId?._id?.toString());
+
+//             });
+
+
+
+//             let allowedNextStatuses = '';
+//             let labalStatuses = ''
+
+
+
+
+
+
+//             if (currentStatus === ORDER_STATUS.PENDING) {
+//                 labalStatuses = ''
+//                 allowedNextStatuses = ORDER_STATUS.CONFIRMED;
+//             } else if (currentStatus === ORDER_STATUS.CONFIRMED) {
+//                 if (allLocalPickup) {
+//                     allowedNextStatuses = ORDER_STATUS.DELIVERED;
+//                 } else {
+//                     labalStatuses = "Unsent"
+
+//                     allowedNextStatuses = ORDER_STATUS.SHIPPED;
+//                 }
+//             }
+
+//             if (!order.isReviewed && (order.status == ORDER_STATUS.DELIVERED || order.status == ORDER_STATUS.CONFIRM_RECEIPT)) {
+//                 // if you need multiple actions, turn this into an array.
+//                 labalStatuses = "Unreviewed"
+//                 allowedNextStatuses = "REVIEW";
+//             }
+
+//             if (order.status == ORDER_STATUS.DISPUTE) {
+
+//                 let disputeData = await Dispute.findOne({ orderId: order?._id })
+//                 if (disputeData?.sellerResponse?.responseType) {
+//                     labalStatuses = "Disputed"
+//                     allowedNextStatuses = ""
+//                 } else {
+//                     labalStatuses = "Disputed"
+//                     allowedNextStatuses = "Response"
+//                 }
+//             }
+
+//             if (order.status == ORDER_STATUS.COMPLETED) {
+//                 labalStatuses = "Completed"
+//                 allowedNextStatuses = ""
+
+//             }
+
+//             if (order.status == ORDER_STATUS.CANCELLED) {
+//                 labalStatuses = 'Cancelled';
+//                 allowedNextStatuses = ""
+//             }
+
+
+
+//             // if (order.paymentStatus == PAYMENT_STATUS.PENDING) {
+//             //     labalStatuses = "InProgress"
+//             //     allowedNextStatuses = ""
+//             // }
+//             // else
+//             if (currentStatus === ORDER_STATUS.SHIPPED) {
+//                 labalStatuses = "Shipped";
+//                 allowedNextStatuses = ""
+//             }
+//             // else {
+//             //     allowedNextStatuses = ALLOWED_NEXT_STATUSES[currentStatus] || [];
+//             // }
+
+
+//             if (paymentStatuss === PAYMENT_STATUS.PENDING) {
+//                 labalStatuses = 'Payment Pending',
+//                     allowedNextStatuses = ""
+//             }
+
+//             order.allowedNextStatuses = allowedNextStatuses;
+
+//             order.labalStatuses = labalStatuses;
+
+//         }
+
+//         return apiSuccessRes(HTTP_STATUS.OK, res, "Sold products fetched successfully", {
+//             pageNo,
+//             size: pageSize,
+//             total,
+//             orders
+//         });
+
+//     } catch (err) {
+//         console.error("Get Sold Products Error:", err);
+//         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to get sold products", err);
+//     }
+// };
+
+
+
 const getSoldProducts = async (req, res) => {
     try {
         const sellerId = req.user?.userId;
@@ -1654,30 +2098,68 @@ const getSoldProducts = async (req, res) => {
         const pageSize = Math.min(100, Math.max(1, parseInt(req.query.size) || 10));
         const skip = (pageNo - 1) * pageSize;
 
-        // Only include confirmed, shipped, delivered orders
-        // const allowedStatuses = [ORDER_STATUS.CONFIRMED, ORDER_STATUS.SHIPPED, ORDER_STATUS.DELIVERED];
+        // Extract filters from query
+        let { paymentStatus, status, keyword, fromDate, toDate, dateFilter } = req.query;
 
-        // Query orders where sellerId is matched and status is in allowedStatuses
+        // Build query object
         const query = {
             sellerId,
             isDeleted: false,
             isDisable: false,
-            // paymentStatus: PAYMENT_STATUS.COMPLETED
         };
 
-        let { paymentStatus, status } = req.query
         if (paymentStatus && paymentStatus !== "") {
-
-            query["paymentStatus"] = paymentStatus || PAYMENT_STATUS.COMPLETED
+            query["paymentStatus"] = paymentStatus || PAYMENT_STATUS.COMPLETED;
         }
-        // ORDER_STATUS
+
         if (status && status !== "") {
-            query["status"] = status
-
+            query["status"] = status;
         }
-        const total = await Order.countDocuments(query);
 
-        const orders = await Order.find(query)
+        // Date range filters
+        if (fromDate || toDate) {
+            query.createdAt = {};
+            if (fromDate) query.createdAt.$gte = new Date(fromDate);
+            if (toDate) query.createdAt.$lte = new Date(toDate);
+        }
+
+        // Predefined date filters
+        if (dateFilter) {
+            const now = new Date();
+            const startOfYear = new Date(now.getFullYear(), 0, 1);
+            let startDate;
+
+            switch (dateFilter.toLowerCase()) {
+                case '1month':
+                    startDate = new Date(now);
+                    startDate.setMonth(now.getMonth() - 1);
+                    break;
+                case '3months':
+                    startDate = new Date(now);
+                    startDate.setMonth(now.getMonth() - 3);
+                    break;
+                case '9months':
+                    startDate = new Date(now);
+                    startDate.setMonth(now.getMonth() - 9);
+                    break;
+                case 'thisyear':
+                    startDate = startOfYear;
+                    break;
+                default:
+                    startDate = null;
+            }
+
+            if (startDate) {
+                query.createdAt = query.createdAt || {};
+                query.createdAt.$gte = startDate;
+                query.createdAt.$lte = now;
+            }
+        }
+
+        // Initial total count before keyword filtering
+        let total = await Order.countDocuments(query);
+
+        let orders = await Order.find(query)
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(pageSize)
@@ -1685,22 +2167,34 @@ const getSoldProducts = async (req, res) => {
                 {
                     path: 'items.productId',
                     model: 'SellProduct',
-                    select: 'title productImages fixedPrice saleType auctionSettings userId deliveryType'
+                    select: 'title productImages fixedPrice saleType auctionSettings userId deliveryType',
                 },
                 {
                     path: 'userId',
-                    select: 'userName profileImage isLive is_Id_verified is_Verified_Seller'
-                }
+                    select: 'userName profileImage isLive is_Id_verified is_Verified_Seller',
+                },
             ])
             .lean();
 
-        const orderIds = orders.map(o => o._id);
+        // Keyword filter applied after fetching because it involves populated fields
+        if (keyword && keyword.trim() !== '') {
+            const lowerKeyword = keyword.toLowerCase();
 
+            orders = orders.filter(order => {
+                const productMatch = order.items.some(item =>
+                    item.productId?.title?.toLowerCase().includes(lowerKeyword)
+                );
 
+                const userMatch = order.userId?.userName?.toLowerCase().includes(lowerKeyword);
 
+                return productMatch || userMatch;
+            });
 
+            // Update total count to reflect keyword filtering
+            total = orders.length;
+        }
 
-        // Filter each order's items to only include the seller's products (defensive step)
+        // Gather all product IDs from orders for review check
         const productIds = [];
         for (const order of orders) {
             for (const item of order.items) {
@@ -1708,120 +2202,95 @@ const getSoldProducts = async (req, res) => {
             }
         }
 
+        // Fetch existing reviews by seller on those products
         const existingReviews = productIds.length
             ? await ProductReview.find({
                 userId: sellerId,
                 raterRole: "seller",
                 productId: { $in: productIds },
                 isDeleted: false,
-                isDisable: false
+                isDisable: false,
             }).select("productId").lean()
             : [];
 
-        const reviewedSet = new Set(existingReviews.map((r) => r.productId.toString()));
+        const reviewedSet = new Set(existingReviews.map(r => r.productId.toString()));
 
         for (const order of orders) {
-
-
-
-            // Compute allowed next statuses based on current order status and delivery types
             const currentStatus = order.status;
             const paymentStatuss = order.paymentStatus;
 
-
+            // Check if all items have deliveryType = 'local pickup'
             const allLocalPickup = order.items.every(item => item.productId?.deliveryType === "local pickup");
 
-            order.items.forEach((item) => {
-                order.isReviewed = reviewedSet.has(item.productId?._id?.toString());
-
+            // Determine if order is reviewed based on items
+            order.isReviewed = false;
+            order.items.forEach(item => {
+                if (item.productId?._id && reviewedSet.has(item.productId._id.toString())) {
+                    order.isReviewed = true;
+                }
             });
 
-
-
             let allowedNextStatuses = '';
-            let labalStatuses = ''
-
-
-
-
-
+            let labalStatuses = '';
 
             if (currentStatus === ORDER_STATUS.PENDING) {
-                labalStatuses = ''
+                labalStatuses = '';
                 allowedNextStatuses = ORDER_STATUS.CONFIRMED;
             } else if (currentStatus === ORDER_STATUS.CONFIRMED) {
                 if (allLocalPickup) {
                     allowedNextStatuses = ORDER_STATUS.DELIVERED;
                 } else {
-                    labalStatuses = "Unsent"
-
+                    labalStatuses = "Unsent";
                     allowedNextStatuses = ORDER_STATUS.SHIPPED;
                 }
             }
 
             if (!order.isReviewed && (order.status == ORDER_STATUS.DELIVERED || order.status == ORDER_STATUS.CONFIRM_RECEIPT)) {
-                // if you need multiple actions, turn this into an array.
-                labalStatuses = "Unreviewed"
+                labalStatuses = "Unreviewed";
                 allowedNextStatuses = "REVIEW";
             }
 
             if (order.status == ORDER_STATUS.DISPUTE) {
-
-                let disputeData = await Dispute.findOne({ orderId: order?._id })
+                let disputeData = await Dispute.findOne({ orderId: order._id });
                 if (disputeData?.sellerResponse?.responseType) {
-                    labalStatuses = "Disputed"
-                    allowedNextStatuses = ""
+                    labalStatuses = "Disputed";
+                    allowedNextStatuses = "";
                 } else {
-                    labalStatuses = "Disputed"
-                    allowedNextStatuses = "Response"
+                    labalStatuses = "Disputed";
+                    allowedNextStatuses = "Response";
                 }
             }
 
             if (order.status == ORDER_STATUS.COMPLETED) {
-                labalStatuses = "Completed"
-                allowedNextStatuses = ""
-
+                labalStatuses = "Completed";
+                allowedNextStatuses = "";
             }
 
             if (order.status == ORDER_STATUS.CANCELLED) {
                 labalStatuses = 'Cancelled';
-                allowedNextStatuses = ""
+                allowedNextStatuses = "";
             }
 
-
-
-            // if (order.paymentStatus == PAYMENT_STATUS.PENDING) {
-            //     labalStatuses = "InProgress"
-            //     allowedNextStatuses = ""
-            // }
-            // else
             if (currentStatus === ORDER_STATUS.SHIPPED) {
                 labalStatuses = "Shipped";
-                allowedNextStatuses = ""
+                allowedNextStatuses = "";
             }
-            // else {
-            //     allowedNextStatuses = ALLOWED_NEXT_STATUSES[currentStatus] || [];
-            // }
-
 
             if (paymentStatuss === PAYMENT_STATUS.PENDING) {
-                labalStatuses = 'Payment Pending',
-                    allowedNextStatuses = ""
+                labalStatuses = 'Payment Pending';
+                allowedNextStatuses = "";
             }
 
             order.allowedNextStatuses = allowedNextStatuses;
-
             order.labalStatuses = labalStatuses;
-
         }
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Sold products fetched successfully", {
             pageNo,
             size: pageSize,
             total,
-            orders
+            orders,
         });
-
     } catch (err) {
         console.error("Get Sold Products Error:", err);
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to get sold products", err);
