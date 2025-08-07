@@ -1527,7 +1527,7 @@ const getBoughtProducts = async (req, res) => {
             if (toDate) matchQuery.createdAt.$lte = new Date(toDate);
         }
 
-        if (dateFilter) {
+        if (dateFilter&&dateFilter!=="") {
             const now = new Date();
             const startOfYear = new Date(now.getFullYear(), 0, 1);
             let startDate;
@@ -2124,7 +2124,7 @@ const getSoldProducts = async (req, res) => {
         }
 
         // Predefined date filters
-        if (dateFilter) {
+        if (dateFilter&&dateFilter!=="") {
             const now = new Date();
             const startOfYear = new Date(now.getFullYear(), 0, 1);
             let startDate;
