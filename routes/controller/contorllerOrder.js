@@ -1508,7 +1508,7 @@ const getBoughtProducts = async (req, res) => {
         let { paymentStatus, status, keyWord, fromDate, toDate, dateFilter } = req.query;
 
         const matchQuery = {
-            userId: mongoose.Types.ObjectId(userId),
+            userId: new mongoose.Types.ObjectId(userId),
             isDeleted: false,
             isDisable: false,
         };
