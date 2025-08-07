@@ -1823,7 +1823,7 @@ const getProfile = async (req, res) => {
             dob: user.dob,
             gender: user.gender,
             language: user.language,
-            is_Verified_Seller: is_Verified_Seller,
+            is_Verified_Seller: user.is_Verified_Seller,
             sellerVerificationStatus: sellerVerificationStatus,
             is_Id_verified: user.is_Id_verified,
             is_Preferred_seller: user.is_Preferred_seller,
