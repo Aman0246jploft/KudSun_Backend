@@ -1358,7 +1358,7 @@ const getBoughtProducts = async (req, res) => {
         };
 
         let { paymentStatus, status } = req.query
-        if (paymentStatus) {
+        if (paymentStatus && paymentStatus !== "") {
 
             query["paymentStatus"] = paymentStatus || PAYMENT_STATUS.COMPLETED
         }
@@ -1666,7 +1666,7 @@ const getSoldProducts = async (req, res) => {
         };
 
         let { paymentStatus, status } = req.query
-        if (paymentStatus) {
+        if (paymentStatus && paymentStatus !== "") {
 
             query["paymentStatus"] = paymentStatus || PAYMENT_STATUS.COMPLETED
         }
