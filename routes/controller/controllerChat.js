@@ -17,7 +17,19 @@ async function handleGetChatRooms(socket, data) {
         const skip = (page - 1) * limit;
         const keyWord = data.keyWord?.toLowerCase() || '';
 
-        const chatRoomsQuery = ChatRoom.find({ participants: toObjectId(userId) })
+        // Use the same filtering logic as getVisibleRooms to exclude deleted rooms
+        const chatRoomsQuery = ChatRoom.find({
+            participants: toObjectId(userId),
+            $and: [
+                { isDeleted: false },
+                {
+                    $or: [
+                        { deleteBy: { $size: 0 } },
+                        { 'deleteBy.userId': { $ne: toObjectId(userId) } }
+                    ]
+                }
+            ]
+        })
             .populate({
                 path: 'lastMessage',
                 select: 'text createdAt sender content messageType',
@@ -53,7 +65,16 @@ async function handleGetChatRooms(socket, data) {
                 ChatMessage.countDocuments({
                     chatRoom: room._id,
                     seenBy: { $ne: toObjectId(userId) },
-                    sender: { $ne: toObjectId(userId) } // exclude own messages
+                    sender: { $ne: toObjectId(userId) }, // exclude own messages
+                    $and: [
+                        { isDeleted: false },
+                        {
+                            $or: [
+                                { deleteBy: { $size: 0 } },
+                                { 'deleteBy.userId': { $ne: toObjectId(userId) } }
+                            ]
+                        }
+                    ]
                 })
             )
         );
@@ -96,15 +117,29 @@ async function handleGetMessageList(socket, data) {
         const limit = Math.min(100, parseInt(size)); // limit max size
         const skip = (page - 1) * limit;
 
-        // Fetch messages sorted by newest first
-        let messages = await ChatMessage.find({ chatRoom: chatRoomId })
+        // Use getVisibleMessages to exclude deleted messages for this user
+        let messages = await ChatMessage.getVisibleMessages(
+            { chatRoom: toObjectId(chatRoomId) },
+            toObjectId(userId)
+        )
             .populate('sender', 'userName profileImage')
             .sort({ createdAt: -1 }) // newest first
             .skip(skip)
             .limit(limit)
             .lean();
 
-        const totalMessages = await ChatMessage.countDocuments({ chatRoom: chatRoomId });
+        const totalMessages = await ChatMessage.countDocuments({
+            chatRoom: toObjectId(chatRoomId),
+            $and: [
+                { isDeleted: false },
+                {
+                    $or: [
+                        { deleteBy: { $size: 0 } },
+                        { 'deleteBy.userId': { $ne: toObjectId(userId) } }
+                    ]
+                }
+            ]
+        });
 
         // Optional: Reverse if client expects ascending order
         messages = messages.reverse();

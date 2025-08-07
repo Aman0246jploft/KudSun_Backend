@@ -555,7 +555,16 @@ async function setupSocket(server) {
                 if (!targetRoomId && otherUserId) {
                     const room = await ChatRoom.findOne({
                         isGroup: false,
-                        participants: { $all: [toObjectId(userId), toObjectId(otherUserId)], $size: 2 }
+                        participants: { $all: [toObjectId(userId), toObjectId(otherUserId)], $size: 2 },
+                        $and: [
+                            { isDeleted: false },
+                            {
+                                $or: [
+                                    { deleteBy: { $size: 0 } },
+                                    { 'deleteBy.userId': { $ne: toObjectId(userId) } }
+                                ]
+                            }
+                        ]
                     });
 
                     if (!room) {
@@ -637,9 +646,18 @@ async function setupSocket(server) {
                 const userId = socket.user?.userId;
                 if (!userId) return;
 
-                // Get all user's chat rooms
+                // Get all user's chat rooms (excluding deleted rooms)
                 const userRooms = await ChatRoom.find({
-                    participants: toObjectId(userId)
+                    participants: toObjectId(userId),
+                    $and: [
+                        { isDeleted: false },
+                        {
+                            $or: [
+                                { deleteBy: { $size: 0 } },
+                                { 'deleteBy.userId': { $ne: toObjectId(userId) } }
+                            ]
+                        }
+                    ]
                 }).select('_id');
 
                 const roomIds = userRooms.map(room => room._id);
@@ -794,7 +812,16 @@ async function setupSocket(server) {
                 if (!targetRoomId && otherUserId) {
                     const room = await ChatRoom.findOne({
                         isGroup: false,
-                        participants: { $all: [toObjectId(userId), toObjectId(otherUserId)], $size: 2 }
+                        participants: { $all: [toObjectId(userId), toObjectId(otherUserId)], $size: 2 },
+                        $and: [
+                            { isDeleted: false },
+                            {
+                                $or: [
+                                    { deleteBy: { $size: 0 } },
+                                    { 'deleteBy.userId': { $ne: toObjectId(userId) } }
+                                ]
+                            }
+                        ]
                     });
 
                     if (!room) {
@@ -856,62 +883,66 @@ async function setupSocket(server) {
                 const errors = [];
                 const results = [];
 
-                // Performance optimization: Batch validation queries
-                const validationPromises = [];
-
                 // Process roomIds if provided
                 if (roomIds && roomIds.length > 0) {
-                    // Batch validation for roomIds
-                    const roomValidationPromises = roomIds.map(async (roomId) => {
+                    for (const roomId of roomIds) {
                         try {
+                            // Verify room exists and user is a participant (excluding deleted rooms)
                             const room = await ChatRoom.findOne({
                                 _id: toObjectId(roomId),
-                                participants: toObjectId(userId)
+                                participants: toObjectId(userId),
+                                $and: [
+                                    { isDeleted: false },
+                                    {
+                                        $or: [
+                                            { deleteBy: { $size: 0 } },
+                                            { 'deleteBy.userId': { $ne: toObjectId(userId) } }
+                                        ]
+                                    }
+                                ]
                             });
-                            return { roomId, room, error: null };
+
+                            if (!room) {
+                                errors.push({ roomId, error: 'Room not found or access denied' });
+                                continue;
+                            }
+
+                            targetRoomIds.push(roomId);
                         } catch (error) {
-                            return { roomId, room: null, error: 'Invalid room ID' };
+                            errors.push({ roomId, error: 'Invalid room ID' });
                         }
-                    });
-                    validationPromises.push(...roomValidationPromises);
+                    }
                 }
 
                 // Process otherUserIds if provided
                 if (otherUserIds && otherUserIds.length > 0) {
-                    // Batch validation for otherUserIds
-                    const userValidationPromises = otherUserIds.map(async (otherUserId) => {
+                    for (const otherUserId of otherUserIds) {
                         try {
                             const room = await ChatRoom.findOne({
                                 isGroup: false,
-                                participants: { $all: [toObjectId(userId), toObjectId(otherUserId)], $size: 2 }
+                                participants: { $all: [toObjectId(userId), toObjectId(otherUserId)], $size: 2 },
+                                $and: [
+                                    { isDeleted: false },
+                                    {
+                                        $or: [
+                                            { deleteBy: { $size: 0 } },
+                                            { 'deleteBy.userId': { $ne: toObjectId(userId) } }
+                                        ]
+                                    }
+                                ]
                             });
-                            return { otherUserId, room, error: null };
+
+                            if (!room) {
+                                errors.push({ otherUserId, error: 'Chat room not found' });
+                                continue;
+                            }
+
+                            targetRoomIds.push(room._id.toString());
                         } catch (error) {
-                            return { otherUserId, room: null, error: 'Invalid user ID' };
+                            errors.push({ otherUserId, error: 'Invalid user ID' });
                         }
-                    });
-                    validationPromises.push(...userValidationPromises);
-                }
-
-                // Wait for all validations to complete
-                const validationResults = await Promise.all(validationPromises);
-
-                // Process validation results
-                validationResults.forEach(result => {
-                    if (result.error) {
-                        errors.push({ 
-                            [result.roomId ? 'roomId' : 'otherUserId']: result.roomId || result.otherUserId, 
-                            error: result.error 
-                        });
-                    } else if (result.room) {
-                        targetRoomIds.push(result.room._id.toString());
-                    } else {
-                        errors.push({ 
-                            [result.roomId ? 'roomId' : 'otherUserId']: result.roomId || result.otherUserId, 
-                            error: 'Room not found or access denied' 
-                        });
                     }
-                });
+                }
 
                 if (targetRoomIds.length === 0) {
                     return socket.emit('error', {
@@ -920,7 +951,7 @@ async function setupSocket(server) {
                     });
                 }
 
-                // Performance optimization: Use bulk operations for better performance
+                // Use bulk operations for better performance
                 try {
                     // Bulk update rooms - delete for user
                     const roomBulkOps = targetRoomIds.map(roomId => ({
@@ -962,7 +993,7 @@ async function setupSocket(server) {
                         console.log(`✅ Bulk deleted ${messageBulkResult.modifiedCount} messages for user ${userId}`);
                     }
 
-                    // Remove user from all room sockets (optimized)
+                    // Remove user from all room sockets
                     targetRoomIds.forEach(roomId => {
                         socket.leave(roomId);
                     });
@@ -976,10 +1007,10 @@ async function setupSocket(server) {
 
                 } catch (bulkError) {
                     console.error('❌ Bulk operation failed:', bulkError);
-                    
+
                     // Fallback to individual operations
                     console.log('🔄 Falling back to individual operations...');
-                    
+
                     const deletePromises = targetRoomIds.map(async (roomId) => {
                         try {
                             // Delete room for user
@@ -1022,7 +1053,7 @@ async function setupSocket(server) {
                     await Promise.all(deletePromises);
                 }
 
-                // Update total unread count (optimized - only once after all deletions)
+                // Update total unread count
                 await emitTotalUnreadCount(io, userId);
 
                 socket.emit('multipleRoomsDeleted', {
