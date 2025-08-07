@@ -1750,6 +1750,8 @@ const loginAsGuest = async (req, res) => {
 const getProfile = async (req, res) => {
     try {
         const userId = req.user.userId;
+        const blockedUsers = await BlockUser.find({ blockBy: userId }).select("userId").lean();
+        const blockedUserIds = blockedUsers.map(b => b.userId);
 
         const user = await User.findById(userId).populate([{ path: "provinceId", select: "value" }, { path: "districtId", select: "value" }]).lean();
         if (!user) {
@@ -1776,8 +1778,8 @@ const getProfile = async (req, res) => {
             ThreadDraft.countDocuments({ userId, isDeleted: false }),
             SellProductDraft.countDocuments({ userId, isDeleted: false }),
 
-            ThreadLike.countDocuments({ likeBy: toObjectId(userId), isDeleted: false }),
-            ProductLike.countDocuments({ likeBy: toObjectId(userId), isDeleted: false }),
+            ThreadLike.countDocuments({ likeBy: toObjectId(userId), isDeleted: false, ...(blockedUserIds.length ? { threadId: { $nin: blockedUserIds } } : {}) }),
+            ProductLike.countDocuments({ likeBy: toObjectId(userId), isDeleted: false, ...(blockedUserIds.length ? { productId: { $nin: blockedUserIds } } : {}) }),
             SellerVerification.findOne({
                 userId: toObjectId(userId)
             }).sort({ createdAt: -1 })
