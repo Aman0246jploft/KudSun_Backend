@@ -2881,7 +2881,7 @@ const updateOrderStatusByBuyer = async (req, res) => {
         if (newStatus === ORDER_STATUS.CONFIRM_RECEIPT) {
             const reviewPendingMessage = new ChatMessage({
                 chatRoom: room._id,
-                messageType: 'REVIEW_STATUS',
+                messageType: 'TEXT',
                 systemMeta: {
                     statusType: 'REVIEW',
                     status: 'PENDING',
