@@ -1358,7 +1358,7 @@ const updateOrderById = async (req, res) => {
 //         };
 
 //         let { paymentStatus, status, } = req.query
-//         if (paymentStatus && paymentStatus !== "") {
+//         if (paymentStatus ) {
 
 //             query["paymentStatus"] = paymentStatus || PAYMENT_STATUS.COMPLETED
 //         }
@@ -1513,7 +1513,7 @@ const getBoughtProducts = async (req, res) => {
             isDisable: false,
         };
 
-        if (paymentStatus && paymentStatus !== "") {
+        if (paymentStatus ) {
             matchQuery.paymentStatus = paymentStatus || PAYMENT_STATUS.COMPLETED;
         }
 
@@ -1926,7 +1926,7 @@ const previewOrder = async (req, res) => {
 //         };
 
 //         let { paymentStatus, status } = req.query
-//         if (paymentStatus && paymentStatus !== "") {
+//         if (paymentStatus ) {
 
 //             query["paymentStatus"] = paymentStatus || PAYMENT_STATUS.COMPLETED
 //         }
@@ -2111,7 +2111,7 @@ const getSoldProducts = async (req, res) => {
             isDisable: false,
         };
 
-        if (paymentStatus && paymentStatus !== "") {
+        if (paymentStatus ) {
             query["paymentStatus"] = paymentStatus || PAYMENT_STATUS.COMPLETED;
         }
 
