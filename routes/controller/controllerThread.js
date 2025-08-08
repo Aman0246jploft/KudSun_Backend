@@ -15,6 +15,35 @@ const { indexThread, deleteThreads } = require('../services/serviceAlgolia');
 // Import notification service
 const { saveNotification } = require('../services/serviceNotification');
 
+
+
+ const getAssociatedProductIdsFromThread = async (threadId) => {
+    // Step 1: Get product IDs from the thread itself
+    const thread = await Thread.findById(threadId).select('associatedProducts').lean();
+    const threadProductIds = thread?.associatedProducts?.map(id => id.toString()) || [];
+
+    // Step 2: Get product IDs from thread comments
+    const commentAgg = await ThreadComment.aggregate([
+        { $match: { thread: toObjectId(threadId) } },
+        { $project: { associatedProducts: 1 } },
+        { $unwind: "$associatedProducts" },
+        { $group: { _id: null, productIds: { $addToSet: "$associatedProducts" } } }
+    ]);
+    const commentProductIds = commentAgg[0]?.productIds?.map(id => id.toString()) || [];
+
+    // Step 3: Combine and deduplicate
+    const combinedIds = [...new Set([...threadProductIds, ...commentProductIds])];
+
+    if (combinedIds.length === 0) return [];
+
+    // Step 4: Filter to only existing product IDs in SellProduct
+    const existingProducts = await SellProduct.find({ _id: { $in: combinedIds.map(toObjectId) } }).select('_id').lean();
+    const validIds = existingProducts.map(p => p._id);
+
+    return validIds;
+};
+
+
 // Add a new thread // Draft also
 const addThread = async (req, res) => {
     try {
@@ -723,16 +752,20 @@ const associatedProductByThreadId = async (req, res) => {
         }
 
         // Step 1: Get associated product IDs from thread comments
-        const comments = await ThreadComment.find({ thread: toObjectId(threadId) })
-            .select('associatedProducts')
-            .lean();
+        // const comments = await ThreadComment.find({ thread: toObjectId(threadId) })
+        //     .select('associatedProducts')
+        //     .lean();
 
-        const productIds = comments.flatMap(c => c.associatedProducts).filter(Boolean);
-        const uniqueProductIds = [...new Set(productIds.map(id => id.toString()))];
+        // const productIds = comments.flatMap(c => c.associatedProducts).filter(Boolean);
+        // const uniqueProductIds = [...new Set(productIds.map(id => id.toString()))];
+        const uniqueProductIds = await getAssociatedProductIdsFromThread(threadId);
+
 
         // Step 2: Build filter for products
         // Step 2: Build filter for products
-        const filter = { _id: { $in: uniqueProductIds.map(toObjectId) } };
+        // const filter = { _id: { $in: uniqueProductIds.map(toObjectId) } };
+        const filter = { _id: { $in: uniqueProductIds } };
+
 
         // Step 2.1: Apply direct product filters
         if (categoryId && categoryId.length === 24) filter.categoryId = toObjectId(categoryId);
@@ -1988,7 +2021,9 @@ const getThreadById = async (req, res) => {
 
         let commentProductIds = allAssociatedProductIdsAgg[0]?.productIds?.map(id => id.toString()) || [];
 
-        const allProductIds = Array.from(new Set([...threadProductIds, ...commentProductIds])).map(id => toObjectId(id));
+        const allProductIds = await getAssociatedProductIdsFromThread(threadId);
+        console.log(allProductIds)
+
 
         // 3. Fetch product details with user info
         const associatedProductsFull = await SellProduct.aggregate([
@@ -2263,7 +2298,7 @@ const getThreadById = async (req, res) => {
             totalFollowers: followerCount || 0,
             totalComments: commentCount || 0,
             totalLikes: likeCount || 0,
-            totalAssociatedProducts: productCount[0]?.count || 0,
+            totalAssociatedProducts: allProductIds.length,
             isLiked: !!likedByUser,
             isFollow: !!isFollow,
             associatedProducts: associatedProductsFull,
@@ -2836,3 +2871,4 @@ router.get('/getCommentByParentId/:parentId', perApiLimiter(), upload.none(), ge
 
 
 module.exports = router;
+

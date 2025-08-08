@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const upload = multer();
 const router = express.Router();
-const { User, Follow, ThreadLike, ProductLike, SellProduct, Thread, Order, SellProductDraft, ThreadDraft, TempUser, Bid, UserLocation, ProductReview, BlockUser, SellerVerification } = require('../../db');
+const { User, Follow, ThreadLike, ProductLike, SellProduct, Thread, Order, SellProductDraft, ThreadDraft, TempUser, Bid, UserLocation, ProductReview, BlockUser, SellerVerification, ThreadComment } = require('../../db');
 const { getDocumentByQuery } = require('../services/serviceGlobalCURD');
 const CONSTANTS_MSG = require('../../utils/constantsMessage');
 const CONSTANTS = require('../../utils/constants')
@@ -27,6 +27,33 @@ const { OAuth2Client } = require('google-auth-library');
 const { saveNotification } = require('../services/serviceNotification');
 const { sendOtpSMS } = require('../services/twilioService');
 const { sendEmail } = require('../../utils/emailService');
+
+
+ const getAssociatedProductIdsFromThread = async (threadId) => {
+    // Step 1: Get product IDs from the thread itself
+    const thread = await Thread.findById(threadId).select('associatedProducts').lean();
+    const threadProductIds = thread?.associatedProducts?.map(id => id.toString()) || [];
+
+    // Step 2: Get product IDs from thread comments
+    const commentAgg = await ThreadComment.aggregate([
+        { $match: { thread: toObjectId(threadId) } },
+        { $project: { associatedProducts: 1 } },
+        { $unwind: "$associatedProducts" },
+        { $group: { _id: null, productIds: { $addToSet: "$associatedProducts" } } }
+    ]);
+    const commentProductIds = commentAgg[0]?.productIds?.map(id => id.toString()) || [];
+
+    // Step 3: Combine and deduplicate
+    const combinedIds = [...new Set([...threadProductIds, ...commentProductIds])];
+
+    if (combinedIds.length === 0) return [];
+
+    // Step 4: Filter to only existing product IDs in SellProduct
+    const existingProducts = await SellProduct.find({ _id: { $in: combinedIds.map(toObjectId) } }).select('_id').lean();
+    const validIds = existingProducts.map(p => p._id);
+
+    return validIds;
+};
 
 const uploadfile = async (req, res) => {
     try {
@@ -1474,6 +1501,13 @@ const getLikedThreads = async (req, res) => {
         pipeline.push({ $skip: skip });
         pipeline.push({ $limit: limit });
         const threads = await Thread.aggregate(pipeline);
+
+        // Fix associatedProductCount to reflect actual existing products
+        await Promise.all(threads.map(async (thread, i) => {
+            const validProductIds = await getAssociatedProductIdsFromThread(thread._id);
+            threads[i].associatedProductCount = validProductIds.length;
+        }));
+
         let obj = {
             threads,
             total: totalCount,
