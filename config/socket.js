@@ -70,15 +70,71 @@ async function setupSocket(server) {
         socket.on('sendMessage', async ({ roomId, type, content, mediaUrl, fileName, systemMeta, ...data }) => {
             try {
                 let isNewRoom = false;
+                let roomRestored = false;
+                
                 if (!roomId) {
                     if (!data.otherUserId) {
                         return socket.emit('error', { message: 'roomId or otherUserId required' });
                     }
                     // Use your service to find or create 1-on-1 room
-                    const { room, isNew } = await findOrCreateOneOnOneRoom(userId, data.otherUserId);
+                    const result = await findOrCreateOneOnOneRoom(userId, data.otherUserId);
+                    if (result.statusCode === 500) {
+                        return socket.emit('error', { message: result.message });
+                    }
+                    const { room, isNew } = result;
                     roomId = room._id?.toString();
                     isNewRoom = isNew || false;
+                    
+                    // Check if room was restored (existed but was deleted)
+                    if (!isNew) {
+                        // Room existed, check if it was just restored
+                        const roomCheck = await ChatRoom.findById(roomId);
+                        const wasDeletedForSender = roomCheck.deleteBy.length > 0;
+                        if (wasDeletedForSender) {
+                            roomRestored = true;
+                            console.log(`✅ Room ${roomId} was restored for conversation between ${userId} and ${data.otherUserId}`);
+                        }
+                    }
+                    
                     socket.join(roomId); // join the socket room dynamically
+                } else {
+                    // Room ID provided, ensure user can access it
+                    const room = await ChatRoom.findById(roomId);
+                    if (!room || room.isDeleted) {
+                        return socket.emit('error', { message: 'Room not found or deleted' });
+                    }
+                    
+                    // Check if room is deleted for current user and restore if needed
+                    const isDeletedForUser = room.deleteBy.some(del => del.userId.toString() === userId);
+                    if (isDeletedForUser) {
+                        await ChatRoom.findByIdAndUpdate(roomId, {
+                            $pull: {
+                                deleteBy: { userId: toObjectId(userId) }
+                            }
+                        });
+                        
+                        // Restore messages that were deleted due to room deletion
+                        await ChatMessage.updateMany(
+                            {
+                                chatRoom: toObjectId(roomId),
+                                'deleteBy.deleteType': 'ROOM_DELETE',
+                                'deleteBy.userId': toObjectId(userId)
+                            },
+                            {
+                                $pull: {
+                                    deleteBy: {
+                                        deleteType: 'ROOM_DELETE',
+                                        userId: toObjectId(userId)
+                                    }
+                                }
+                            }
+                        );
+                        
+                        roomRestored = true;
+                        console.log(`✅ Room ${roomId} was restored for user ${userId}`);
+                    }
+                    
+                    socket.join(roomId);
                 }
 
 
@@ -282,54 +338,71 @@ async function setupSocket(server) {
                     participants: updatedRoom.participants.filter(p => p._id?.toString() !== data.otherUserId?.toString())
                 };
 
-                if (isNewRoom) {
-                    io.to(`user_${userId}`).emit('newChatRoom', {
+                // Calculate unread counts for both users
+                const senderUnreadCount = await ChatMessage.countDocuments({
+                    chatRoom: roomId,
+                    seenBy: { $ne: toObjectId(userId) },
+                    sender: { $ne: toObjectId(userId) },
+                    $and: [
+                        { isDeleted: false },
+                        {
+                            $or: [
+                                { deleteBy: { $size: 0 } },
+                                { 'deleteBy.userId': { $ne: toObjectId(userId) } }
+                            ]
+                        }
+                    ]
+                });
+
+                const receiverUnreadCount = await ChatMessage.countDocuments({
+                    chatRoom: roomId,
+                    seenBy: { $ne: toObjectId(data.otherUserId) },
+                    sender: { $ne: toObjectId(data.otherUserId) },
+                    $and: [
+                        { isDeleted: false },
+                        {
+                            $or: [
+                                { deleteBy: { $size: 0 } },
+                                { 'deleteBy.userId': { $ne: toObjectId(data.otherUserId) } }
+                            ]
+                        }
+                    ]
+                });
+
+                if (isNewRoom || roomRestored) {
+                    // Emit as new room for both users if it's truly new or was restored
+                    const eventType = isNewRoom ? 'newChatRoom' : 'roomRestored';
+                    
+                    io.to(`user_${userId}`).emit(eventType, {
                         ...roomForSender,
-                        unreadCount: 0 // sender has no unread
+                        unreadCount: senderUnreadCount,
+                        isRestored: roomRestored
                     });
 
-                    const unreadCount = await ChatMessage.countDocuments({
-                        chatRoom: roomId,
-                        seenBy: { $nin: [toObjectId(data.otherUserId)] },
-                        sender: { $ne: toObjectId(data.otherUserId) },
-                        $and: [
-                            { isDeleted: false },
-                            {
-                                $or: [
-                                    { deleteBy: { $size: 0 } },
-                                    { 'deleteBy.userId': { $ne: toObjectId(data.otherUserId) } }
-                                ]
-                            }
-                        ]
-                    });
-                    io.to(`user_${data.otherUserId}`).emit('newChatRoom', {
+                    io.to(`user_${data.otherUserId}`).emit(eventType, {
                         ...roomForReceiver,
-                        unreadCount
+                        unreadCount: receiverUnreadCount,
+                        isRestored: roomRestored
                     });
                 } else {
+                    // Regular room update
                     io.to(`user_${userId}`).emit('roomUpdated', {
                         ...roomForSender,
-                        unreadCount: 0
-                    });
-                    const unreadCount = await ChatMessage.countDocuments({
-                        chatRoom: roomId,
-                        seenBy: { $ne: toObjectId(data.otherUserId) },
-                        sender: { $ne: toObjectId(data.otherUserId) },
-                        $and: [
-                            { isDeleted: false },
-                            {
-                                $or: [
-                                    { deleteBy: { $size: 0 } },
-                                    { 'deleteBy.userId': { $ne: toObjectId(data.otherUserId) } }
-                                ]
-                            }
-                        ]
+                        unreadCount: senderUnreadCount
                     });
 
                     io.to(`user_${data.otherUserId}`).emit('roomUpdated', {
                         ...roomForReceiver,
-                        unreadCount
+                        unreadCount: receiverUnreadCount
                     });
+                }
+
+                // Emit updated total unread counts for both users when room is restored
+                if (roomRestored) {
+                    await emitTotalUnreadCount(io, userId);
+                    if (data.otherUserId) {
+                        await emitTotalUnreadCount(io, data.otherUserId);
+                    }
                 }
             } catch (error) {
                 console.error('Error in sendMessage:', error);
@@ -875,7 +948,7 @@ async function setupSocket(server) {
 
         // Delete multiple chat rooms/conversations for the current user
         socket.on('deleteMultipleRooms', async ({ roomIds = [], otherUserIds = [], clearHistory = true }) => {
-            console.log("5555555", roomIds)
+            console.log("🗑️ deleteMultipleRooms called with:", { roomIds, otherUserIds, clearHistory });
             try {
                 const userId = socket.user?.userId;
                 if (!userId) return;
@@ -888,23 +961,22 @@ async function setupSocket(server) {
                 if (roomIds && roomIds.length > 0) {
                     for (const roomId of roomIds) {
                         try {
-                            // Verify room exists and user is a participant (excluding deleted rooms)
+                            // Verify room exists and user is a participant (check both active and deleted rooms)
                             const room = await ChatRoom.findOne({
                                 _id: toObjectId(roomId),
                                 participants: toObjectId(userId),
-                                $and: [
-                                    { isDeleted: false },
-                                    {
-                                        $or: [
-                                            { deleteBy: { $size: 0 } },
-                                            { 'deleteBy.userId': { $ne: toObjectId(userId) } }
-                                        ]
-                                    }
-                                ]
+                                isDeleted: false  // Only check if room is not permanently deleted
                             });
 
                             if (!room) {
                                 errors.push({ roomId, error: 'Room not found or access denied' });
+                                continue;
+                            }
+
+                            // Check if room is already deleted for this user
+                            const isAlreadyDeleted = room.deleteBy.some(del => del.userId.toString() === userId);
+                            if (isAlreadyDeleted) {
+                                errors.push({ roomId, error: 'Room already deleted for this user' });
                                 continue;
                             }
 
@@ -922,19 +994,18 @@ async function setupSocket(server) {
                             const room = await ChatRoom.findOne({
                                 isGroup: false,
                                 participants: { $all: [toObjectId(userId), toObjectId(otherUserId)], $size: 2 },
-                                $and: [
-                                    { isDeleted: false },
-                                    {
-                                        $or: [
-                                            { deleteBy: { $size: 0 } },
-                                            { 'deleteBy.userId': { $ne: toObjectId(userId) } }
-                                        ]
-                                    }
-                                ]
+                                isDeleted: false  // Only check if room is not permanently deleted
                             });
 
                             if (!room) {
                                 errors.push({ otherUserId, error: 'Chat room not found' });
+                                continue;
+                            }
+
+                            // Check if room is already deleted for this user
+                            const isAlreadyDeleted = room.deleteBy.some(del => del.userId.toString() === userId);
+                            if (isAlreadyDeleted) {
+                                errors.push({ otherUserId, error: 'Room already deleted for this user' });
                                 continue;
                             }
 
@@ -1189,6 +1260,54 @@ async function setupSocket(server) {
             return { chatUnreadCount, notificationUnreadCount, totalUnreadCount };
         } catch (error) {
             console.error('Error emitting total unread count:', error);
+        }
+    }
+
+    // Helper function to emit room updates for all participants
+    async function emitRoomUpdateToParticipants(io, roomId, eventType = 'roomUpdated') {
+        try {
+            const room = await ChatRoom.findById(roomId)
+                .populate('participants', '_id userName profileImage')
+                .populate('lastMessage');
+
+            if (!room) return;
+
+            const roomObj = room.toObject();
+
+            // Emit updates to all participants
+            await Promise.all(room.participants.map(async (participant) => {
+                const participantId = participant._id?.toString();
+
+                // Calculate unread count for this participant
+                const unreadCount = await ChatMessage.countDocuments({
+                    chatRoom: roomId,
+                    seenBy: { $ne: toObjectId(participantId) },
+                    sender: { $ne: toObjectId(participantId) },
+                    $and: [
+                        { isDeleted: false },
+                        {
+                            $or: [
+                                { deleteBy: { $size: 0 } },
+                                { 'deleteBy.userId': { $ne: toObjectId(participantId) } }
+                            ]
+                        }
+                    ]
+                });
+
+                // Filter out the participant from their own participant list
+                const roomForParticipant = {
+                    ...roomObj,
+                    participants: roomObj.participants.filter(p => p._id?.toString() !== participantId),
+                    unreadCount
+                };
+
+                io.to(`user_${participantId}`).emit(eventType, roomForParticipant);
+
+                // Also emit updated total unread count
+                await emitTotalUnreadCount(io, participantId);
+            }));
+        } catch (error) {
+            console.error('Error emitting room updates to participants:', error);
         }
     }
 
