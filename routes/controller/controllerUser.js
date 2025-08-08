@@ -1952,7 +1952,8 @@ const getProfile = async (req, res) => {
             Order.countDocuments({
                 sellerId: userId,
                 isDeleted: false,
-                paymentStatus: PAYMENT_STATUS.COMPLETED
+                paymentStatus: { $ne: PAYMENT_STATUS.COMPLETED }
+
             }),
             ThreadDraft.countDocuments({ userId, isDeleted: false }),
             SellProductDraft.countDocuments({ userId, isDeleted: false }),
