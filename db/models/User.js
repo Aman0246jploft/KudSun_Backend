@@ -86,7 +86,8 @@ const UserSchema = new Schema({
         type: String,
     },
     language: {
-        type: String
+        type: String,
+        default:"english"
     },
     isDisable: {
         type: Boolean,

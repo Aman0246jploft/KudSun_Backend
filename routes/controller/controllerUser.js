@@ -759,7 +759,7 @@ const resendLoginOtp = async (req, res) => {
 
 const googleSignIn = async (req, res) => {
     try {
-        const { accessToken, fcmToken } = req.body;
+        const { accessToken, fcmToken, language } = req.body;
         console.log("Received request for Google Sign-In");
         console.log("accessToken:", accessToken ? "Received" : "Missing");
         console.log("fcmToken:", fcmToken || "Not Provided");
@@ -815,6 +815,9 @@ const googleSignIn = async (req, res) => {
                 console.log("📸 Updating user profile image from Google");
                 user.profileImage = picture;
             }
+            if (language && language !== "") {
+                user.language = language
+            }
 
             await user.save();
             console.log("✅ Existing user updated and saved");
@@ -824,13 +827,17 @@ const googleSignIn = async (req, res) => {
             const userName = await generateUniqueUsername(name || email.split('@')[0]);
             console.log("🆕 Generated unique username:", userName);
 
-            user = new User({
+            let obj = {
                 email: email.toLowerCase(),
                 userName,
                 profileImage: picture || null,
                 fcmToken: fcmToken || null,
                 step: 5,
-            });
+            }
+            if (language && language !== "") {
+                obj.language = language
+            }
+            user = new User(obj);
 
             await user.save();
             console.log("✅ New user created:", user._id.toString());
