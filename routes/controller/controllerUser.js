@@ -2157,6 +2157,10 @@ const requestPhoneNumberUpdateOtp = async (req, res) => {
 
         const otp = process.env.NODE_ENV !== 'production' ? '123456' : generateOTP();
 
+        if (process.env.NODE_ENV == 'production') {
+            await sendOtpSMS(phoneNumber, otp);
+        }
+
         await setKeyWithTime(`verify-update:${userId}:${phoneNumber}`, otp, 5);
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "OTP sent successfully");
@@ -2190,7 +2194,8 @@ const verifyPhoneNumberUpdateOtp = async (req, res) => {
         // Update phone number
         await User.findByIdAndUpdate(
             userId,
-            { phoneNumber: phoneNumber.toLowerCase() }
+            { phoneNumber: phoneNumber.toLowerCase(), verifyPhone: true },
+
         );
 
         const updatedUser = await User.findById(userId)
@@ -2201,6 +2206,8 @@ const verifyPhoneNumberUpdateOtp = async (req, res) => {
             .select("-password");
 
         // Clean up OTP
+
+
         await removeKey(redisKey);
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Phone number updated successfully", updatedUser);
@@ -2248,6 +2255,12 @@ const resendPhoneNumberUpdateOtp = async (req, res) => {
         // Generate and resend OTP
         const newOtp = process.env.NODE_ENV !== 'production' ? '123456' : generateOTP();
 
+        if (process.env.NODE_ENV == 'production') {
+            await sendOtpSMS(formattedPhone, newOtp);
+        }
+
+
+
         await setKeyWithTime(redisKey, newOtp, 5); // 5-minute TTL
 
         return apiSuccessRes(
@@ -2262,6 +2275,131 @@ const resendPhoneNumberUpdateOtp = async (req, res) => {
             "Failed to resend OTP",
             error.message
         );
+    }
+};
+
+const requestEmailUpdateOtp = async (req, res) => {
+    try {
+        const { email } = req.body;
+        const userId = req.user.userId;
+
+        if (!email) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Email is required");
+        }
+
+        const existing = await getDocumentByQuery(User, { email: email.toLowerCase() });
+        if (existing.statusCode === CONSTANTS.SUCCESS && existing.data._id.toString() !== userId) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Email already in use");
+        }
+
+        const otp = process.env.NODE_ENV !== 'production' ? '123456' : generateOTP();
+
+        if (process.env.NODE_ENV === 'production') {
+            await sendEmail({
+                to: email,
+                subject: "Your Kadsun Email OTP",
+                text: `Your OTP code is: ${otp}`,
+                html: `<p>Your OTP code is: <strong>${otp}</strong></p>`
+            });
+        }
+
+        await setKeyWithTime(`verify-email-update:${userId}:${email.toLowerCase()}`, otp, 5);
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "OTP sent to email successfully");
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to send email OTP", error.message);
+    }
+};
+
+
+const verifyEmailUpdateOtp = async (req, res) => {
+    try {
+        const { email, otp } = req.body;
+        const userId = req.user.userId;
+
+        if (!email || !otp) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Email and OTP are required");
+        }
+
+        const redisKey = `verify-email-update:${userId}:${email.toLowerCase()}`;
+        const savedOtp = await getKey(redisKey);
+
+        if (!savedOtp?.data) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "OTP expired or not requested");
+        }
+
+        if (savedOtp.data !== otp) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid OTP");
+        }
+
+        // Update email
+        await User.findByIdAndUpdate(
+            userId,
+            { email: email.toLowerCase(), verifyEmail: true }
+        );
+
+        const updatedUser = await User.findById(userId)
+            .populate([
+                { path: "provinceId", select: "value" },
+                { path: "districtId", select: "value" }
+            ])
+            .select("-password");
+
+        // Clean up OTP
+        await removeKey(redisKey);
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "Email updated successfully", updatedUser);
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to verify email OTP", error.message);
+    }
+};
+const resendEmailUpdateOtp = async (req, res) => {
+    try {
+        const { email } = req.body;
+        const userId = req.user.userId;
+
+        if (!email) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Email is required");
+        }
+
+        const formattedEmail = email.toLowerCase();
+
+        const existingUser = await getDocumentByQuery(User, {
+            email: formattedEmail,
+            _id: { $ne: toObjectId(userId) }
+        });
+
+        if (existingUser.statusCode === CONSTANTS.SUCCESS) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Email already exists");
+        }
+
+        const redisKey = `verify-email-update:${userId}:${formattedEmail}`;
+        const previousOtp = await getKey(redisKey);
+
+        if (!previousOtp) {
+            return apiErrorRes(
+                HTTP_STATUS.BAD_REQUEST,
+                res,
+                "No OTP request found for this email. Please initiate email update first."
+            );
+        }
+
+        const newOtp = process.env.NODE_ENV !== 'production' ? '123456' : generateOTP();
+
+        if (process.env.NODE_ENV === 'production') {
+            await sendEmail({
+                to: formattedEmail,
+                subject: "Your Kadsun Email  OTP",
+                text: `Your OTP code is: ${newOtp}`,
+                html: `<p>Your OTP code is: <strong>${newOtp}</strong></p>`
+            });
+        }
+
+        await setKeyWithTime(redisKey, newOtp, 5); // 5-minute TTL
+
+        return apiSuccessRes(HTTP_STATUS.OK, res, "OTP resent to email successfully");
+    } catch (error) {
+        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to resend email OTP", error.message);
     }
 };
 
@@ -3190,6 +3328,12 @@ router.get('/getFollowingList/:id', perApiLimiter(), upload.none(), getFollowing
 router.post('/requestPhoneNumberUpdateOtp', perApiLimiter(), upload.none(), requestPhoneNumberUpdateOtp);
 router.post('/verifyPhoneNumberUpdateOtp', perApiLimiter(), upload.none(), verifyPhoneNumberUpdateOtp);
 router.post('/resendPhoneNumberUpdateOtp', perApiLimiter(), upload.none(), resendPhoneNumberUpdateOtp);
+
+//Email
+router.post('/requestEmailUpdateOtp', perApiLimiter(), upload.none(), requestEmailUpdateOtp);
+router.post('/verifyEmailUpdateOtp', perApiLimiter(), upload.none(), verifyEmailUpdateOtp);
+router.post('/resendEmailUpdateOtp', perApiLimiter(), upload.none(), resendEmailUpdateOtp);
+
 
 router.post('/hardDelete', perApiLimiter(), upload.none(), validateRequest(moduleSchemaForId), globalCrudController.hardDelete(User));
 router.post('/softDelete', perApiLimiter(), upload.none(), validateRequest(moduleSchemaForId), globalCrudController.softDelete(User));

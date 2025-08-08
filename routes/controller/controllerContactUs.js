@@ -38,7 +38,7 @@ const create = async (req, res) => {
         });
         await contactUs.save();
         return apiSuccessRes(HTTP_STATUS.CREATED, res, 'Message submitted successfully', { contactUs });
-    } catch (error) {
+    } catch (error) {   
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };

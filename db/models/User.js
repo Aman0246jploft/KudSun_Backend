@@ -87,7 +87,7 @@ const UserSchema = new Schema({
     },
     language: {
         type: String,
-        default:"english"
+        default: "english"
     },
     isDisable: {
         type: Boolean,
@@ -142,6 +142,17 @@ const UserSchema = new Schema({
         type: Boolean,
         default: true
     },
+
+    verifyEmail: {
+        type: Boolean,
+        default: false
+    },
+    
+    verifyPhone: {
+        type: Boolean,
+        default: false
+    },
+
     //seller
     totalRatingSum: { type: Number, default: 0 },
     totalRatingCount: { type: Number, default: 0 },
