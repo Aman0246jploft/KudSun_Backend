@@ -7,6 +7,7 @@ const { getDocumentByQuery } = require('../services/serviceGlobalCURD');
 const CONSTANTS_MSG = require('../../utils/constantsMessage');
 const CONSTANTS = require('../../utils/constants')
 const HTTP_STATUS = require('../../utils/statusCode');
+const axios = require("axios");
 const { apiErrorRes, verifyPassword, apiSuccessRes, generateOTP, generateKey, toObjectId, isNewItem, getBlockedUserIds } = require('../../utils/globalFunction');
 const { signToken } = require('../../utils/jwtTokenUtils');
 const { loginSchema, followSchema, threadLikeSchema, productLikeSchema, requestResetOtpSchema, verifyResetOtpSchema, resetPasswordSchema, loginStepOneSchema, loginStepTwoSchema, loginStepThreeSchema, otpTokenSchema, resendResetOtpSchema, resendOtpSchema, googleSignInSchema } = require('../services/validations/userValidation');
@@ -595,48 +596,197 @@ const resendLoginOtp = async (req, res) => {
 
 
 
+// const googleSignIn = async (req, res) => {
+//     try {
+//         const { idToken, fcmToken } = req.body;
+//         console.log("Received request for Google Sign-In");
+//         console.log("idToken:", idToken ? "Received" : "Missing");
+//         console.log("fcmToken:", fcmToken || "Not Provided");
+
+//         if (!idToken) {
+//             console.log("❌ Missing Google ID token");
+//             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Google ID token is required");
+//         }
+
+//         const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+//         let ticket;
+//         try {
+//             console.log("Verifying Google ID token...");
+//             ticket = await client.verifyIdToken({
+//                 idToken: idToken,
+//                 audience: process.env.GOOGLE_CLIENT_ID,
+//             });
+//         } catch (error) {
+//             console.error('❌ Google token verification failed:', error);
+//             return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Invalid Google token");
+//         }
+
+//         const payload = ticket.getPayload();
+//         const {
+//             email,
+//             name,
+//             picture,
+//             sub: googleId,
+//             given_name: firstName,
+//             family_name: lastName
+//         } = payload;
+
+//         console.log("✅ Google token verified. Extracted email:", email);
+
+//         if (!email) {
+//             console.log("❌ Email not found in Google payload");
+//             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Email not provided by Google");
+//         }
+
+//         let user = await User.findOne({ email: email.toLowerCase() }).populate([
+//             { path: 'provinceId', select: 'value' },
+//             { path: 'districtId', select: 'value' }
+//         ]);
+
+//         if (user) {
+//             console.log("🔍 Existing user found:", user._id.toString());
+
+//             if (user.isDisable) {
+//                 console.log("⚠️ User account is disabled");
+//                 return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, CONSTANTS_MSG.ACCOUNT_DISABLE);
+//             }
+
+//             if (user.isDeleted) {
+//                 console.log("⚠️ User account is deleted");
+//                 return apiErrorRes(HTTP_STATUS.UNPROCESSABLE_ENTITY, res, CONSTANTS_MSG.ACCOUNT_DELETED);
+//             }
+
+//             if (fcmToken && fcmToken !== "") {
+//                 console.log("🔄 Updating FCM token for user");
+//                 user.fcmToken = fcmToken;
+//             }
+
+//             if (!user.profileImage && picture) {
+//                 console.log("📸 Updating user profile image from Google");
+//                 user.profileImage = picture;
+//             }
+
+//             await user.save();
+//             console.log("✅ Existing user updated and saved");
+//         } else {
+//             console.log("👤 No user found with this email. Creating new user...");
+
+//             const userName = await generateUniqueUsername(name || email.split('@')[0]);
+//             console.log("🆕 Generated unique username:", userName);
+
+//             user = new User({
+//                 email: email.toLowerCase(),
+//                 userName: userName,
+//                 profileImage: picture || null,
+//                 fcmToken: fcmToken || null,
+//                 step: 5,
+//             });
+
+//             await user.save();
+//             console.log("✅ New user created:", user._id.toString());
+
+//             try {
+//                 await indexUser(user);
+//                 console.log("📦 User indexed to Algolia");
+//             } catch (algoliaError) {
+//                 console.error('⚠️ Algolia indexing failed:', algoliaError);
+//             }
+
+//             user = await User.findById(user._id).populate([
+//                 { path: 'provinceId', select: 'value' },
+//                 { path: 'districtId', select: 'value' }
+//             ]);
+//         }
+
+//         const [totalFollowers, totalFollowing] = await Promise.all([
+//             Follow.countDocuments({
+//                 userId: user._id,
+//                 isDeleted: false,
+//                 isDisable: false
+//             }),
+//             Follow.countDocuments({
+//                 followedBy: user._id,
+//                 isDeleted: false,
+//                 isDisable: false
+//             })
+//         ]);
+
+//         console.log(`👥 Follower stats - Followers: ${totalFollowers}, Following: ${totalFollowing}`);
+
+//         const payload_jwt = {
+//             userId: user._id,
+//             email: user.email,
+//             roleId: user.roleId,
+//             role: user.role,
+//             userName: user.userName,
+//             profileImage: user.profileImage
+//         };
+
+//         const token = signToken(payload_jwt);
+//         console.log("🔐 JWT token generated");
+
+//         const userResponse = {
+//             token,
+//             ...user.toJSON(),
+//             totalFollowers,
+//             totalFollowing
+//         };
+
+//         console.log("✅ Google Sign-In successful. Responding to client.");
+//         return apiSuccessRes(
+//             HTTP_STATUS.OK,
+//             res,
+//             "Google sign-in successful",
+//             userResponse
+//         );
+
+//     } catch (error) {
+//         console.error('💥 Google Sign-In error:', error);
+//         return apiErrorRes(
+//             HTTP_STATUS.INTERNAL_SERVER_ERROR,
+//             res,
+//             "Internal server error",
+//             error.message
+//         );
+//     }
+// };
+
+
+// Helper function to generate unique username
+
+
+
 const googleSignIn = async (req, res) => {
     try {
-        const { idToken, fcmToken } = req.body;
+        const { idToken:accessToken, fcmToken } = req.body;
         console.log("Received request for Google Sign-In");
-        console.log("idToken:", idToken ? "Received" : "Missing");
+        console.log("accessToken:", accessToken ? "Received" : "Missing");
         console.log("fcmToken:", fcmToken || "Not Provided");
 
-        if (!idToken) {
-            console.log("❌ Missing Google ID token");
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Google ID token is required");
+        if (!accessToken) {
+            console.log("❌ Missing Google access token");
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Google access token is required");
         }
 
-        const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-
-        let ticket;
+        let googleUser;
         try {
-            console.log("Verifying Google ID token...");
-            ticket = await client.verifyIdToken({
-                idToken: idToken,
-                audience: process.env.GOOGLE_CLIENT_ID,
-            });
+            console.log("🔍 Fetching user info from Google...");
+            const response = await axios.get(`https://www.googleapis.com/oauth2/v1/userinfo?alt=json&access_token=${accessToken}`);
+            googleUser = response.data;
         } catch (error) {
-            console.error('❌ Google token verification failed:', error);
-            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Invalid Google token");
+            console.error("❌ Failed to fetch user info from Google:", error.response?.data || error.message);
+            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Invalid Google access token");
         }
 
-        const payload = ticket.getPayload();
-        const {
-            email,
-            name,
-            picture,
-            sub: googleId,
-            given_name: firstName,
-            family_name: lastName
-        } = payload;
-
-        console.log("✅ Google token verified. Extracted email:", email);
+        const { email, name, picture, id: googleId } = googleUser;
 
         if (!email) {
-            console.log("❌ Email not found in Google payload");
+            console.log("❌ Email not found in Google user info");
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Email not provided by Google");
         }
+
+        console.log("✅ Google user info received. Email:", email);
 
         let user = await User.findOne({ email: email.toLowerCase() }).populate([
             { path: 'provinceId', select: 'value' },
@@ -656,7 +806,7 @@ const googleSignIn = async (req, res) => {
                 return apiErrorRes(HTTP_STATUS.UNPROCESSABLE_ENTITY, res, CONSTANTS_MSG.ACCOUNT_DELETED);
             }
 
-            if (fcmToken && fcmToken !== "") {
+            if (fcmToken) {
                 console.log("🔄 Updating FCM token for user");
                 user.fcmToken = fcmToken;
             }
@@ -676,7 +826,7 @@ const googleSignIn = async (req, res) => {
 
             user = new User({
                 email: email.toLowerCase(),
-                userName: userName,
+                userName,
                 profileImage: picture || null,
                 fcmToken: fcmToken || null,
                 step: 5,
@@ -752,7 +902,19 @@ const googleSignIn = async (req, res) => {
 };
 
 
-// Helper function to generate unique username
+
+
+
+
+
+
+
+
+
+
+
+
+
 const generateUniqueUsername = async (baseName) => {
     let username = baseName.toLowerCase().replace(/[^a-zA-Z0-9@._]/g, '');
 
