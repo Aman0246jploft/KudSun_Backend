@@ -132,15 +132,15 @@ const UserSchema = new Schema({
     },
     dealChatnotification: {
         type: Boolean,
-        defaut: true
+        default: true
     },
     activityNotification: {
         type: Boolean,
-        defaut: true
+        default: true
     },
     alertNotification: {
         type: Boolean,
-        defaut: true
+        default: true
     },
     //seller
     totalRatingSum: { type: Number, default: 0 },
