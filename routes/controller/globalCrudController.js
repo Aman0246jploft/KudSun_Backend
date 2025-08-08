@@ -11,6 +11,7 @@ const {
 const CONSTANTS_MSG = require("../../utils/constantsMessage")
 const CONSTANTS = require('../../utils/constants');
 const HTTP_STATUS = require('../../utils/statusCode');
+const { deleteUsers, indexUser } = require('../services/serviceAlgolia');
 
 
 // Generic CRUD functions
@@ -48,8 +49,18 @@ const globalCrudController = {
     try {
       const { id } = req.body;
       const modelData = await updateDocument(model, id, req.body);
-      if (modelData.statusCode === CONSTANTS.SUCCESS)
+      if (modelData.statusCode === CONSTANTS.SUCCESS) {
+        if (model.modelName === 'User') {
+          try {
+            await indexUser(modelData.data); // updatedUser
+          } catch (err) {
+            console.error(`❌ Algolia update error for user ${id}:`, err);
+          }
+        }
+
+
         return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, modelData.data);
+      }
 
       return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, CONSTANTS_MSG.FAILED, CONSTANTS.DATA_NULL);
     } catch (error) {
@@ -62,8 +73,16 @@ const globalCrudController = {
 
       const { id } = req.body;
       const modelData = await deleteDocument(model, id);
-      if (modelData.statusCode === CONSTANTS.SUCCESS)
+      if (modelData.statusCode === CONSTANTS.SUCCESS) {
+        if (model.modelName === 'User') {
+          try {
+            await deleteUsers(id);
+          } catch (err) {
+            console.error(`❌ Algolia soft delete error for user ${id}:`, err);
+          }
+        }
         return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, modelData.data);
+      }
 
       return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, CONSTANTS_MSG.FAILED, CONSTANTS.DATA_NULL);
     } catch (error) {
@@ -75,8 +94,16 @@ const globalCrudController = {
     try {
       const { id } = req.body;
       const modelData = await softDeleteDocument(model, id);
-      if (modelData.statusCode === CONSTANTS.SUCCESS)
+      if (modelData.statusCode === CONSTANTS.SUCCESS) {
+        if (model.modelName === 'User') {
+          try {
+            await deleteUsers(id);
+          } catch (err) {
+            console.error(`❌ Algolia soft delete error for user ${id}:`, err);
+          }
+        }
         return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, modelData.data);
+      }
 
       return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, CONSTANTS_MSG.FAILED, CONSTANTS.DATA_NULL);
     } catch (error) {

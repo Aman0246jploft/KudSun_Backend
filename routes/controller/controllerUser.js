@@ -212,6 +212,8 @@ const getOnboardingStep = async (req, res) => {
         step: user.step
     });
 };
+
+
 const completeRegistration = async (req, res) => {
     const { phoneNumber, fcmToken, userName, gender, dob } = req.body;
 
@@ -2765,6 +2767,13 @@ const deleteAccount = async (req, res) => {
         }
         user.data.isDeleted = true
         await user.data.save();
+        try {
+            await deleteUsers(userId);
+        } catch (algoliaError) {
+            console.error('❌ Algolia deletion failed for user:', userId, algoliaError);
+            // Don't block account deletion if Algolia fails
+        }
+
         return apiSuccessRes(HTTP_STATUS.OK, res, 'Account deleted successfully');
     } catch (err) {
         console.error('updatePassword error:', err);
