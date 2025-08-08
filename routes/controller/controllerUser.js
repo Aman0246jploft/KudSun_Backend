@@ -797,13 +797,13 @@ const googleSignIn = async (req, res) => {
             console.log("🔍 Existing user found:", user._id.toString());
 
             if (user.isDisable) {
-                console.log("⚠️ User account is disabled");
-                return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, CONSTANTS_MSG.ACCOUNT_DISABLE);
+
+                return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, CONSTANTS_MSG.ACCOUNT_DISABLE);
             }
 
             if (user.isDeleted) {
-                console.log("⚠️ User account is deleted");
-                return apiErrorRes(HTTP_STATUS.UNPROCESSABLE_ENTITY, res, CONSTANTS_MSG.ACCOUNT_DELETED);
+
+                return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, CONSTANTS_MSG.ACCOUNT_DELETED);
             }
 
             if (fcmToken) {
@@ -820,7 +820,6 @@ const googleSignIn = async (req, res) => {
             }
 
             await user.save();
-            console.log("✅ Existing user updated and saved");
         } else {
             console.log("👤 No user found with this email. Creating new user...");
 
@@ -840,7 +839,6 @@ const googleSignIn = async (req, res) => {
             user = new User(obj);
 
             await user.save();
-            console.log("✅ New user created:", user._id.toString());
 
             try {
                 await indexUser(user);
@@ -868,7 +866,7 @@ const googleSignIn = async (req, res) => {
             })
         ]);
 
-        console.log(`👥 Follower stats - Followers: ${totalFollowers}, Following: ${totalFollowing}`);
+
 
         const payload_jwt = {
             userId: user._id,
@@ -880,7 +878,7 @@ const googleSignIn = async (req, res) => {
         };
 
         const token = signToken(payload_jwt);
-        console.log("🔐 JWT token generated");
+
 
         const userResponse = {
             token,
@@ -889,7 +887,6 @@ const googleSignIn = async (req, res) => {
             totalFollowing
         };
 
-        console.log("✅ Google Sign-In successful. Responding to client.");
         return apiSuccessRes(
             HTTP_STATUS.OK,
             res,
