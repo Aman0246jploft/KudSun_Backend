@@ -17,7 +17,7 @@ const { saveNotification } = require('../services/serviceNotification');
 
 
 
- const getAssociatedProductIdsFromThread = async (threadId) => {
+const getAssociatedProductIdsFromThread = async (threadId) => {
     // Step 1: Get product IDs from the thread itself
     const thread = await Thread.findById(threadId).select('associatedProducts').lean();
     const threadProductIds = thread?.associatedProducts?.map(id => id.toString()) || [];
@@ -1453,6 +1453,14 @@ const getThreads = async (req, res) => {
             });
         });
 
+
+        const productCountMap = {};
+        await Promise.all(threadIds.map(async threadId => {
+            const productIds = await getAssociatedProductIdsFromThread(threadId.toString());
+            productCountMap[threadId.toString()] = productIds.length;
+        }));
+
+
         const enrichedThreads = paginatedThreads.map(thread => {
             const tid = thread?._id.toString();
             const uid = thread.userId?._id?.toString() || '';
@@ -1463,7 +1471,7 @@ const getThreads = async (req, res) => {
                 totalFollowers: followerMap[uid] || 0,
                 totalComments: commentMap[tid] || 0,
                 totalLikes: likeMap[tid] || 0,
-                totalAssociatedProducts: productMap[tid] || 0,
+                totalAssociatedProducts: productCountMap[tid] || 0,
                 myThread: currentUserId && uid === currentUserId,
                 isLiked: likedThreadSet.has(tid),
                 subCategory: {
