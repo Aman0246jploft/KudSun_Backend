@@ -3145,7 +3145,7 @@ router.post('/resendLoginOtp', perApiLimiter(), upload.none(), resendLoginOtp);
 
 router.post('/login', perApiLimiter(), upload.none(), validateRequest(loginSchema), login);
 router.post('/loginAsGuest', perApiLimiter(), upload.none(), loginAsGuest);
-router.post('/googleSignIn', perApiLimiter(), upload.none(), validateRequest(googleSignInSchema), googleSignIn);
+router.post('/googleSignIn', perApiLimiter(), upload.none(), googleSignIn);
 
 //RESET PASSWORD 
 router.post('/requestResetOtp', perApiLimiter(), upload.none(), requestResetOtp);
