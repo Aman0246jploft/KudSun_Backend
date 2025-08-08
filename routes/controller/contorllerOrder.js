@@ -5254,9 +5254,9 @@ const cancelOrderByBuyer = async (req, res) => {
         }
 
         // Check if payment is completed (only allow cancellation of paid orders)
-        if (order.paymentStatus !== PAYMENT_STATUS.COMPLETED) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Only paid orders can be cancelled");
-        }
+        // if (order.paymentStatus !== PAYMENT_STATUS.COMPLETED) {
+        //     return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Only paid orders can be cancelled");
+        // }
 
 
 
