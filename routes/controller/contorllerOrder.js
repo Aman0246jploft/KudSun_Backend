@@ -5265,7 +5265,6 @@ const cancelOrderByBuyer = async (req, res) => {
 
 
 
-
         // Populate product data to check delivery types
         const populatedOrder = await order.populate('items.productId');
 
