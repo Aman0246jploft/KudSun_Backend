@@ -5372,7 +5372,7 @@ const cancelOrderByBuyer = async (req, res) => {
             // Create system message for cancellation
             const systemMessage = new ChatMessage({
                 chatRoom: room._id,
-                messageType: 'TEXT',
+                messageType: 'ORDER_STATUS',
                 content: `Order cancelled by buyer`,
                 systemMeta: {
                     statusType: 'ORDER',
