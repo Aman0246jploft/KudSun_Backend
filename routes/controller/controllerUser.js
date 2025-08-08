@@ -2136,8 +2136,8 @@ const userList = async (req, res) => {
             const regex = new RegExp(keyWord, "i");
             query.$or = [
                 { userName: regex },
-                { email: regex },
-                { phoneNumber: regex },
+                // { email: regex },
+                // { phoneNumber: regex },
             ];
         }
 
