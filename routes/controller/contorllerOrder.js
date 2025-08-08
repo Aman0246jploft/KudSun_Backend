@@ -5213,6 +5213,7 @@ router.get('/admin/payoutCalculation/:orderId', perApiLimiter(), upload.none(), 
 // SHIPPED -> CONFIRM_RECEIPT 
 
 const cancelOrderByBuyer = async (req, res) => {
+    const io = req.app.get('io');
     try {
         const buyerId = req.user?.userId;
         const { orderId } = req.params;
