@@ -759,7 +759,7 @@ const resendLoginOtp = async (req, res) => {
 
 const googleSignIn = async (req, res) => {
     try {
-        const { idToken:accessToken, fcmToken } = req.body;
+        const { accessToken, fcmToken } = req.body;
         console.log("Received request for Google Sign-In");
         console.log("accessToken:", accessToken ? "Received" : "Missing");
         console.log("fcmToken:", fcmToken || "Not Provided");
@@ -772,7 +772,7 @@ const googleSignIn = async (req, res) => {
         let googleUser;
         try {
             console.log("🔍 Fetching user info from Google...");
-            const response = await axios.get(`https://www.googleapis.com/oauth2/v1/userinfo?alt=json&access_token=${accessToken}`);
+            const response = await axios.get(`https://www.googleapis.com/oauth2/v2/userinfo?access_token=${accessToken}`);
             googleUser = response.data;
         } catch (error) {
             console.error("❌ Failed to fetch user info from Google:", error.response?.data || error.message);
