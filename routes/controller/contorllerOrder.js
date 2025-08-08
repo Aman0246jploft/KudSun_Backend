@@ -5255,10 +5255,12 @@ const cancelOrderByBuyer = async (req, res) => {
         if (terminalStatuses.includes(order.status)) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `Order is already ${order.status}`);
         }
+        const isOrderPending = order.status === ORDER_STATUS.PENDING;
+        const isUnpaidOrFailed = [PAYMENT_STATUS.PENDING, PAYMENT_STATUS.FAILED].includes(order.paymentStatus);
 
 
-        if (![PAYMENT_STATUS.PENDING, PAYMENT_STATUS.FAILED].includes(order.paymentStatus)) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Only unpaid or failed orders can be cancelled");
+        if (!(isOrderPending || isUnpaidOrFailed)) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Only pending or unpaid/failed orders can be cancelled");
         }
 
 
