@@ -37,12 +37,15 @@ const SellProductsSchema = new Schema({
         type: String,
         trim: true
     }],
-    specifics: [{
-        parameterId: { type: mongoose.Schema.Types.ObjectId, required: true },
-        parameterName: { type: String, required: true },
-        valueId: { type: mongoose.Schema.Types.ObjectId, required: true },
-        valueName: { type: String, required: true }
-    }],
+    specifics: {
+        type: [{
+            parameterId: { type: mongoose.Schema.Types.ObjectId },
+            parameterName: { type: String },
+            valueId: { type: mongoose.Schema.Types.ObjectId },
+            valueName: { type: String }
+        }],
+        default: null
+    },
     condition: {
         type: String,
         required: true
@@ -109,7 +112,6 @@ const SellProductsSchema = new Schema({
 
 SellProductsSchema.index({ saleType: 1, isDeleted: 1, isDisable: 1 });
 SellProductsSchema.index({ categoryId: 1, subCategoryId: 1 });
-SellProductsSchema.index({ "specifics.valueId": 1 });
 SellProductsSchema.index({ tags: 1 });
 SellProductsSchema.index({ title: "text", description: "text", tags: "text" });
 SellProductsSchema.pre('save', function (next) {

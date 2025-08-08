@@ -113,7 +113,8 @@ const addSellerProduct = async (req, res) => {
                     specifics.push(spec);
                 }
             } else {
-                return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Specifics are required.");
+                specifics = null;
+
             }
         } catch (e) {
             console.error("❌ Error in specifics handling:", e);
@@ -228,7 +229,7 @@ const addSellerProduct = async (req, res) => {
         if (!deliveryType) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Missing required field: deliveryType.");
         }
-        if (!Array.isArray(specifics) || specifics.length === 0) {
+        if (specifics !== null && !Array.isArray(specifics) || specifics?.length === 0) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Missing or invalid field: specifics must be a non-empty array.");
         }
 
@@ -245,12 +246,15 @@ const addSellerProduct = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Shipping charge required.");
         }
 
-        // === Specifics validation ===
-        for (const spec of specifics) {
-            const keys = ['parameterId', 'parameterName', 'valueId', 'valueName'];
-            for (const key of keys) {
-                if (!spec[key]) {
-                    return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `Missing '${key}' in specifics.`);
+        if (specifics !== null) {
+
+            // === Specifics validation ===
+            for (const spec of specifics) {
+                const keys = ['parameterId', 'parameterName', 'valueId', 'valueName'];
+                for (const key of keys) {
+                    if (!spec[key]) {
+                        return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `Missing '${key}' in specifics.`);
+                    }
                 }
             }
         }
@@ -339,6 +343,7 @@ const addSellerProduct = async (req, res) => {
 
         return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, savedProduct);
     } catch (error) {
+        console.log(error)
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error);
     }
 };
@@ -382,35 +387,38 @@ const updateSellerProduct = async (req, res) => {
         } = req.body;
 
 
-        let processedSpecifics = [];
+        let processedSpecifics = null;
 
-        try {
-            let parsedSpecifics = typeof req.body.specifics === 'string'
-                ? JSON.parse(req.body.specifics)
-                : req.body.specifics;
+        if (req.body.specifics && req.body.specifics !== "") {
+            try {
+                let parsedSpecifics = typeof req.body.specifics === 'string'
+                    ? JSON.parse(req.body.specifics)
+                    : req.body.specifics;
 
-            if (typeof parsedSpecifics !== 'object' || Array.isArray(parsedSpecifics)) {
-                return apiErrorRes(400, res, "Specifics must be a key-value object.");
+                if (typeof parsedSpecifics !== 'object' || Array.isArray(parsedSpecifics)) {
+                    return apiErrorRes(400, res, "Specifics must be a key-value object.");
+                }
+
+                processedSpecifics = [];
+
+                for (const [key, value] of Object.entries(parsedSpecifics)) {
+                    if (!key || !value) continue;
+                    const spec = await ensureParameterAndValue(
+                        categoryId,
+                        subCategoryId,
+                        key,
+                        value,
+                        req.user?.userId,
+                        req.user?.roleId
+                    );
+                    processedSpecifics.push(spec);
+                }
+            } catch (err) {
+                console.error("❌ Error processing specifics:", err);
+                return apiErrorRes(400, res, "Invalid specifics format or processing failed.");
             }
-
-
-
-            for (const [key, value] of Object.entries(parsedSpecifics)) {
-                if (!key || !value) continue;
-                const spec = await ensureParameterAndValue(
-                    categoryId,
-                    subCategoryId,
-                    key,
-                    value,
-                    req.user?.userId,
-                    req.user?.roleId
-                );
-                processedSpecifics.push(spec);
-            }
-        } catch (err) {
-            console.error("❌ Error processing specifics:", err);
-            return apiErrorRes(400, res, "Invalid specifics format or processing failed.");
         }
+
 
 
 
@@ -423,7 +431,7 @@ const updateSellerProduct = async (req, res) => {
         } catch (err) {
             return apiErrorRes(400, res, "Invalid JSON in auctionSettings field.");
         }
-        specifics = processedSpecifics
+        specifics = processedSpecifics ?? null;
 
         // Validate required fields ONLY for published (non-draft) products
         if (!isDraftUpdate) {
@@ -437,19 +445,23 @@ const updateSellerProduct = async (req, res) => {
             // Condition must be valid
 
             // specifics must be array and non-empty
-            if (!Array.isArray(processedSpecifics) || processedSpecifics.length === 0) {
-                return apiErrorRes(400, res, "Missing or invalid field: specifics must be a non-empty array.");
-            }
+            // specifics is optional; validate only if provided
+            if (req.body.specifics) {
+                if (!Array.isArray(processedSpecifics)) {
+                    return apiErrorRes(400, res, "Specifics must be an array if provided.");
+                }
 
-
-            // specifics: each item must have required keys
-            for (const spec of processedSpecifics) {
-                const keys = ['parameterId', 'parameterName', 'valueId', 'valueName'];
-                for (const key of keys) {
-                    if (!spec[key]) {
-                        return apiErrorRes(400, res, `Missing '${key}' in specifics.`);
+                for (const spec of processedSpecifics) {
+                    const keys = ['parameterId', 'parameterName', 'valueId', 'valueName'];
+                    for (const key of keys) {
+                        if (!spec[key]) {
+                            return apiErrorRes(400, res, `Missing '${key}' in specifics.`);
+                        }
                     }
                 }
+            } else {
+                // if not provided or empty, explicitly set to null
+                processedSpecifics = null;
             }
 
             // saleType specific validations
@@ -514,22 +526,6 @@ const updateSellerProduct = async (req, res) => {
 
         // For draft update, allow partial update, no strict validations
         let photoUrls = existingProduct.productImages || [];
-        // Remove photos as requested
-        // if (removePhotos) {
-        //     const photosToRemove = Array.isArray(removePhotos) ? removePhotos : [removePhotos];
-        //     // Delete these images from Cloudinary
-        //     for (const url of photosToRemove) {
-        //         try {
-
-        //             await deleteImageCloudinary(url);
-        //         } catch (err) {
-        //             console.error("Failed to delete old image:", url, err);
-        //             // Continue anyway
-        //         }
-        //     }
-        //     // Filter out removed photos from productImages array
-        //     photoUrls = photoUrls.filter(url => !photosToRemove.includes(url));
-        // }
 
 
         let imageArray = req.body.imageArray;
@@ -613,6 +609,7 @@ const updateSellerProduct = async (req, res) => {
         return apiSuccessRes(200, res, "Product updated successfully", updatedProduct);
 
     } catch (error) {
+        console.log(error)
         return apiErrorRes(500, res, error.message, error);
     }
 };

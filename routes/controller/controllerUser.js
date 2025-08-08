@@ -596,23 +596,26 @@ const resendLoginOtp = async (req, res) => {
 const googleSignIn = async (req, res) => {
     try {
         const { idToken, fcmToken } = req.body;
+        console.log("Received request for Google Sign-In");
+        console.log("idToken:", idToken ? "Received" : "Missing");
+        console.log("fcmToken:", fcmToken || "Not Provided");
 
         if (!idToken) {
+            console.log("❌ Missing Google ID token");
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Google ID token is required");
         }
 
-        // Initialize Google OAuth2 client
         const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-        // Verify the Google ID token
         let ticket;
         try {
+            console.log("Verifying Google ID token...");
             ticket = await client.verifyIdToken({
                 idToken: idToken,
                 audience: process.env.GOOGLE_CLIENT_ID,
             });
         } catch (error) {
-            console.error('Google token verification failed:', error);
+            console.error('❌ Google token verification failed:', error);
             return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Invalid Google token");
         }
 
@@ -626,68 +629,73 @@ const googleSignIn = async (req, res) => {
             family_name: lastName
         } = payload;
 
+        console.log("✅ Google token verified. Extracted email:", email);
+
         if (!email) {
+            console.log("❌ Email not found in Google payload");
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Email not provided by Google");
         }
 
-        // Check if user already exists with this email
         let user = await User.findOne({ email: email.toLowerCase() }).populate([
             { path: 'provinceId', select: 'value' },
             { path: 'districtId', select: 'value' }
         ]);
 
         if (user) {
-            // User exists - check if account is disabled or deleted
+            console.log("🔍 Existing user found:", user._id.toString());
+
             if (user.isDisable) {
+                console.log("⚠️ User account is disabled");
                 return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, CONSTANTS_MSG.ACCOUNT_DISABLE);
             }
+
             if (user.isDeleted) {
+                console.log("⚠️ User account is deleted");
                 return apiErrorRes(HTTP_STATUS.UNPROCESSABLE_ENTITY, res, CONSTANTS_MSG.ACCOUNT_DELETED);
             }
 
-            // Update FCM token if provided
             if (fcmToken && fcmToken !== "") {
+                console.log("🔄 Updating FCM token for user");
                 user.fcmToken = fcmToken;
             }
 
-            // Update last login and Google profile image if not set
             if (!user.profileImage && picture) {
+                console.log("📸 Updating user profile image from Google");
                 user.profileImage = picture;
             }
 
             await user.save();
+            console.log("✅ Existing user updated and saved");
         } else {
-            // Create new user
+            console.log("👤 No user found with this email. Creating new user...");
+
             const userName = await generateUniqueUsername(name || email.split('@')[0]);
+            console.log("🆕 Generated unique username:", userName);
 
             user = new User({
                 email: email.toLowerCase(),
                 userName: userName,
                 profileImage: picture || null,
                 fcmToken: fcmToken || null,
-                step: 5, // Complete registration for Google users
-                // Note: No password for Google users - they can only sign in via Google
-                // Or you can generate a random password if needed
+                step: 5,
             });
 
             await user.save();
+            console.log("✅ New user created:", user._id.toString());
 
-            // Index the user in Algolia after successful registration
             try {
                 await indexUser(user);
+                console.log("📦 User indexed to Algolia");
             } catch (algoliaError) {
-                console.error('Algolia indexing failed for Google user:', user._id, algoliaError);
-                // Don't fail the main operation if Algolia fails
+                console.error('⚠️ Algolia indexing failed:', algoliaError);
             }
 
-            // Populate location fields for new user
             user = await User.findById(user._id).populate([
                 { path: 'provinceId', select: 'value' },
                 { path: 'districtId', select: 'value' }
             ]);
         }
 
-        // Get follower counts
         const [totalFollowers, totalFollowing] = await Promise.all([
             Follow.countDocuments({
                 userId: user._id,
@@ -701,7 +709,8 @@ const googleSignIn = async (req, res) => {
             })
         ]);
 
-        // Generate JWT token
+        console.log(`👥 Follower stats - Followers: ${totalFollowers}, Following: ${totalFollowing}`);
+
         const payload_jwt = {
             userId: user._id,
             email: user.email,
@@ -712,8 +721,8 @@ const googleSignIn = async (req, res) => {
         };
 
         const token = signToken(payload_jwt);
+        console.log("🔐 JWT token generated");
 
-        // Prepare response
         const userResponse = {
             token,
             ...user.toJSON(),
@@ -721,6 +730,7 @@ const googleSignIn = async (req, res) => {
             totalFollowing
         };
 
+        console.log("✅ Google Sign-In successful. Responding to client.");
         return apiSuccessRes(
             HTTP_STATUS.OK,
             res,
@@ -729,7 +739,7 @@ const googleSignIn = async (req, res) => {
         );
 
     } catch (error) {
-        console.error('Google Sign-In error:', error);
+        console.error('💥 Google Sign-In error:', error);
         return apiErrorRes(
             HTTP_STATUS.INTERNAL_SERVER_ERROR,
             res,
@@ -738,6 +748,7 @@ const googleSignIn = async (req, res) => {
         );
     }
 };
+
 
 // Helper function to generate unique username
 const generateUniqueUsername = async (baseName) => {
