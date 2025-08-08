@@ -353,48 +353,48 @@ const createOrder = async (req, res) => {
 
 
         // Send payment pending message if payment is not completed
-        if (order.paymentStatus !== PAYMENT_STATUS.COMPLETED) {
-            const payNowMessage = new ChatMessage({
-                chatRoom: room._id,
-                messageType: 'PAYMENT_STATUS',
-                systemMeta: {
-                    statusType: 'PAYMENT',
-                    status: PAYMENT_STATUS.PENDING,
-                    orderId: order._id,
-                    productId: orderItems[0].productId,
-                    title: 'Payment Pending',
-                    meta: createStandardizedChatMeta({
-                        orderNumber: order._id.toString(),
-                        totalAmount: order.grandTotal,
-                        amount: order.grandTotal,
-                        itemCount: orderItems.length,
-                        sellerId: sellerId,
-                        buyerId: userId,
-                        orderStatus: order.status,
-                        paymentStatus: order.paymentStatus,
-                        paymentMethod: order.paymentMethod
-                    }),
-                    actions: [
-                        {
-                            label: 'Pay Now',
-                            url: `/payment/retry/${order._id}`,
-                            type: 'primary'
-                        }
-                    ],
-                    theme: 'warning',
-                    content: 'Payment Pending. Pay now. Unpaid orders will be cancelled within 24 hours.'
-                }
-            });
-            await payNowMessage.save();
-            await ChatRoom.findByIdAndUpdate(
-                room._id,
-                {
-                    lastMessage: payNowMessage._id,
-                    updatedAt: new Date()
-                }
-            );
-            await emitSystemMessage(io, payNowMessage, room, userId, sellerId);
-        }
+        // if (order.paymentStatus !== PAYMENT_STATUS.COMPLETED) {
+        //     const payNowMessage = new ChatMessage({
+        //         chatRoom: room._id,
+        //         messageType: 'PAYMENT_STATUS',
+        //         systemMeta: {
+        //             statusType: 'PAYMENT',
+        //             status: PAYMENT_STATUS.PENDING,
+        //             orderId: order._id,
+        //             productId: orderItems[0].productId,
+        //             title: 'Payment Pending',
+        //             meta: createStandardizedChatMeta({
+        //                 orderNumber: order._id.toString(),
+        //                 totalAmount: order.grandTotal,
+        //                 amount: order.grandTotal,
+        //                 itemCount: orderItems.length,
+        //                 sellerId: sellerId,
+        //                 buyerId: userId,
+        //                 orderStatus: order.status,
+        //                 paymentStatus: order.paymentStatus,
+        //                 paymentMethod: order.paymentMethod
+        //             }),
+        //             actions: [
+        //                 {
+        //                     label: 'Pay Now',
+        //                     url: `/payment/retry/${order._id}`,
+        //                     type: 'primary'
+        //                 }
+        //             ],
+        //             theme: 'warning',
+        //             content: 'Payment Pending. Pay now. Unpaid orders will be cancelled within 24 hours.'
+        //         }
+        //     });
+        //     await payNowMessage.save();
+        //     await ChatRoom.findByIdAndUpdate(
+        //         room._id,
+        //         {
+        //             lastMessage: payNowMessage._id,
+        //             updatedAt: new Date()
+        //         }
+        //     );
+        //     await emitSystemMessage(io, payNowMessage, room, userId, sellerId);
+        // }
 
         return apiSuccessRes(HTTP_STATUS.CREATED, res, "Order placed successfully", order);
     } catch (err) {
