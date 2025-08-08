@@ -31,24 +31,10 @@ async function findOrCreateOneOnOneRoom(userId1, userId2) {
                     updatedAt: new Date()
                 });
                 
-                // Also restore messages that were deleted due to room deletion
-                await ChatMessage.updateMany(
-                    {
-                        chatRoom: room._id,
-                        'deleteBy.deleteType': 'ROOM_DELETE',
-                        'deleteBy.userId': { $in: [toObjectId(userId1), toObjectId(userId2)] }
-                    },
-                    {
-                        $pull: {
-                            deleteBy: {
-                                deleteType: 'ROOM_DELETE',
-                                userId: { $in: [toObjectId(userId1), toObjectId(userId2)] }
-                            }
-                        }
-                    }
-                );
+                // DO NOT restore old messages - users should only see new messages after room restoration
+                // Old messages remain deleted for users who deleted the room to maintain "fresh start" experience
                 
-                console.log(`✅ Restored room ${room._id} for users ${userId1} and ${userId2}`);
+                console.log(`✅ Restored room ${room._id} for users ${userId1} and ${userId2} (old messages remain hidden)`);
                 
                 // Fetch the updated room
                 room = await ChatRoom.findById(room._id);

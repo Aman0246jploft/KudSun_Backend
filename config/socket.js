@@ -113,25 +113,11 @@ async function setupSocket(server) {
                             }
                         });
                         
-                        // Restore messages that were deleted due to room deletion
-                        await ChatMessage.updateMany(
-                            {
-                                chatRoom: toObjectId(roomId),
-                                'deleteBy.deleteType': 'ROOM_DELETE',
-                                'deleteBy.userId': toObjectId(userId)
-                            },
-                            {
-                                $pull: {
-                                    deleteBy: {
-                                        deleteType: 'ROOM_DELETE',
-                                        userId: toObjectId(userId)
-                                    }
-                                }
-                            }
-                        );
+                        // DO NOT restore old messages - user should only see new messages after room restoration
+                        // Old messages remain deleted for this user to maintain the "fresh start" experience
                         
                         roomRestored = true;
-                        console.log(`✅ Room ${roomId} was restored for user ${userId}`);
+                        console.log(`✅ Room ${roomId} was restored for user ${userId} (old messages remain hidden)`);
                     }
                     
                     socket.join(roomId);
