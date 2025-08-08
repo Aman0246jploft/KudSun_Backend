@@ -24,7 +24,7 @@ const ReviewSchema = new Schema({
     reviewText: {
         type: String,
         required: true,
-        minlength: 50
+        
     },
     reviewImages: [{
         type: String // URL to Cloudinary or other storage
