@@ -2400,7 +2400,10 @@ const getThreadById = async (req, res) => {
             }
         ]);
 
-
+        for (let rt of recommendedThreads) {
+            const productIds = await getAssociatedProductIdsFromThread(rt._id);
+            rt.productCount = productIds.length;
+        }
 
         if (thread.categoryId && thread.categoryId.subCategories) {
             delete thread.categoryId.subCategories;
