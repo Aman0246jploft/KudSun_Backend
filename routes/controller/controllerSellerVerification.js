@@ -106,10 +106,10 @@ const create = async (req, res) => {
         }
 
 
-        await User.findByIdAndUpdate(userId, {
-            is_Verified_Seller: true,
-            is_Id_verified: false,
-        });
+        // await User.findByIdAndUpdate(userId, {
+        //     is_Verified_Seller: true,
+        //     is_Id_verified: false,
+        // });
         
         return apiSuccessRes(HTTP_STATUS.CREATED, res, 'Seller verification submitted successfully', result);
 
