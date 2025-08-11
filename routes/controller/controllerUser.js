@@ -2026,7 +2026,12 @@ const getProfile = async (req, res) => {
             ...(blockedUserIds.length ? { userId: { $nin: blockedUserIds } } : {})
         });
 
-        const sellerVerificationStatus = !sellerVerification || sellerVerification.verificationStatus !== "Approved";
+
+        const sellerVerificationStatus =
+            !sellerVerification || sellerVerification.verificationStatus === "Rejected";
+
+
+        console.log("4444444", !sellerVerification, sellerVerification.verificationStatus, sellerVerificationStatus)
 
         const output = {
             userId: user._id,
@@ -2066,7 +2071,7 @@ const getProfile = async (req, res) => {
         return apiErrorRes(
             HTTP_STATUS.INTERNAL_SERVER_ERROR,
             res,
-            "Internal server error", 
+            "Internal server error",
             error.message
         );
     }

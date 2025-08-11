@@ -5844,7 +5844,7 @@ router.get('/admin/payoutCalculation/:orderId', perApiLimiter(), upload.none(), 
 
 const cancelOrderByBuyer = async (req, res) => {
     const io = req.app.get('io');
-    
+
     // Simple retry wrapper - ONLY CHANGE
     const executeWithRetry = async (transactionFn, maxRetries = 3) => {
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -5852,11 +5852,11 @@ const cancelOrderByBuyer = async (req, res) => {
                 return await transactionFn();
             } catch (error) {
                 const isRetryableError = error.code === 112 || error.errorLabelSet?.has('TransientTransactionError');
-                
+
                 if (!isRetryableError || attempt === maxRetries) {
                     throw error;
                 }
-                
+
                 // Small delay before retry
                 await new Promise(resolve => setTimeout(resolve, 100 * attempt));
                 console.log(`Retrying transaction attempt ${attempt + 1}/${maxRetries}`);
@@ -5870,7 +5870,7 @@ const cancelOrderByBuyer = async (req, res) => {
         const { cancellationReason } = req.body;
 
         const buyer = await User.findById(buyerId);
-        
+
         // Input validation - UNCHANGED
         if (!buyerId) {
             return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Authentication required");
@@ -5902,7 +5902,7 @@ const cancelOrderByBuyer = async (req, res) => {
         if (terminalStatuses.includes(order.status)) {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `Order is already ${order.status}`);
         }
-        
+
         const isOrderPending = order.status === ORDER_STATUS.PENDING;
         const isUnpaidOrFailed = [PAYMENT_STATUS.PENDING, PAYMENT_STATUS.FAILED].includes(order.paymentStatus);
 
