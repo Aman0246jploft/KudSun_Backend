@@ -58,355 +58,644 @@ const emitSystemMessage = async (io, systemMessage, room, buyerId, sellerId) => 
     });
 };
 
+// const createOrder = async (req, res) => {
+//     const session = await mongoose.startSession();
+//     session.startTransaction();
+
+//     try {
+//         let { addressId, items, paymentMethod = PAYMENT_METHOD.ONLINE } = req.body;
+//         let totalShippingCharge = 0;
+//         const userId = req.user.userId;
+
+//         if (req.body.items) {
+//             items = parseItems(req.body.items)
+//         }
+
+//         const sellerIds = new Set(); // collect seller IDs
+
+//         if (!Array.isArray(items) || items.length === 0) {
+//             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Invalid order data');
+//         }
+//         const address = await UserAddress.findOne({ userId, _id: toObjectId(addressId) });
+//         if (!address) {
+//             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Address not found');
+//         }
+//         const activeOrderStatuses = [
+//             ORDER_STATUS.PENDING,
+//             ORDER_STATUS.CONFIRMED,
+//             ORDER_STATUS.PROCESSING,
+//             ORDER_STATUS.SHIPPED,
+//             ORDER_STATUS.DELIVERED
+//         ];
+//         const productIds = items.map(i => toObjectId(i.productId));
+//         const existingOrders = await Order.find({
+//             userId: toObjectId(userId),
+//             'items.productId': { $in: productIds },
+//             isDeleted: { $ne: true },   // Assuming soft deletes,
+//             status: { $in: activeOrderStatuses },
+//             paymentStatus: { $ne: PAYMENT_STATUS.FAILED }
+//         }).session(session);
+
+
+//         if (existingOrders.length > 0) {
+//             // Find which products are duplicated
+//             const orderedProductIds = new Set();
+//             for (const order of existingOrders) {
+//                 for (const item of order.items) {
+//                     if (productIds.some(pid => pid.equals(item.productId))) {
+//                         orderedProductIds.add(item.productId.toString());
+//                     }
+//                 }
+//             }
+//             return apiErrorRes(
+//                 HTTP_STATUS.CONFLICT,
+//                 res,
+//                 `Order already placed for product(s): ${Array.from(orderedProductIds).join(', ')}`
+//             );
+//         }
+
+//         const feeSettings = await FeeSetting.find({
+//             isActive: true,
+//             isDisable: false,
+//             isDeleted: false
+//         }).lean();
+//         const feeMap = {};
+//         feeSettings.forEach(fee => {
+//             feeMap[fee.name] = fee;
+//         });
+
+
+//         let totalAmount = 0;
+//         const orderItems = [];
+
+//         for (const item of items) {
+//             const product = await SellProduct.findOne({ _id: toObjectId(item.productId), isDeleted: false, isDisable: false, isSold: false }).session(session);
+//             if (!product) {
+//                 await session.abortTransaction();
+//                 return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, `Product not found or unavailable: ${item.productId}`);
+//             }
+
+//             const seller = await User.findOne({ _id: product.userId });
+//             if (!seller || seller.isDeleted || seller.isDisable) {
+//                 return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `Seller of product ${product.title} is deleted or disabled`);
+//             }
+
+//             sellerIds.add(product.userId.toString());
+
+//             if (product.userId.toString() === userId.toString()) {
+//                 await session.abortTransaction();
+//                 return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `You cannot purchase your own product: ${product.title}`);
+//             }
+
+//             let price = 0;
+
+//             if (product.saleType === SALE_TYPE.FIXED) {
+//                 // Standard product
+//                 price = product.fixedPrice;
+
+
+//             } else if (product.saleType === SALE_TYPE.AUCTION) {
+//                 const { auctionSettings = {} } = product;
+
+//                 // Ensure bidding has ended
+//                 if (auctionSettings.isBiddingOpen) {
+//                     await session.abortTransaction();
+//                     return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `Bidding is still open for: ${product.title}`);
+//                 }
+
+//                 // Optionally enforce based on end timestamp
+//                 if (auctionSettings.biddingEndsAt && moment().isBefore(auctionSettings.biddingEndsAt)) {
+//                     await session.abortTransaction();
+//                     return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `Bidding period hasn't ended yet for: ${product.title}`);
+//                 }
+
+
+
+//                 // Check if user is the winning bidder
+//                 const winningBid = await Bid.findOne({
+//                     productId: toObjectId(product._id),
+//                     userId: toObjectId(userId),
+//                     currentlyWinning: true
+//                 }).session(session);
+
+//                 if (!winningBid) {
+//                     await session.abortTransaction();
+//                     return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `You have not won the auction for: ${product.title}`);
+//                 }
+
+//                 if (auctionSettings.reservePrice && winningBid.amount < auctionSettings.reservePrice) {
+//                     await session.abortTransaction();
+//                     return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `Winning bid for ${product.title} does not meet the reserve price`);
+//                 }
+
+//                 price = winningBid.amount;
+//             }
+
+//             const subtotal = price * Number(item.quantity ?? 1);
+//             totalAmount += subtotal;
+
+//             orderItems.push({
+//                 productId: product._id,
+//                 productImage: product.productImages?.[0] || '',
+//                 productTitle: product.title,
+//                 productSaleType: product.saleType,
+//                 quantity: Number(item.quantity ?? 1),
+//                 priceAtPurchase: price
+//             });
+//             totalShippingCharge += Number(product.shippingCharge ?? DEFAULT_AMOUNT.SHIPPING_CHARGE);
+//         }
+
+//         const sellerId = Array.from(sellerIds)[0];
+
+//         const buyerProtectionFeeSetting = feeMap[CHARGE_TYPE.BUYER_PROTECTION_FEE];
+//         let buyerProtectionFee = 0;
+//         let buyerProtectionFeeType = PRICING_TYPE.FIXED;
+//         if (buyerProtectionFeeSetting) {
+//             buyerProtectionFeeType = buyerProtectionFeeSetting.type;
+//             buyerProtectionFee = buyerProtectionFeeType === PRICING_TYPE.PERCENTAGE
+//                 ? (totalAmount * buyerProtectionFeeSetting.value / 100)
+//                 : buyerProtectionFeeSetting.value;
+//         }
+//         const taxSetting = feeMap[CHARGE_TYPE.TAX];
+//         let tax = 0;
+//         let taxType = PRICING_TYPE.FIXED;
+//         if (taxSetting) {
+//             taxType = taxSetting.type;
+//             tax = taxType === PRICING_TYPE.PERCENTAGE
+//                 ? (totalAmount * taxSetting.value / 100)
+//                 : taxSetting.value;
+//         }
+
+
+//         const shippingCharge = totalShippingCharge || 0
+
+//         const grandTotal = totalAmount + shippingCharge + buyerProtectionFee + tax;
+
+
+
+//         const order = new Order({
+//             userId,
+//             sellerId,
+//             addressId: address._id,
+//             items: orderItems,
+//             totalAmount,
+//             shippingCharge,
+//             grandTotal,
+//             paymentMethod,
+//             BuyerProtectionFee: buyerProtectionFee,
+//             BuyerProtectionFeeType: buyerProtectionFeeType,
+//             Tax: tax,
+//             TaxType: taxType,
+//         });
+//         await order.save({ session });
+
+//         // Create or get chat room with seller after order creation
+//         const { room } = await findOrCreateOneOnOneRoom(userId, sellerId);
+
+//         // Create system message for order creation
+//         const systemMessage = new ChatMessage({
+//             chatRoom: room._id,
+//             messageType: 'ORDER_STATUS',
+//             systemMeta: {
+//                 statusType: 'ORDER',
+//                 status: ORDER_STATUS.PENDING,
+//                 title: "Order Created",
+//                 orderId: order._id,
+//                 productId: orderItems[0].productId, // First product in order
+//                 meta: createStandardizedChatMeta({
+//                     orderNumber: order.orderId.toString(),
+//                     totalAmount: order.grandTotal,
+//                     amount: order.grandTotal,
+//                     itemCount: orderItems.length,
+//                     sellerId: sellerId,
+//                     buyerId: userId,
+//                     orderStatus: ORDER_STATUS.PENDING,
+//                     paymentStatus: order.paymentStatus,
+//                     paymentMethod: order.paymentMethod
+//                 }),
+//                 actions: [
+//                     {
+//                         label: "View Order",
+//                         url: `/order/${order._id}`,
+//                         type: "primary"
+//                     }
+//                 ],
+//                 theme: 'info'
+//             }
+//         });
+
+
+
+
+//         await systemMessage.save({ session });
+
+//         // Update chat room's last message
+//         await ChatRoom.findByIdAndUpdate(
+//             room._id,
+//             {
+//                 lastMessage: systemMessage._id,
+//                 updatedAt: new Date()
+//             },
+//             { session }
+//         );
+
+//         for (const item of orderItems) {
+//             await SellProduct.updateOne(
+//                 { _id: item.productId },
+//                 { $set: { isSold: true } },
+//                 { session }
+//             );
+//         }
+
+
+//         await session.commitTransaction();
+
+
+//         const io = req.app.get('io');
+//         await emitSystemMessage(io, systemMessage, room, userId, sellerId);
+
+//         await trackOrderRevenue(order, feeMap, session);
+
+//         const sellerUser = await User.findById(sellerId).lean();
+//         if (sellerUser?.alertNotification !== false) {
+//             const notifications = [
+//                 {
+//                     recipientId: sellerId,
+//                     userId: userId,
+//                     orderId: order._id,
+//                     productId: orderItems[0].productId,
+//                     type: NOTIFICATION_TYPES.ORDER,
+//                     title: "New Order Received!",
+//                     message: `You have received a new order for ${orderItems.length} item(s). Order amount: ฿${order.grandTotal.toFixed(2)}`,
+//                     meta: createStandardizedNotificationMeta({
+//                         orderNumber: order._id.toString(),
+//                         orderId: order._id.toString(),
+//                         itemCount: orderItems.length,
+//                         totalAmount: order.grandTotal,
+//                         amount: order.grandTotal,
+//                         sellerId: sellerId,
+//                         buyerId: userId,
+//                         status: ORDER_STATUS.PENDING,
+//                         newStatus: ORDER_STATUS.PENDING,
+//                         paymentMethod: order.paymentMethod,
+//                         paymentStatus: order.paymentStatus,
+//                         productImage: orderItems[0]?.productImage || '',     // ✅ Added
+//                         productTitle: orderItems[0]?.productTitle || '',
+//                     }),
+//                     redirectUrl: `/order/${order._id}`
+//                 }
+//             ];
+//             await saveNotification(notifications);
+//         }
+
+
+//         // Send notifications
+
+
+//         // Send payment pending message if payment is not completed
+//         // if (order.paymentStatus !== PAYMENT_STATUS.COMPLETED) {
+//         //     const payNowMessage = new ChatMessage({
+//         //         chatRoom: room._id,
+//         //         messageType: 'PAYMENT_STATUS',
+//         //         systemMeta: {
+//         //             statusType: 'PAYMENT',
+//         //             status: PAYMENT_STATUS.PENDING,
+//         //             orderId: order._id,
+//         //             productId: orderItems[0].productId,
+//         //             title: 'Payment Pending',
+//         //             meta: createStandardizedChatMeta({
+//         //                 orderNumber: order._id.toString(),
+//         //                 totalAmount: order.grandTotal,
+//         //                 amount: order.grandTotal,
+//         //                 itemCount: orderItems.length,
+//         //                 sellerId: sellerId,
+//         //                 buyerId: userId,
+//         //                 orderStatus: order.status,
+//         //                 paymentStatus: order.paymentStatus,
+//         //                 paymentMethod: order.paymentMethod
+//         //             }),
+//         //             actions: [
+//         //                 {
+//         //                     label: 'Pay Now',
+//         //                     url: `/payment/retry/${order._id}`,
+//         //                     type: 'primary'
+//         //                 }
+//         //             ],
+//         //             theme: 'warning',
+//         //             content: 'Payment Pending. Pay now. Unpaid orders will be cancelled within 24 hours.'
+//         //         }
+//         //     });
+//         //     await payNowMessage.save();
+//         //     await ChatRoom.findByIdAndUpdate(
+//         //         room._id,
+//         //         {
+//         //             lastMessage: payNowMessage._id,
+//         //             updatedAt: new Date()
+//         //         }
+//         //     );
+//         //     await emitSystemMessage(io, payNowMessage, room, userId, sellerId);
+//         // }
+
+//         return apiSuccessRes(HTTP_STATUS.CREATED, res, "Order placed successfully", order);
+//     } catch (err) {
+//         await session.abortTransaction(); // ✅ move here only
+//         console.error("Order creation error:", err);
+//         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to place order");
+//     } finally {
+//         session.endSession(); // ✅ always close the session
+//     }
+
+
+// };
+
+
+
+
 const createOrder = async (req, res) => {
-    const session = await mongoose.startSession();
-    session.startTransaction();
+    const MAX_RETRIES = 3; // Retry up to 3 times
+    let attempt = 0;
 
-    try {
-        let { addressId, items, paymentMethod = PAYMENT_METHOD.ONLINE } = req.body;
-        let totalShippingCharge = 0;
-        const userId = req.user.userId;
+    while (attempt < MAX_RETRIES) {
+        const session = await mongoose.startSession();
+        try {
+            session.startTransaction();
+            attempt++;
 
-        if (req.body.items) {
-            items = parseItems(req.body.items)
-        }
+            let { addressId, items, paymentMethod = PAYMENT_METHOD.ONLINE } = req.body;
+            let totalShippingCharge = 0;
+            const userId = req.user.userId;
 
-        const sellerIds = new Set(); // collect seller IDs
+            if (req.body.items) {
+                items = parseItems(req.body.items);
+            }
 
-        if (!Array.isArray(items) || items.length === 0) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Invalid order data');
-        }
-        const address = await UserAddress.findOne({ userId, _id: toObjectId(addressId) });
-        if (!address) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Address not found');
-        }
-        const activeOrderStatuses = [
-            ORDER_STATUS.PENDING,
-            ORDER_STATUS.CONFIRMED,
-            ORDER_STATUS.PROCESSING,
-            ORDER_STATUS.SHIPPED,
-            ORDER_STATUS.DELIVERED
-        ];
-        const productIds = items.map(i => toObjectId(i.productId));
-        const existingOrders = await Order.find({
-            userId: toObjectId(userId),
-            'items.productId': { $in: productIds },
-            isDeleted: { $ne: true },   // Assuming soft deletes,
-            status: { $in: activeOrderStatuses },
-            paymentStatus: { $ne: PAYMENT_STATUS.FAILED }
-        }).session(session);
+            const sellerIds = new Set();
 
+            if (!Array.isArray(items) || items.length === 0) {
+                return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Invalid order data');
+            }
 
-        if (existingOrders.length > 0) {
-            // Find which products are duplicated
-            const orderedProductIds = new Set();
-            for (const order of existingOrders) {
-                for (const item of order.items) {
-                    if (productIds.some(pid => pid.equals(item.productId))) {
-                        orderedProductIds.add(item.productId.toString());
+            const address = await UserAddress.findOne({ userId, _id: toObjectId(addressId) });
+            if (!address) {
+                return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Address not found');
+            }
+
+            const activeOrderStatuses = [
+                ORDER_STATUS.PENDING,
+                ORDER_STATUS.CONFIRMED,
+                ORDER_STATUS.PROCESSING,
+                ORDER_STATUS.SHIPPED,
+                ORDER_STATUS.DELIVERED
+            ];
+
+            const productIds = items.map(i => toObjectId(i.productId));
+            const existingOrders = await Order.find({
+                userId: toObjectId(userId),
+                'items.productId': { $in: productIds },
+                isDeleted: { $ne: true },
+                status: { $in: activeOrderStatuses },
+                paymentStatus: { $ne: PAYMENT_STATUS.FAILED }
+            }).session(session);
+
+            if (existingOrders.length > 0) {
+                const orderedProductIds = new Set();
+                for (const order of existingOrders) {
+                    for (const item of order.items) {
+                        if (productIds.some(pid => pid.equals(item.productId))) {
+                            orderedProductIds.add(item.productId.toString());
+                        }
                     }
                 }
-            }
-            return apiErrorRes(
-                HTTP_STATUS.CONFLICT,
-                res,
-                `Order already placed for product(s): ${Array.from(orderedProductIds).join(', ')}`
-            );
-        }
-
-        const feeSettings = await FeeSetting.find({
-            isActive: true,
-            isDisable: false,
-            isDeleted: false
-        }).lean();
-        const feeMap = {};
-        feeSettings.forEach(fee => {
-            feeMap[fee.name] = fee;
-        });
-
-
-        let totalAmount = 0;
-        const orderItems = [];
-
-        for (const item of items) {
-            const product = await SellProduct.findOne({ _id: toObjectId(item.productId), isDeleted: false, isDisable: false, isSold: false }).session(session);
-            if (!product) {
-                await session.abortTransaction();
-                return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, `Product not found or unavailable: ${item.productId}`);
+                return apiErrorRes(
+                    HTTP_STATUS.CONFLICT,
+                    res,
+                    `Order already placed for product(s): ${Array.from(orderedProductIds).join(', ')}`
+                );
             }
 
-            const seller = await User.findOne({ _id: product.userId });
-            if (!seller || seller.isDeleted || seller.isDisable) {
-                return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `Seller of product ${product.title} is deleted or disabled`);
-            }
+            const feeSettings = await FeeSetting.find({
+                isActive: true,
+                isDisable: false,
+                isDeleted: false
+            }).lean();
+            const feeMap = {};
+            feeSettings.forEach(fee => {
+                feeMap[fee.name] = fee;
+            });
 
-            sellerIds.add(product.userId.toString());
+            let totalAmount = 0;
+            const orderItems = [];
 
-            if (product.userId.toString() === userId.toString()) {
-                await session.abortTransaction();
-                return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `You cannot purchase your own product: ${product.title}`);
-            }
-
-            let price = 0;
-
-            if (product.saleType === SALE_TYPE.FIXED) {
-                // Standard product
-                price = product.fixedPrice;
-
-
-            } else if (product.saleType === SALE_TYPE.AUCTION) {
-                const { auctionSettings = {} } = product;
-
-                // Ensure bidding has ended
-                if (auctionSettings.isBiddingOpen) {
-                    await session.abortTransaction();
-                    return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `Bidding is still open for: ${product.title}`);
-                }
-
-                // Optionally enforce based on end timestamp
-                if (auctionSettings.biddingEndsAt && moment().isBefore(auctionSettings.biddingEndsAt)) {
-                    await session.abortTransaction();
-                    return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `Bidding period hasn't ended yet for: ${product.title}`);
-                }
-
-
-
-                // Check if user is the winning bidder
-                const winningBid = await Bid.findOne({
-                    productId: toObjectId(product._id),
-                    userId: toObjectId(userId),
-                    currentlyWinning: true
+            for (const item of items) {
+                const product = await SellProduct.findOne({
+                    _id: toObjectId(item.productId),
+                    isDeleted: false,
+                    isDisable: false,
+                    isSold: false
                 }).session(session);
 
-                if (!winningBid) {
+                if (!product) {
                     await session.abortTransaction();
-                    return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `You have not won the auction for: ${product.title}`);
+                    return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, `Product not found or unavailable: ${item.productId}`);
                 }
 
-                if (auctionSettings.reservePrice && winningBid.amount < auctionSettings.reservePrice) {
-                    await session.abortTransaction();
-                    return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `Winning bid for ${product.title} does not meet the reserve price`);
+                const seller = await User.findOne({ _id: product.userId });
+                if (!seller || seller.isDeleted || seller.isDisable) {
+                    return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `Seller of product ${product.title} is deleted or disabled`);
                 }
 
-                price = winningBid.amount;
-            }
+                sellerIds.add(product.userId.toString());
 
-            const subtotal = price * Number(item.quantity ?? 1);
-            totalAmount += subtotal;
+                if (product.userId.toString() === userId.toString()) {
+                    await session.abortTransaction();
+                    return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `You cannot purchase your own product: ${product.title}`);
+                }
 
-            orderItems.push({
-                productId: product._id,
-                productImage: product.productImages?.[0] || '',
-                productTitle: product.title,
-                productSaleType: product.saleType,
-                quantity: Number(item.quantity ?? 1),
-                priceAtPurchase: price
-            });
-            totalShippingCharge += Number(product.shippingCharge ?? DEFAULT_AMOUNT.SHIPPING_CHARGE);
-        }
+                let price = 0;
 
-        const sellerId = Array.from(sellerIds)[0];
-
-        const buyerProtectionFeeSetting = feeMap[CHARGE_TYPE.BUYER_PROTECTION_FEE];
-        let buyerProtectionFee = 0;
-        let buyerProtectionFeeType = PRICING_TYPE.FIXED;
-        if (buyerProtectionFeeSetting) {
-            buyerProtectionFeeType = buyerProtectionFeeSetting.type;
-            buyerProtectionFee = buyerProtectionFeeType === PRICING_TYPE.PERCENTAGE
-                ? (totalAmount * buyerProtectionFeeSetting.value / 100)
-                : buyerProtectionFeeSetting.value;
-        }
-        const taxSetting = feeMap[CHARGE_TYPE.TAX];
-        let tax = 0;
-        let taxType = PRICING_TYPE.FIXED;
-        if (taxSetting) {
-            taxType = taxSetting.type;
-            tax = taxType === PRICING_TYPE.PERCENTAGE
-                ? (totalAmount * taxSetting.value / 100)
-                : taxSetting.value;
-        }
-
-
-        const shippingCharge = totalShippingCharge || 0
-
-        const grandTotal = totalAmount + shippingCharge + buyerProtectionFee + tax;
-
-
-
-        const order = new Order({
-            userId,
-            sellerId,
-            addressId: address._id,
-            items: orderItems,
-            totalAmount,
-            shippingCharge,
-            grandTotal,
-            paymentMethod,
-            BuyerProtectionFee: buyerProtectionFee,
-            BuyerProtectionFeeType: buyerProtectionFeeType,
-            Tax: tax,
-            TaxType: taxType,
-        });
-        await order.save({ session });
-
-        // Create or get chat room with seller after order creation
-        const { room } = await findOrCreateOneOnOneRoom(userId, sellerId);
-
-        // Create system message for order creation
-        const systemMessage = new ChatMessage({
-            chatRoom: room._id,
-            messageType: 'ORDER_STATUS',
-            systemMeta: {
-                statusType: 'ORDER',
-                status: ORDER_STATUS.PENDING,
-                title: "Order Created",
-                orderId: order._id,
-                productId: orderItems[0].productId, // First product in order
-                meta: createStandardizedChatMeta({
-                    orderNumber: order.orderId.toString(),
-                    totalAmount: order.grandTotal,
-                    amount: order.grandTotal,
-                    itemCount: orderItems.length,
-                    sellerId: sellerId,
-                    buyerId: userId,
-                    orderStatus: ORDER_STATUS.PENDING,
-                    paymentStatus: order.paymentStatus,
-                    paymentMethod: order.paymentMethod
-                }),
-                actions: [
-                    {
-                        label: "View Order",
-                        url: `/order/${order._id}`,
-                        type: "primary"
+                if (product.saleType === SALE_TYPE.FIXED) {
+                    price = product.fixedPrice;
+                } else if (product.saleType === SALE_TYPE.AUCTION) {
+                    const { auctionSettings = {} } = product;
+                    if (auctionSettings.isBiddingOpen) {
+                        await session.abortTransaction();
+                        return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `Bidding is still open for: ${product.title}`);
                     }
-                ],
-                theme: 'info'
-            }
-        });
+                    if (auctionSettings.biddingEndsAt && moment().isBefore(auctionSettings.biddingEndsAt)) {
+                        await session.abortTransaction();
+                        return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `Bidding period hasn't ended yet for: ${product.title}`);
+                    }
+                    const winningBid = await Bid.findOne({
+                        productId: toObjectId(product._id),
+                        userId: toObjectId(userId),
+                        currentlyWinning: true
+                    }).session(session);
 
-
-
-
-        await systemMessage.save({ session });
-
-        // Update chat room's last message
-        await ChatRoom.findByIdAndUpdate(
-            room._id,
-            {
-                lastMessage: systemMessage._id,
-                updatedAt: new Date()
-            },
-            { session }
-        );
-
-        for (const item of orderItems) {
-            await SellProduct.updateOne(
-                { _id: item.productId },
-                { $set: { isSold: true } },
-                { session }
-            );
-        }
-
-
-        await session.commitTransaction();
-
-
-        const io = req.app.get('io');
-        await emitSystemMessage(io, systemMessage, room, userId, sellerId);
-
-        await trackOrderRevenue(order, feeMap, session);
-
-        const sellerUser = await User.findById(sellerId).lean();
-        if (sellerUser?.alertNotification !== false) {
-            const notifications = [
-                {
-                    recipientId: sellerId,
-                    userId: userId,
-                    orderId: order._id,
-                    productId: orderItems[0].productId,
-                    type: NOTIFICATION_TYPES.ORDER,
-                    title: "New Order Received!",
-                    message: `You have received a new order for ${orderItems.length} item(s). Order amount: ฿${order.grandTotal.toFixed(2)}`,
-                    meta: createStandardizedNotificationMeta({
-                        orderNumber: order._id.toString(),
-                        orderId: order._id.toString(),
-                        itemCount: orderItems.length,
-                        totalAmount: order.grandTotal,
-                        amount: order.grandTotal,
-                        sellerId: sellerId,
-                        buyerId: userId,
-                        status: ORDER_STATUS.PENDING,
-                        newStatus: ORDER_STATUS.PENDING,
-                        paymentMethod: order.paymentMethod,
-                        paymentStatus: order.paymentStatus,
-                        productImage: orderItems[0]?.productImage || '',     // ✅ Added
-                        productTitle: orderItems[0]?.productTitle || '',
-                    }),
-                    redirectUrl: `/order/${order._id}`
+                    if (!winningBid) {
+                        await session.abortTransaction();
+                        return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `You have not won the auction for: ${product.title}`);
+                    }
+                    if (auctionSettings.reservePrice && winningBid.amount < auctionSettings.reservePrice) {
+                        await session.abortTransaction();
+                        return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `Winning bid for ${product.title} does not meet the reserve price`);
+                    }
+                    price = winningBid.amount;
                 }
-            ];
-            await saveNotification(notifications);
+
+                const subtotal = price * Number(item.quantity ?? 1);
+                totalAmount += subtotal;
+
+                orderItems.push({
+                    productId: product._id,
+                    productImage: product.productImages?.[0] || '',
+                    productTitle: product.title,
+                    productSaleType: product.saleType,
+                    quantity: Number(item.quantity ?? 1),
+                    priceAtPurchase: price
+                });
+                totalShippingCharge += Number(product.shippingCharge ?? DEFAULT_AMOUNT.SHIPPING_CHARGE);
+
+                // Lock product immediately
+                await SellProduct.updateOne(
+                    { _id: product._id, isSold: false },
+                    { $set: { isSold: true } },
+                    { session }
+                );
+            }
+
+            const sellerId = Array.from(sellerIds)[0];
+            const buyerProtectionFeeSetting = feeMap[CHARGE_TYPE.BUYER_PROTECTION_FEE];
+            let buyerProtectionFee = 0;
+            let buyerProtectionFeeType = PRICING_TYPE.FIXED;
+            if (buyerProtectionFeeSetting) {
+                buyerProtectionFeeType = buyerProtectionFeeSetting.type;
+                buyerProtectionFee = buyerProtectionFeeType === PRICING_TYPE.PERCENTAGE
+                    ? (totalAmount * buyerProtectionFeeSetting.value / 100)
+                    : buyerProtectionFeeSetting.value;
+            }
+
+            const taxSetting = feeMap[CHARGE_TYPE.TAX];
+            let tax = 0;
+            let taxType = PRICING_TYPE.FIXED;
+            if (taxSetting) {
+                taxType = taxSetting.type;
+                tax = taxType === PRICING_TYPE.PERCENTAGE
+                    ? (totalAmount * taxSetting.value / 100)
+                    : taxSetting.value;
+            }
+
+            const shippingCharge = totalShippingCharge || 0;
+            const grandTotal = totalAmount + shippingCharge + buyerProtectionFee + tax;
+
+            const order = new Order({
+                userId,
+                sellerId,
+                addressId: address._id,
+                items: orderItems,
+                totalAmount,
+                shippingCharge,
+                grandTotal,
+                paymentMethod,
+                BuyerProtectionFee: buyerProtectionFee,
+                BuyerProtectionFeeType: buyerProtectionFeeType,
+                Tax: tax,
+                TaxType: taxType,
+            });
+            await order.save({ session });
+
+            await session.commitTransaction();
+
+            // Non-critical chat + notification AFTER commit
+            process.nextTick(async () => {
+                const { room } = await findOrCreateOneOnOneRoom(userId, sellerId);
+                const systemMessage = new ChatMessage({
+                    chatRoom: room._id,
+                    messageType: 'ORDER_STATUS',
+                    systemMeta: {
+                        statusType: 'ORDER',
+                        status: ORDER_STATUS.PENDING,
+                        title: "Order Created",
+                        orderId: order._id,
+                        productId: orderItems[0].productId,
+                        meta: createStandardizedChatMeta({
+                            orderNumber: order.orderId.toString(),
+                            totalAmount: order.grandTotal,
+                            amount: order.grandTotal,
+                            itemCount: orderItems.length,
+                            sellerId: sellerId,
+                            buyerId: userId,
+                            orderStatus: ORDER_STATUS.PENDING,
+                            paymentStatus: order.paymentStatus,
+                            paymentMethod: order.paymentMethod
+                        }),
+                        actions: [
+                            { label: "View Order", url: `/order/${order._id}`, type: "primary" }
+                        ],
+                        theme: 'info'
+                    }
+                });
+                await systemMessage.save();
+                await ChatRoom.findByIdAndUpdate(room._id, {
+                    lastMessage: systemMessage._id,
+                    updatedAt: new Date()
+                });
+                const io = req.app.get('io');
+                await emitSystemMessage(io, systemMessage, room, userId, sellerId);
+                await trackOrderRevenue(order, feeMap);
+                const sellerUser = await User.findById(sellerId).lean();
+                if (sellerUser?.alertNotification !== false) {
+                    const notifications = [
+                        {
+                            recipientId: sellerId,
+                            userId: userId,
+                            orderId: order._id,
+                            productId: orderItems[0].productId,
+                            type: NOTIFICATION_TYPES.ORDER,
+                            title: "New Order Received!",
+                            message: `You have received a new order for ${orderItems.length} item(s). Order amount: ฿${order.grandTotal.toFixed(2)}`,
+                            meta: createStandardizedNotificationMeta({
+                                orderNumber: order._id.toString(),
+                                orderId: order._id.toString(),
+                                itemCount: orderItems.length,
+                                totalAmount: order.grandTotal,
+                                amount: order.grandTotal,
+                                sellerId: sellerId,
+                                buyerId: userId,
+                                status: ORDER_STATUS.PENDING,
+                                newStatus: ORDER_STATUS.PENDING,
+                                paymentMethod: order.paymentMethod,
+                                paymentStatus: order.paymentStatus,
+                                productImage: orderItems[0]?.productImage || '',
+                                productTitle: orderItems[0]?.productTitle || '',
+                            }),
+                            redirectUrl: `/order/${order._id}`
+                        }
+                    ];
+                    await saveNotification(notifications);
+                }
+            });
+
+            return apiSuccessRes(HTTP_STATUS.CREATED, res, "Order placed successfully", order);
+
+        } catch (err) {
+            await session.abortTransaction();
+            if (err.hasErrorLabel && err.hasErrorLabel('TransientTransactionError') && attempt < MAX_RETRIES) {
+                console.warn(`Retrying createOrder... attempt ${attempt}`);
+                continue; // Retry the transaction
+            }
+            console.error("Order creation error:", err);
+            return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to place order");
+        } finally {
+            session.endSession();
         }
-
-
-        // Send notifications
-
-
-        // Send payment pending message if payment is not completed
-        // if (order.paymentStatus !== PAYMENT_STATUS.COMPLETED) {
-        //     const payNowMessage = new ChatMessage({
-        //         chatRoom: room._id,
-        //         messageType: 'PAYMENT_STATUS',
-        //         systemMeta: {
-        //             statusType: 'PAYMENT',
-        //             status: PAYMENT_STATUS.PENDING,
-        //             orderId: order._id,
-        //             productId: orderItems[0].productId,
-        //             title: 'Payment Pending',
-        //             meta: createStandardizedChatMeta({
-        //                 orderNumber: order._id.toString(),
-        //                 totalAmount: order.grandTotal,
-        //                 amount: order.grandTotal,
-        //                 itemCount: orderItems.length,
-        //                 sellerId: sellerId,
-        //                 buyerId: userId,
-        //                 orderStatus: order.status,
-        //                 paymentStatus: order.paymentStatus,
-        //                 paymentMethod: order.paymentMethod
-        //             }),
-        //             actions: [
-        //                 {
-        //                     label: 'Pay Now',
-        //                     url: `/payment/retry/${order._id}`,
-        //                     type: 'primary'
-        //                 }
-        //             ],
-        //             theme: 'warning',
-        //             content: 'Payment Pending. Pay now. Unpaid orders will be cancelled within 24 hours.'
-        //         }
-        //     });
-        //     await payNowMessage.save();
-        //     await ChatRoom.findByIdAndUpdate(
-        //         room._id,
-        //         {
-        //             lastMessage: payNowMessage._id,
-        //             updatedAt: new Date()
-        //         }
-        //     );
-        //     await emitSystemMessage(io, payNowMessage, room, userId, sellerId);
-        // }
-
-        return apiSuccessRes(HTTP_STATUS.CREATED, res, "Order placed successfully", order);
-    } catch (err) {
-        await session.abortTransaction(); // ✅ move here only
-        console.error("Order creation error:", err);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to place order");
-    } finally {
-        session.endSession(); // ✅ always close the session
     }
-
-
 };
+
+
+
+
+
+
 
 const trackOrderRevenue = async (order, feeMap, session) => {
     const revenueEntries = [];
