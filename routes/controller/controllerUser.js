@@ -2028,10 +2028,9 @@ const getProfile = async (req, res) => {
 
 
         const sellerVerificationStatus =
-            !sellerVerification || sellerVerification.verificationStatus === "Rejected";
+            !sellerVerification || sellerVerification?.verificationStatus === "Rejected";
 
 
-        console.log("4444444", !sellerVerification, sellerVerification.verificationStatus, sellerVerificationStatus)
 
         const output = {
             userId: user._id,
