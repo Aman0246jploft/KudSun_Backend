@@ -368,6 +368,9 @@ const loginStepOne = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
+
+
+
 const loginStepTwoPassword = async (req, res) => {
     try {
         const { identifier, password, fcmToken, loginWithCode } = req.body;
@@ -2063,7 +2066,7 @@ const getProfile = async (req, res) => {
         return apiErrorRes(
             HTTP_STATUS.INTERNAL_SERVER_ERROR,
             res,
-            "Internal server error",
+            "Internal server error", 
             error.message
         );
     }
