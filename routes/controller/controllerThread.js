@@ -697,7 +697,7 @@ const addComment = async (req, res) => {
             // Send notifications if any
             if (notifications.length > 0) {
                 try {
-                    console.log(`✅ ${notifications.length} notification(s) sent for thread comment and product associations`);
+                    // console.log(`✅ ${notifications.length} notification(s) sent for thread comment and product associations`);
                     // await saveNotification(notifications);
                     const recipientIds = notifications.map(n => n.recipientId);
                     const activeUsers = await User.find({
@@ -2135,7 +2135,7 @@ const getThreadById = async (req, res) => {
         let commentProductIds = allAssociatedProductIdsAgg[0]?.productIds?.map(id => id.toString()) || [];
 
         const allProductIds = await getAssociatedProductIdsFromThread(threadId);
-        console.log(allProductIds)
+
 
 
         // 3. Fetch product details with user info
