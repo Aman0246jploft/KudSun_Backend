@@ -152,9 +152,7 @@ const getList = async (req, res) => {
 
 router.post('/addBank', perApiLimiter(), upload.none(), createBank);
 router.post('/update', perApiLimiter(), upload.none(), updateAddress);
-router.get('/getList', perApiLimiter(), getList);
-
-
+router.get('/getList', perApiLimiter(), getList); 
 
 // router.post('/getById', perApiLimiter(), upload.none(), validateRequest(moduleSchemaForId), getById);
 // router.post('/delete', perApiLimiter(), upload.none(), validateRequest(moduleSchemaForId), globalCrudController.softDelete(UserAddress));
