@@ -1987,7 +1987,7 @@ const getProfile = async (req, res) => {
             Order.countDocuments({
                 sellerId: userId,
                 isDeleted: false,
-                paymentStatus: { $eq: PAYMENT_STATUS.COMPLETED }
+                paymentStatus: { $ne: PAYMENT_STATUS.PENDING }
 
             }),
 
