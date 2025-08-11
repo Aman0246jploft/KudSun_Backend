@@ -178,7 +178,7 @@ const UserSchema = new Schema({
 
 
 
-
+UserSchema.index({ _id: 1, walletBalance: 1 });
 
 
 

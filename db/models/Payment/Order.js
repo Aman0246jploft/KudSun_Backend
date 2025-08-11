@@ -79,7 +79,7 @@ const OrderSchema = new Schema({
 // Indexes for performance
 OrderSchema.index({ userId: 1 });
 OrderSchema.index({ status: 1 });
-
+OrderSchema.index({ _id: 1, status: 1 });
 
 OrderSchema.pre('save', async function (next) {
     if (!this.orderId) {

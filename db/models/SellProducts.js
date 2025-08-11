@@ -113,6 +113,7 @@ const SellProductsSchema = new Schema({
 SellProductsSchema.index({ saleType: 1, isDeleted: 1, isDisable: 1 });
 SellProductsSchema.index({ categoryId: 1, subCategoryId: 1 });
 SellProductsSchema.index({ tags: 1 });
+SellProductsSchema.index({ _id: 1, isSold: 1 });
 SellProductsSchema.index({ title: "text", description: "text", tags: "text" });
 SellProductsSchema.pre('save', function (next) {
 

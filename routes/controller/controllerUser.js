@@ -3390,10 +3390,5 @@ router.get('/getBlockedUsers', perApiLimiter(), upload.none(), getBlockedUsers);
 router.get('/getUserNotificationSettings', perApiLimiter(), upload.none(), getUserNotificationSettings);
 router.post('/updateUserNotificationSettings', perApiLimiter(), upload.none(), updateUserNotificationSettings);
 
-
-
 //Notifiaction
-
-
-
 module.exports = router;
