@@ -1652,7 +1652,6 @@ const getBoughtProducts = async (req, res) => {
             if (order.status === ORDER_STATUS.CANCELLED) {
                 order.labalStatuses = 'Cancelled';
                 order.allowedNextStatuses = "";
-
             }
 
             if (status === "Unreviewed" && order.isReviewed) continue;

@@ -29,7 +29,7 @@ const { sendOtpSMS } = require('../services/twilioService');
 const { sendEmail } = require('../../utils/emailService');
 
 
- const getAssociatedProductIdsFromThread = async (threadId) => {
+const getAssociatedProductIdsFromThread = async (threadId) => {
     // Step 1: Get product IDs from the thread itself
     const thread = await Thread.findById(threadId).select('associatedProducts').lean();
     const threadProductIds = thread?.associatedProducts?.map(id => id.toString()) || [];
@@ -1975,8 +1975,6 @@ const getProfile = async (req, res) => {
             );
         }
 
-
-
         const [myThreadCount, productListed, boughtCount, sellCount, ThreadDraftCount, ProductDraftCount, sellerVerification] = await Promise.all([
 
             Thread.countDocuments({ userId, isDeleted: false }),
@@ -1986,9 +1984,10 @@ const getProfile = async (req, res) => {
             Order.countDocuments({
                 sellerId: userId,
                 isDeleted: false,
-                paymentStatus: { $ne: PAYMENT_STATUS.COMPLETED }
+                paymentStatus: { $eq: PAYMENT_STATUS.COMPLETED }
 
             }),
+
             ThreadDraft.countDocuments({ userId, isDeleted: false }),
             SellProductDraft.countDocuments({ userId, isDeleted: false }),
 
