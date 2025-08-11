@@ -10,7 +10,7 @@ const createReviewValidation = Joi.object({
 const updateReviewValidation = Joi.object({
   rating: Joi.number().min(1).max(5).optional(),
   ratingText: Joi.string().optional(),
-  reviewText: Joi.string().min(50).optional()
+  reviewText: Joi.string().optional()
 });
 
 module.exports = {
