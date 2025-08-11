@@ -725,11 +725,129 @@ const addComment = async (req, res) => {
     }
 };
 
+// const associatedProductByThreadId = async (req, res) => {
+//     try {
+//         const {
+//             threadId,
+//         } = req.params;
+//         const {
+//             categoryId,
+//             subCategoryId,
+//             condition,
+//             provinceId,
+//             districtId,
+//             averageRatting,
+//             deliveryFilter,
+
+//             keyWord
+//         } = req.query
+
+//         const pageNo = parseInt(req.query.pageNo) || 1;
+//         const size = parseInt(req.query.size) || 10;
+//         const sortBy = req.query.sortBy || 'createdAt';
+//         const sortOrder = req.query.orderBy === 'asc' ? 1 : -1;
+
+//         if (!threadId || threadId.length !== 24) {
+//             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Invalid thread ID');
+//         }
+
+//         // Step 1: Get associated product IDs from thread comments
+//         // const comments = await ThreadComment.find({ thread: toObjectId(threadId) })
+//         //     .select('associatedProducts')
+//         //     .lean();
+
+//         // const productIds = comments.flatMap(c => c.associatedProducts).filter(Boolean);
+//         // const uniqueProductIds = [...new Set(productIds.map(id => id.toString()))];
+//         const uniqueProductIds = await getAssociatedProductIdsFromThread(threadId);
+
+
+//         // Step 2: Build filter for products
+//         // Step 2: Build filter for products
+//         // const filter = { _id: { $in: uniqueProductIds.map(toObjectId) } };
+//         const filter = { _id: { $in: uniqueProductIds } };
+
+
+//         // Step 2.1: Apply direct product filters
+//         if (categoryId && categoryId.length === 24) filter.categoryId = toObjectId(categoryId);
+//         if (subCategoryId && subCategoryId.length === 24) filter.subCategoryId = toObjectId(subCategoryId);
+//         if (condition && condition !== "") filter.condition = condition;
+//         if (keyWord?.trim()) {
+//             filter.title = { $regex: keyWord.trim(), $options: 'i' };
+//         }
+//         if (deliveryFilter === "free") {
+//             filter.deliveryType = { $in: [DeliveryType.FREE_SHIPPING, DeliveryType.LOCAL_PICKUP] };
+//         } else if (deliveryFilter === "charged") {
+//             filter.deliveryType = DeliveryType.CHARGE_SHIPPING;
+//         }
+
+//         // Step 2.2: Apply user-based filters
+//         let userFilter = {};
+
+//         if (provinceId && provinceId.length === 24) userFilter.provinceId = toObjectId(provinceId);
+//         if (districtId && districtId.length === 24) userFilter.districtId = toObjectId(districtId);
+//         if (averageRatting) userFilter.averageRatting = { $gte: parseFloat(averageRatting) };
+
+//         let filteredUserIds = [];
+
+//         if (Object.keys(userFilter).length > 0) {
+//             const users = await User.find(userFilter).select('_id').lean();
+//             filteredUserIds = users.map(u => u._id.toString());
+
+//             // If no users match, prevent product match
+//             if (filteredUserIds.length === 0) {
+//                 return apiSuccessRes(HTTP_STATUS.OK, res, 'No matching products found', {
+//                     total: 0,
+//                     size,
+//                     products: []
+//                 });
+//             }
+
+//             filter.userId = { $in: filteredUserIds.map(toObjectId) };
+//         }
+
+//         // Step 3: Count total products after filter
+//         const total = await SellProduct.countDocuments(filter);
+
+//         // Step 4: Fetch paginated, sorted products with user info
+//         const products = await SellProduct.find(filter)
+//             .populate({
+//                 path: 'userId',
+//                 select: 'userName email is_Verified_Seller is_Preferred_seller profileImage isLive is_Id_verified'
+//             })
+//             .sort({ [sortBy]: sortOrder })
+//             .skip((pageNo - 1) * size)
+//             .limit(size)
+//             .lean();
+
+//         // Step 5: Append bid count if auction type
+//         const productWithBidInfo = await Promise.all(products.map(async (product) => {
+//             let bidCount = 0;
+//             if (product.saleType === SALE_TYPE.AUCTION) {
+//                 bidCount = await Bid.countDocuments({ productId: toObjectId(product._id) });
+//             }
+
+//             return {
+//                 ...product,
+//                 bidCount,
+//                 user: product.userId,
+//                 userId: undefined
+//             };
+//         }));
+
+//         return apiSuccessRes(HTTP_STATUS.OK, res, 'Associated products fetched successfully', {
+//             total,
+//             size,
+//             products: productWithBidInfo
+//         });
+
+//     } catch (error) {
+//         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+//     }
+// };
+
 const associatedProductByThreadId = async (req, res) => {
     try {
-        const {
-            threadId,
-        } = req.params;
+        const { threadId } = req.params;
         const {
             categoryId,
             subCategoryId,
@@ -738,9 +856,8 @@ const associatedProductByThreadId = async (req, res) => {
             districtId,
             averageRatting,
             deliveryFilter,
-
             keyWord
-        } = req.query
+        } = req.query;
 
         const pageNo = parseInt(req.query.pageNo) || 1;
         const size = parseInt(req.query.size) || 10;
@@ -751,23 +868,13 @@ const associatedProductByThreadId = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Invalid thread ID');
         }
 
-        // Step 1: Get associated product IDs from thread comments
-        // const comments = await ThreadComment.find({ thread: toObjectId(threadId) })
-        //     .select('associatedProducts')
-        //     .lean();
-
-        // const productIds = comments.flatMap(c => c.associatedProducts).filter(Boolean);
-        // const uniqueProductIds = [...new Set(productIds.map(id => id.toString()))];
+        // Step 1: Get associated product IDs from helper
         const uniqueProductIds = await getAssociatedProductIdsFromThread(threadId);
 
-
-        // Step 2: Build filter for products
-        // Step 2: Build filter for products
-        // const filter = { _id: { $in: uniqueProductIds.map(toObjectId) } };
+        // Step 2: Build product filter
         const filter = { _id: { $in: uniqueProductIds } };
 
-
-        // Step 2.1: Apply direct product filters
+        // Step 2.1: Apply product filters
         if (categoryId && categoryId.length === 24) filter.categoryId = toObjectId(categoryId);
         if (subCategoryId && subCategoryId.length === 24) filter.subCategoryId = toObjectId(subCategoryId);
         if (condition && condition !== "") filter.condition = condition;
@@ -780,20 +887,16 @@ const associatedProductByThreadId = async (req, res) => {
             filter.deliveryType = DeliveryType.CHARGE_SHIPPING;
         }
 
-        // Step 2.2: Apply user-based filters
+        // Step 2.2: Apply user filters
         let userFilter = {};
-
         if (provinceId && provinceId.length === 24) userFilter.provinceId = toObjectId(provinceId);
         if (districtId && districtId.length === 24) userFilter.districtId = toObjectId(districtId);
         if (averageRatting) userFilter.averageRatting = { $gte: parseFloat(averageRatting) };
 
-        let filteredUserIds = [];
-
         if (Object.keys(userFilter).length > 0) {
             const users = await User.find(userFilter).select('_id').lean();
-            filteredUserIds = users.map(u => u._id.toString());
+            const filteredUserIds = users.map(u => u._id.toString());
 
-            // If no users match, prevent product match
             if (filteredUserIds.length === 0) {
                 return apiSuccessRes(HTTP_STATUS.OK, res, 'No matching products found', {
                     total: 0,
@@ -805,10 +908,10 @@ const associatedProductByThreadId = async (req, res) => {
             filter.userId = { $in: filteredUserIds.map(toObjectId) };
         }
 
-        // Step 3: Count total products after filter
+        // Step 3: Count matching products
         const total = await SellProduct.countDocuments(filter);
 
-        // Step 4: Fetch paginated, sorted products with user info
+        // Step 4: Fetch products with user info
         const products = await SellProduct.find(filter)
             .populate({
                 path: 'userId',
@@ -819,21 +922,23 @@ const associatedProductByThreadId = async (req, res) => {
             .limit(size)
             .lean();
 
-        // Step 5: Append bid count if auction type
-        const productWithBidInfo = await Promise.all(products.map(async (product) => {
-            let bidCount = 0;
-            if (product.saleType === SALE_TYPE.AUCTION) {
-                bidCount = await Bid.countDocuments({ productId: toObjectId(product._id) });
-            }
+        // Step 5: Add bid count for auction products
+        const productWithBidInfo = await Promise.all(
+            products.map(async (product) => {
+                let bidCount = 0;
+                if (product.saleType === SALE_TYPE.AUCTION) {
+                    bidCount = await Bid.countDocuments({ productId: toObjectId(product._id) });
+                }
+                return {
+                    ...product,
+                    bidCount,
+                    user: product.userId,
+                    userId: undefined
+                };
+            })
+        );
 
-            return {
-                ...product,
-                bidCount,
-                user: product.userId,
-                userId: undefined
-            };
-        }));
-
+        // Step 6: Send response (unchanged structure)
         return apiSuccessRes(HTTP_STATUS.OK, res, 'Associated products fetched successfully', {
             total,
             size,
@@ -2471,6 +2576,251 @@ const getFollowedUsersThreads = async (req, res) => {
 };
 
 /////////////////////////////////////////////////////////////////
+// const getRecentFollowedUsers = async (req, res) => {
+//     try {
+//         const currentUserId = toObjectId(req.user.userId);
+//         const pageNo = parseInt(req.query.pageNo) || 1;
+//         const size = parseInt(req.query.size) || 10;
+//         const skip = (pageNo - 1) * size;
+
+//         // Get followed user IDs
+//         const follows = await Follow.find({
+//             followedBy: currentUserId,
+//             isDeleted: false,
+//             isDisable: false
+//         }).select('userId');
+//         const followedUserIdsRaw = follows.map(f => f.userId);
+
+//         const activeFollowedUsers = await User.find({
+//             _id: { $in: followedUserIdsRaw },
+//             isDeleted: false,
+//             isDisable: false
+//         }).select('_id');
+
+//         const followedUserIds = activeFollowedUsers.map(user => user?._id);
+
+//         if (!followedUserIds.length) {
+//             return apiSuccessRes(HTTP_STATUS.OK, res, "No followed users.", {
+//                 pageNo,
+//                 size,
+//                 total: 0,
+//                 users: []
+//             });
+//         }
+
+
+
+//         // Aggregate user info + latest thread + total followers
+//         const users = await User.aggregate([
+//             {
+//                 $match: {
+//                     _id: { $in: followedUserIds },
+//                     isDeleted: false,
+//                     isDisable: false
+//                 }
+//             },
+//             {
+//                 $lookup: {
+//                     from: 'Thread',
+//                     let: { userId: '$_id' },
+//                     pipeline: [
+//                         { $match: { $expr: { $eq: ['$userId', '$$userId'] }, isDeleted: false, isDisable: false } },
+//                         { $sort: { createdAt: -1 } },
+//                         { $limit: 1 },
+//                         // Count total distinct comments
+//                         {
+//                             $lookup: {
+//                                 from: 'ThreadComment',
+//                                 let: { threadId: '$_id' },
+//                                 pipeline: [
+//                                     {
+//                                         $match: {
+//                                             $expr: { $eq: ['$thread', '$$threadId'] },
+//                                             isDeleted: false,
+//                                             isDisable: false
+//                                         }
+//                                     },
+//                                     { $count: 'totalComments' }
+//                                 ],
+//                                 as: 'commentsCountInfo'
+//                             }
+//                         },
+
+//                         // Count all associated products across all comments
+//                         {
+//                             $lookup: {
+//                                 from: 'ThreadComment',
+//                                 let: { threadId: '$_id',threadProducts: '$associatedProducts' },
+//                                 pipeline: [
+//                                     {
+//                                         $match: {
+//                                             $expr: { $eq: ['$thread', '$$threadId'] },
+//                                             isDeleted: false,
+//                                             isDisable: false,
+//                                             associatedProducts: { $exists: true, $ne: [] }
+//                                         }
+//                                     },
+//                                     { $unwind: '$associatedProducts' },
+//                                     {
+//                                         $group: {
+//                                             _id: null,
+//                                             count: { $sum: 1 }
+//                                         }
+//                                     }
+//                                 ],
+//                                 as: 'associatedProductCountInfo'
+//                             }
+//                         },
+
+//                         {
+//                             $lookup: {
+//                                 from: 'ThreadLike',
+//                                 let: { threadId: '$_id', currentUserId: currentUserId }, // Pass currentUserId as ObjectId
+//                                 pipeline: [
+//                                     { $match: { $expr: { $eq: ['$threadId', '$$threadId'] }, isDeleted: false, isDisable: false } },
+//                                     {
+//                                         $addFields: {
+//                                             // Debug fields
+//                                             likeByType: { $type: '$likeBy' },
+//                                             currentUserIdType: { $type: '$$currentUserId' },
+//                                             likeByStr: { $toString: '$likeBy' },
+//                                             currentUserIdStr: { $toString: '$$currentUserId' },
+//                                             isCurrentUserLike: { $eq: ['$likeBy', '$$currentUserId'] }
+//                                         }
+//                                     },
+//                                     {
+//                                         $group: {
+//                                             _id: null,
+//                                             totalLikes: { $sum: 1 },
+//                                             likedByCurrentUser: {
+//                                                 $sum: {
+//                                                     $cond: [{ $eq: ['$likeBy', '$$currentUserId'] }, 1, 0]
+//                                                 }
+//                                             },
+//                                             // Debug info
+//                                             debugInfo: {
+//                                                 $push: {
+//                                                     likeBy: '$likeBy',
+//                                                     likeByType: '$likeByType',
+//                                                     currentUserId: '$$currentUserId',
+//                                                     currentUserIdType: '$currentUserIdType',
+//                                                     isMatch: '$isCurrentUserLike'
+//                                                 }
+//                                             }
+//                                         }
+//                                     }
+//                                 ],
+//                                 as: 'likesInfo'
+//                             }
+//                         },
+//                         {
+//                             $addFields: {
+//                                 associatedProductCount: { $ifNull: [{ $arrayElemAt: ['$associatedProductCountInfo.count', 0] }, 0] },
+//                                 totalComments: { $ifNull: [{ $arrayElemAt: ['$commentsCountInfo.totalComments', 0] }, 0] },
+//                                 totalLikes: { $ifNull: [{ $arrayElemAt: ['$likesInfo.totalLikes', 0] }, 0] },
+//                                 isLiked: {
+//                                     $gt: [
+//                                         { $ifNull: [{ $arrayElemAt: ['$likesInfo.likedByCurrentUser', 0] }, 0] },
+//                                         0
+//                                     ]
+//                                 },
+//                                 // Debug field
+//                                 debugLikesInfo: { $arrayElemAt: ['$likesInfo', 0] }
+//                             }
+//                         },
+//                         {
+//                             $project: {
+//                                 _id: 1,
+//                                 title: 1,
+//                                 createdAt: 1,
+//                                 description: 1,
+//                                 budgetFlexible: 1,
+//                                 isClosed: 1,
+//                                 budgetRange: 1,
+//                                 tags: 1,
+//                                 photos: 1,
+//                                 isTrending: 1,
+//                                 associatedProductCount: 1,
+//                                 totalComments: 1,
+//                                 totalLikes: 1,
+//                                 isLiked: 1,
+//                                 debugLikesInfo: 1 // Include debug info in output
+//                             }
+//                         }
+//                     ],
+//                     as: 'latestThread'
+//                 }
+//             },
+//             {
+//                 $lookup: {
+//                     from: 'Follow',
+//                     let: { userId: '$_id' },
+//                     pipeline: [
+//                         {
+//                             $match: {
+//                                 $expr: { $eq: ['$userId', '$$userId'] },
+//                                 isDeleted: false,
+//                                 isDisable: false
+//                             }
+//                         },
+//                         { $count: 'count' }
+//                     ],
+//                     as: 'followersCount'
+//                 }
+//             },
+//             {
+//                 $addFields: {
+//                     latestThread: { $arrayElemAt: ['$latestThread', 0] },
+//                     latestThreadDate: {
+//                         $ifNull: [{ $arrayElemAt: ['$latestThread.createdAt', 0] }, null]
+//                     },
+//                     totalFollowers: {
+//                         $ifNull: [{ $arrayElemAt: ['$followersCount.count', 0] }, 0]
+//                     }
+//                 }
+//             },
+//             {
+//                 $sort: {
+//                     latestThreadDate: -1
+//                 }
+//             },
+//             {
+//                 $project: {
+//                     _id: 1,
+//                     userName: 1,
+//                     profileImage: 1,
+//                     isLive: 1,
+//                     latestThread: 1,
+//                     totalFollowers: 1
+//                 }
+//             },
+//             { $skip: skip },
+//             { $limit: size }
+//         ]);
+
+//         // Debug: Log the results
+
+//         // Remove debug info before sending response
+//         const cleanUsers = users.map(user => {
+//             if (user.latestThread && user.latestThread.debugLikesInfo) {
+//                 delete user.latestThread.debugLikesInfo;
+//             }
+//             return user;
+//         });
+
+//         return apiSuccessRes(HTTP_STATUS.OK, res, "Recent followed users fetched successfully.", {
+//             pageNo,
+//             size,
+//             total: followedUserIds.length,
+//             users: cleanUsers
+//         });
+
+//     } catch (err) {
+//         console.error("Error in getRecentFollowedUsers:", err);
+//         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Something went wrong");
+//     }
+// };
+
 const getRecentFollowedUsers = async (req, res) => {
     try {
         const currentUserId = toObjectId(req.user.userId);
@@ -2503,8 +2853,6 @@ const getRecentFollowedUsers = async (req, res) => {
             });
         }
 
-
-
         // Aggregate user info + latest thread + total followers
         const users = await User.aggregate([
             {
@@ -2522,7 +2870,6 @@ const getRecentFollowedUsers = async (req, res) => {
                         { $match: { $expr: { $eq: ['$userId', '$$userId'] }, isDeleted: false, isDisable: false } },
                         { $sort: { createdAt: -1 } },
                         { $limit: 1 },
-                        // Count total distinct comments
                         {
                             $lookup: {
                                 from: 'ThreadComment',
@@ -2540,49 +2887,12 @@ const getRecentFollowedUsers = async (req, res) => {
                                 as: 'commentsCountInfo'
                             }
                         },
-
-                        // Count all associated products across all comments
-                        {
-                            $lookup: {
-                                from: 'ThreadComment',
-                                let: { threadId: '$_id' },
-                                pipeline: [
-                                    {
-                                        $match: {
-                                            $expr: { $eq: ['$thread', '$$threadId'] },
-                                            isDeleted: false,
-                                            isDisable: false,
-                                            associatedProducts: { $exists: true, $ne: [] }
-                                        }
-                                    },
-                                    { $unwind: '$associatedProducts' },
-                                    {
-                                        $group: {
-                                            _id: null,
-                                            count: { $sum: 1 }
-                                        }
-                                    }
-                                ],
-                                as: 'associatedProductCountInfo'
-                            }
-                        },
-
                         {
                             $lookup: {
                                 from: 'ThreadLike',
-                                let: { threadId: '$_id', currentUserId: currentUserId }, // Pass currentUserId as ObjectId
+                                let: { threadId: '$_id', currentUserId: currentUserId },
                                 pipeline: [
                                     { $match: { $expr: { $eq: ['$threadId', '$$threadId'] }, isDeleted: false, isDisable: false } },
-                                    {
-                                        $addFields: {
-                                            // Debug fields
-                                            likeByType: { $type: '$likeBy' },
-                                            currentUserIdType: { $type: '$$currentUserId' },
-                                            likeByStr: { $toString: '$likeBy' },
-                                            currentUserIdStr: { $toString: '$$currentUserId' },
-                                            isCurrentUserLike: { $eq: ['$likeBy', '$$currentUserId'] }
-                                        }
-                                    },
                                     {
                                         $group: {
                                             _id: null,
@@ -2590,16 +2900,6 @@ const getRecentFollowedUsers = async (req, res) => {
                                             likedByCurrentUser: {
                                                 $sum: {
                                                     $cond: [{ $eq: ['$likeBy', '$$currentUserId'] }, 1, 0]
-                                                }
-                                            },
-                                            // Debug info
-                                            debugInfo: {
-                                                $push: {
-                                                    likeBy: '$likeBy',
-                                                    likeByType: '$likeByType',
-                                                    currentUserId: '$$currentUserId',
-                                                    currentUserIdType: '$currentUserIdType',
-                                                    isMatch: '$isCurrentUserLike'
                                                 }
                                             }
                                         }
@@ -2610,7 +2910,6 @@ const getRecentFollowedUsers = async (req, res) => {
                         },
                         {
                             $addFields: {
-                                associatedProductCount: { $ifNull: [{ $arrayElemAt: ['$associatedProductCountInfo.count', 0] }, 0] },
                                 totalComments: { $ifNull: [{ $arrayElemAt: ['$commentsCountInfo.totalComments', 0] }, 0] },
                                 totalLikes: { $ifNull: [{ $arrayElemAt: ['$likesInfo.totalLikes', 0] }, 0] },
                                 isLiked: {
@@ -2618,9 +2917,7 @@ const getRecentFollowedUsers = async (req, res) => {
                                         { $ifNull: [{ $arrayElemAt: ['$likesInfo.likedByCurrentUser', 0] }, 0] },
                                         0
                                     ]
-                                },
-                                // Debug field
-                                debugLikesInfo: { $arrayElemAt: ['$likesInfo', 0] }
+                                }
                             }
                         },
                         {
@@ -2635,11 +2932,9 @@ const getRecentFollowedUsers = async (req, res) => {
                                 tags: 1,
                                 photos: 1,
                                 isTrending: 1,
-                                associatedProductCount: 1,
                                 totalComments: 1,
                                 totalLikes: 1,
-                                isLiked: 1,
-                                debugLikesInfo: 1 // Include debug info in output
+                                isLiked: 1
                             }
                         }
                     ],
@@ -2693,9 +2988,19 @@ const getRecentFollowedUsers = async (req, res) => {
             { $limit: size }
         ]);
 
-        // Debug: Log the results
+        // Add associatedProductCount using helper function
+        await Promise.all(
+            users.map(async (user) => {
+                if (user.latestThread?._id) {
+                    const validProducts = await getAssociatedProductIdsFromThread(user.latestThread._id);
+                    user.latestThread.associatedProductCount = validProducts.length;
+                } else if (user.latestThread) {
+                    user.latestThread.associatedProductCount = 0;
+                }
+            })
+        );
 
-        // Remove debug info before sending response
+        // Remove debug info before sending
         const cleanUsers = users.map(user => {
             if (user.latestThread && user.latestThread.debugLikesInfo) {
                 delete user.latestThread.debugLikesInfo;
@@ -2715,6 +3020,7 @@ const getRecentFollowedUsers = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Something went wrong");
     }
 };
+
 /////////////////////////////////////////////////////////////////
 
 
