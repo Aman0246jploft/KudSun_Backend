@@ -172,7 +172,7 @@ const getMyVerificationList = async (req, res) => {
         sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
 
         // Get only the top/latest verification record
-        const verification = await AccountVerification.findOne(filter)
+        const verification = await SellerVerification.findOne(filter)
             .sort(sort)
             .select('-__v') // Exclude version field
             .lean();
