@@ -7,7 +7,7 @@ const ChatMessageSchema = new mongoose.Schema({
     sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // Null for system messages
     messageType: {
         type: String,
-        enum: ['TEXT', 'IMAGE', 'VIDEO', 'FILE', 'AUDIO', 'SYSTEM', 'ORDER_STATUS', 'PAYMENT_STATUS', 'SHIPPING_STATUS', 'PRODUCT'],
+        enum: ['TEXT', 'IMAGE', 'VIDEO', 'FILE', 'AUDIO', 'SYSTEM', 'ORDER_STATUS', 'PAYMENT_STATUS', 'SHIPPING_STATUS', 'PRODUCT','REVIEW_STATUS'],
         required: true,
     },
 
