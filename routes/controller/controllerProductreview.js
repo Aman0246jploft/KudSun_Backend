@@ -621,7 +621,7 @@ const getReviewersList = async (req, res) => {
         const totalReviewersCount = await ProductReview.aggregate([
             {
                 $match: {
-                    otheruserId: toObjectId(userId) // Add this line
+                    otheruserId: toObjectId(userId), // Add this line
                     // productId: { $in: productIds },
                     isDeleted: false,
                     isDisable: false
