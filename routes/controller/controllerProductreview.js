@@ -483,314 +483,195 @@ const getReviewsAboutUser = async (req, res) => {
     }
 };
 
-// const getReviewersList = async (req, res) => {
-//     try {
-//         const userId = req.query.userId || req.user.userId;
-//         // Parse pagination params
-//         const pageNo = parseInt(req.query.pageNo) || 1;
-//         const size = parseInt(req.query.size) || 10;
-//         const skip = (pageNo - 1) * size;
-
-//         // First, find all products by this user
-//         const userProducts = await SellProduct.find({
-//             userId: userId,
-//             isDeleted: false,
-//             isDisable: false
-//         }).select('_id').lean();
-
-//         const productIds = userProducts.map(product => product._id);
-
-//         // Get unique reviewers who have reviewed this user's products with their reviews
-//         const reviewersAggregation = await ProductReview.aggregate([
-//             {
-//                 $match: {
-//                     productId: { $in: productIds },
-//                     isDeleted: false,
-//                     isDisable: false,
-//                     otheruserId: toObjectId(userId) // Add this line
-//                 }
-//             },
-//             {
-//                 $lookup: {
-//                     from: 'SellProduct',
-//                     localField: 'productId',
-//                     foreignField: '_id',
-//                     as: 'productDetails'
-//                 }
-//             },
-//             {
-//                 $unwind: '$productDetails'
-//             },
-//             {
-//                 $group: {
-//                     _id: '$userId',
-//                     totalReviews: { $sum: 1 },
-//                     averageRating: { $avg: '$rating' },
-//                     lastReviewDate: { $max: '$createdAt' },
-//                     raterRoles: { $addToSet: '$raterRole' },
-//                     reviews: {
-//                         $push: {
-//                             _id: '$_id',
-//                             rating: '$rating',
-//                             ratingText: '$ratingText',
-//                             reviewText: '$reviewText',
-//                             reviewImages: '$reviewImages',
-//                             raterRole: '$raterRole',
-//                             createdAt: '$createdAt',
-//                             updatedAt: '$updatedAt',
-//                             product: {
-//                                 _id: '$productDetails._id',
-//                                 title: '$productDetails.title',
-//                                 description: '$productDetails.description',
-//                                 fixedPrice: '$productDetails.fixedPrice',
-//                                 saleType: '$productDetails.saleType',
-//                                 productImages: '$productDetails.productImages'
-//                             }
-//                         }
-//                     }
-//                 }
-//             },
-//             {
-//                 $lookup: {
-//                     from: 'User',
-//                     localField: '_id',
-//                     foreignField: '_id',
-//                     as: 'userDetails'
-//                 }
-//             },
-//             {
-//                 $unwind: '$userDetails'
-//             },
-//             {
-//                 $lookup: {
-//                     from: 'Location',
-//                     localField: 'userDetails.provinceId',
-//                     foreignField: '_id',
-//                     as: 'province'
-//                 }
-//             },
-//             {
-//                 $lookup: {
-//                     from: 'Location',
-//                     localField: 'userDetails.districtId',
-//                     foreignField: '_id',
-//                     as: 'district'
-//                 }
-//             },
-//             {
-//                 $project: {
-//                     _id: 1,
-//                     totalReviews: 1,
-//                     averageRating: { $round: ['$averageRating', 1] },
-//                     lastReviewDate: 1,
-//                     raterRoles: 1,
-//                     reviews: {
-//                         $sortArray: {
-//                             input: '$reviews',
-//                             sortBy: { createdAt: -1 }
-//                         }
-//                     },
-//                     reviewer: {
-//                         _id: '$userDetails._id',
-//                         userName: '$userDetails.userName',
-//                         profileImage: '$userDetails.profileImage',
-//                         isLive: '$userDetails.isLive',
-//                         is_Id_verified: '$userDetails.is_Id_verified',
-//                         is_Verified_Seller: '$userDetails.is_Verified_Seller',
-//                         averageRatting: '$userDetails.averageRatting',
-//                         location: {
-//                             province: { $arrayElemAt: ['$province.value', 0] },
-//                             district: { $arrayElemAt: ['$district.value', 0] }
-//                         }
-//                     }
-//                 }
-//             },
-//             {
-//                 $sort: { lastReviewDate: -1 }
-//             },
-//             {
-//                 $skip: skip
-//             },
-//             {
-//                 $limit: size
-//             }
-//         ]);
-
-//         // Count total unique reviewers
-//         const totalReviewersCount = await ProductReview.aggregate([
-//             {
-//                 $match: {
-//                     productId: { $in: productIds },
-//                     isDeleted: false,
-//                     isDisable: false
-//                 }
-//             },
-//             {
-//                 $group: {
-//                     _id: '$userId'
-//                 }
-//             },
-//             {
-//                 $count: 'total'
-//             }
-//         ]);
-
-//         const totalReviewers = totalReviewersCount.length > 0 ? totalReviewersCount[0].total : 0;
-
-//         // Format response
-//         const formattedReviewers = reviewersAggregation.map(item => ({
-//             reviewer: item.reviewer,
-//             // reviewStats: {
-//             //     totalReviews: item.totalReviews,
-//             //     averageRating: item.averageRating,
-//             //     lastReviewDate: item.lastReviewDate,
-//             //     raterRoles: item.raterRoles // ['buyer', 'seller'] - shows what roles this user has reviewed as
-//             // },
-//             reviews: item?.reviews && item?.reviews[0]
-//             // .map(review => ({
-//             //     _id: review._id,
-//             //     rating: review.rating,
-//             //     ratingText: review.ratingText,
-//             //     reviewText: review.reviewText,
-//             //     reviewImages: review.reviewImages,
-//             //     raterRole: review.raterRole,
-//             //     createdAt: review.createdAt,
-//             //     updatedAt: review.updatedAt,
-//             //     product: {
-//             //         _id: review.product._id,
-//             //         title: review.product.title,
-//             //         description: review.product.description,
-//             //         price: review.product.fixedPrice,
-//             //         saleType: review.product.saleType,
-//             //         images: review.product.productImages
-//             //     }
-//             // }))
-//         }));
-
-//         return apiSuccessRes(HTTP_STATUS.OK, res, 'Reviewers list fetched successfully', {
-//             pageNo,
-//             size,
-//             total: totalReviewers,
-//             reviewers: formattedReviewers
-//         });
-
-//     } catch (err) {
-//         console.error('Get Reviewers List Error:', err);
-//         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Something went wrong');
-//     }
-// };
-
-
-
-
-
 const getReviewersList = async (req, res) => {
     try {
-        const currentUserId = req.query.userId || req.user.userId;
+        const userId = req.query.userId || req.user.userId;
+        // Parse pagination params
         const pageNo = parseInt(req.query.pageNo) || 1;
         const size = parseInt(req.query.size) || 10;
         const skip = (pageNo - 1) * size;
 
-        // 1. Find all reviews where userId or otheruserId matches
-        const reviews = await ProductReview.find({
-            $or: [
-                { userId: currentUserId },
-                { otheruserId: currentUserId }
-            ],
+        // First, find all products by this user
+        const userProducts = await SellProduct.find({
+            userId: userId,
             isDeleted: false,
             isDisable: false
-        })
-            .populate({
-                path: 'productId',
-                select: 'title description fixedPrice saleType productImages'
-            })
-            .populate({
-                path: 'userId',
-                select: 'userName profileImage isLive is_Id_verified is_Verified_Seller averageRatting provinceId districtId'
-            })
-            .sort({ createdAt: -1 })
-            .lean();
+        }).select('_id').lean();
 
-        // 2. Group reviews by reviewer (userId)
-        const reviewersMap = new Map();
-        for (const review of reviews) {
-            const reviewerId = review.userId?._id?.toString();
-            if (!reviewerId) continue;
+        const productIds = userProducts.map(product => product._id);
 
-            if (!reviewersMap.has(reviewerId)) {
-                reviewersMap.set(reviewerId, {
-                    reviewer: {
-                        _id: review.userId._id,
-                        userName: review.userId.userName,
-                        profileImage: review.userId.profileImage,
-                        isLive: review.userId.isLive,
-                        is_Id_verified: review.userId.is_Id_verified,
-                        is_Verified_Seller: review.userId.is_Verified_Seller,
-                        averageRatting: review.userId.averageRatting,
-                        provinceId: review.userId.provinceId,
-                        districtId: review.userId.districtId,
-                        location: { province: null, district: null }
-                    },
-                    reviews: []
-                });
-            }
-
-            reviewersMap.get(reviewerId).reviews.push({
-                _id: review._id,
-                rating: review.rating,
-                ratingText: review.ratingText,
-                reviewText: review.reviewText,
-                reviewImages: review.reviewImages,
-                raterRole: review.raterRole,
-                createdAt: review.createdAt,
-                updatedAt: review.updatedAt,
-                product: review.productId
-                    ? {
-                        _id: review.productId._id,
-                        title: review.productId.title,
-                        description: review.productId.description,
-                        fixedPrice: review.productId.fixedPrice,
-                        saleType: review.productId.saleType,
-                        productImages: review.productId.productImages
+        // Get unique reviewers who have reviewed this user's products with their reviews
+        const reviewersAggregation = await ProductReview.aggregate([
+            {
+                $match: {
+                    productId: { $in: productIds },
+                    isDeleted: false,
+                    isDisable: false,
+                    otheruserId: toObjectId(userId) // Add this line
+                }
+            },
+            {
+                $lookup: {
+                    from: 'SellProduct',
+                    localField: 'productId',
+                    foreignField: '_id',
+                    as: 'productDetails'
+                }
+            },
+            {
+                $unwind: '$productDetails'
+            },
+            {
+                $group: {
+                    _id: '$userId',
+                    totalReviews: { $sum: 1 },
+                    averageRating: { $avg: '$rating' },
+                    lastReviewDate: { $max: '$createdAt' },
+                    raterRoles: { $addToSet: '$raterRole' },
+                    reviews: {
+                        $push: {
+                            _id: '$_id',
+                            rating: '$rating',
+                            ratingText: '$ratingText',
+                            reviewText: '$reviewText',
+                            reviewImages: '$reviewImages',
+                            raterRole: '$raterRole',
+                            createdAt: '$createdAt',
+                            updatedAt: '$updatedAt',
+                            product: {
+                                _id: '$productDetails._id',
+                                title: '$productDetails.title',
+                                description: '$productDetails.description',
+                                fixedPrice: '$productDetails.fixedPrice',
+                                saleType: '$productDetails.saleType',
+                                productImages: '$productDetails.productImages'
+                            }
+                        }
                     }
-                    : null
-            });
-        }
+                }
+            },
+            {
+                $lookup: {
+                    from: 'User',
+                    localField: '_id',
+                    foreignField: '_id',
+                    as: 'userDetails'
+                }
+            },
+            {
+                $unwind: '$userDetails'
+            },
+            {
+                $lookup: {
+                    from: 'Location',
+                    localField: 'userDetails.provinceId',
+                    foreignField: '_id',
+                    as: 'province'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'Location',
+                    localField: 'userDetails.districtId',
+                    foreignField: '_id',
+                    as: 'district'
+                }
+            },
+            {
+                $project: {
+                    _id: 1,
+                    totalReviews: 1,
+                    averageRating: { $round: ['$averageRating', 1] },
+                    lastReviewDate: 1,
+                    raterRoles: 1,
+                    reviews: {
+                        $sortArray: {
+                            input: '$reviews',
+                            sortBy: { createdAt: -1 }
+                        }
+                    },
+                    reviewer: {
+                        _id: '$userDetails._id',
+                        userName: '$userDetails.userName',
+                        profileImage: '$userDetails.profileImage',
+                        isLive: '$userDetails.isLive',
+                        is_Id_verified: '$userDetails.is_Id_verified',
+                        is_Verified_Seller: '$userDetails.is_Verified_Seller',
+                        averageRatting: '$userDetails.averageRatting',
+                        location: {
+                            province: { $arrayElemAt: ['$province.value', 0] },
+                            district: { $arrayElemAt: ['$district.value', 0] }
+                        }
+                    }
+                }
+            },
+            {
+                $sort: { lastReviewDate: -1 }
+            },
+            {
+                $skip: skip
+            },
+            {
+                $limit: size
+            }
+        ]);
 
-        // 3. Fetch province & district names
-        const provinceIds = [...new Set([...reviewersMap.values()].map(r => r.reviewer.provinceId).filter(Boolean))];
-        const districtIds = [...new Set([...reviewersMap.values()].map(r => r.reviewer.districtId).filter(Boolean))];
+        // Count total unique reviewers
+        const totalReviewersCount = await ProductReview.aggregate([
+            {
+                $match: {
+                    productId: { $in: productIds },
+                    isDeleted: false,
+                    isDisable: false
+                }
+            },
+            {
+                $group: {
+                    _id: '$userId'
+                }
+            },
+            {
+                $count: 'total'
+            }
+        ]);
 
-        const provinces = await Location.find({ _id: { $in: provinceIds } }).select('value').lean();
-        const districts = await Location.find({ _id: { $in: districtIds } }).select('value').lean();
+        const totalReviewers = totalReviewersCount.length > 0 ? totalReviewersCount[0].total : 0;
 
-        const provinceMap = Object.fromEntries(provinces.map(p => [p._id.toString(), p.value]));
-        const districtMap = Object.fromEntries(districts.map(d => [d._id.toString(), d.value]));
-
-        // 4. Build final array
-        let reviewersArr = [];
-        for (const [, data] of reviewersMap) {
-            data.reviewer.location = {
-                province: provinceMap[data.reviewer.provinceId?.toString()] || null,
-                district: districtMap[data.reviewer.districtId?.toString()] || null
-            };
-
-            reviewersArr.push({
-                reviewer: data.reviewer,
-                reviews: data.reviews[0] // latest review only
-            });
-        }
-
-        // 5. Sort & paginate
-        reviewersArr.sort((a, b) => b.reviews.createdAt - a.reviews.createdAt);
-        const totalReviewers = reviewersArr.length;
-        reviewersArr = reviewersArr.slice(skip, skip + size);
+        // Format response
+        const formattedReviewers = reviewersAggregation.map(item => ({
+            reviewer: item.reviewer,
+            // reviewStats: {
+            //     totalReviews: item.totalReviews,
+            //     averageRating: item.averageRating,
+            //     lastReviewDate: item.lastReviewDate,
+            //     raterRoles: item.raterRoles // ['buyer', 'seller'] - shows what roles this user has reviewed as
+            // },
+            reviews: item?.reviews && item?.reviews[0]
+            // .map(review => ({
+            //     _id: review._id,
+            //     rating: review.rating,
+            //     ratingText: review.ratingText,
+            //     reviewText: review.reviewText,
+            //     reviewImages: review.reviewImages,
+            //     raterRole: review.raterRole,
+            //     createdAt: review.createdAt,
+            //     updatedAt: review.updatedAt,
+            //     product: {
+            //         _id: review.product._id,
+            //         title: review.product.title,
+            //         description: review.product.description,
+            //         price: review.product.fixedPrice,
+            //         saleType: review.product.saleType,
+            //         images: review.product.productImages
+            //     }
+            // }))
+        }));
 
         return apiSuccessRes(HTTP_STATUS.OK, res, 'Reviewers list fetched successfully', {
             pageNo,
             size,
             total: totalReviewers,
-            reviewers: reviewersArr
+            reviewers: formattedReviewers
         });
 
     } catch (err) {
@@ -798,6 +679,125 @@ const getReviewersList = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Something went wrong');
     }
 };
+
+
+
+
+
+// const getReviewersList = async (req, res) => {
+//     try {
+//         const currentUserId = req.query.userId || req.user.userId;
+//         const pageNo = parseInt(req.query.pageNo) || 1;
+//         const size = parseInt(req.query.size) || 10;
+//         const skip = (pageNo - 1) * size;
+
+//         // 1. Find all reviews where userId or otheruserId matches
+//         const reviews = await ProductReview.find({
+//             $or: [
+//                 { userId: currentUserId },
+//                 { otheruserId: currentUserId }
+//             ],
+//             isDeleted: false,
+//             isDisable: false
+//         })
+//             .populate({
+//                 path: 'productId',
+//                 select: 'title description fixedPrice saleType productImages'
+//             })
+//             .populate({
+//                 path: 'userId',
+//                 select: 'userName profileImage isLive is_Id_verified is_Verified_Seller averageRatting provinceId districtId'
+//             })
+//             .sort({ createdAt: -1 })
+//             .lean();
+
+//         // 2. Group reviews by reviewer (userId)
+//         const reviewersMap = new Map();
+//         for (const review of reviews) {
+//             const reviewerId = review.userId?._id?.toString();
+//             if (!reviewerId) continue;
+
+//             if (!reviewersMap.has(reviewerId)) {
+//                 reviewersMap.set(reviewerId, {
+//                     reviewer: {
+//                         _id: review.userId._id,
+//                         userName: review.userId.userName,
+//                         profileImage: review.userId.profileImage,
+//                         isLive: review.userId.isLive,
+//                         is_Id_verified: review.userId.is_Id_verified,
+//                         is_Verified_Seller: review.userId.is_Verified_Seller,
+//                         averageRatting: review.userId.averageRatting,
+//                         provinceId: review.userId.provinceId,
+//                         districtId: review.userId.districtId,
+//                         location: { province: null, district: null }
+//                     },
+//                     reviews: []
+//                 });
+//             }
+
+//             reviewersMap.get(reviewerId).reviews.push({
+//                 _id: review._id,
+//                 rating: review.rating,
+//                 ratingText: review.ratingText,
+//                 reviewText: review.reviewText,
+//                 reviewImages: review.reviewImages,
+//                 raterRole: review.raterRole,
+//                 createdAt: review.createdAt,
+//                 updatedAt: review.updatedAt,
+//                 product: review.productId
+//                     ? {
+//                         _id: review.productId._id,
+//                         title: review.productId.title,
+//                         description: review.productId.description,
+//                         fixedPrice: review.productId.fixedPrice,
+//                         saleType: review.productId.saleType,
+//                         productImages: review.productId.productImages
+//                     }
+//                     : null
+//             });
+//         }
+
+//         // 3. Fetch province & district names
+//         const provinceIds = [...new Set([...reviewersMap.values()].map(r => r.reviewer.provinceId).filter(Boolean))];
+//         const districtIds = [...new Set([...reviewersMap.values()].map(r => r.reviewer.districtId).filter(Boolean))];
+
+//         const provinces = await Location.find({ _id: { $in: provinceIds } }).select('value').lean();
+//         const districts = await Location.find({ _id: { $in: districtIds } }).select('value').lean();
+
+//         const provinceMap = Object.fromEntries(provinces.map(p => [p._id.toString(), p.value]));
+//         const districtMap = Object.fromEntries(districts.map(d => [d._id.toString(), d.value]));
+
+//         // 4. Build final array
+//         let reviewersArr = [];
+//         for (const [, data] of reviewersMap) {
+//             data.reviewer.location = {
+//                 province: provinceMap[data.reviewer.provinceId?.toString()] || null,
+//                 district: districtMap[data.reviewer.districtId?.toString()] || null
+//             };
+
+//             reviewersArr.push({
+//                 reviewer: data.reviewer,
+//                 reviews: data.reviews[0] // latest review only
+//             });
+//         }
+
+//         // 5. Sort & paginate
+//         reviewersArr.sort((a, b) => b.reviews.createdAt - a.reviews.createdAt);
+//         const totalReviewers = reviewersArr.length;
+//         reviewersArr = reviewersArr.slice(skip, skip + size);
+
+//         return apiSuccessRes(HTTP_STATUS.OK, res, 'Reviewers list fetched successfully', {
+//             pageNo,
+//             size,
+//             total: totalReviewers,
+//             reviewers: reviewersArr
+//         });
+
+//     } catch (err) {
+//         console.error('Get Reviewers List Error:', err);
+//         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Something went wrong');
+//     }
+// };
 
 
 
