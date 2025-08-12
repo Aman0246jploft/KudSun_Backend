@@ -85,6 +85,11 @@ const createDispute = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Order not found for this buyer');
         }
 
+        if (order.status === 'completed') {
+            await session.abortTransaction();
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Cannot raise dispute on a completed order');
+        }
+
         const deliveredHistory = await OrderStatusHistory.findOne({
             orderId: order._id,
             newStatus: ORDER_STATUS.DELIVERED
