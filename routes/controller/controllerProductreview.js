@@ -499,7 +499,7 @@ const getReviewersList = async (req, res) => {
             isDisable: false
         }).select('_id').lean();
 
-        const productIds = userProducts.map(product => product._id);
+        // const productIds = userProducts.map(product => product._id);
 
         // Get unique reviewers who have reviewed this user's products with their reviews
         const reviewersAggregation = await ProductReview.aggregate([
@@ -621,7 +621,8 @@ const getReviewersList = async (req, res) => {
         const totalReviewersCount = await ProductReview.aggregate([
             {
                 $match: {
-                    productId: { $in: productIds },
+                    otheruserId: toObjectId(userId) // Add this line
+                    // productId: { $in: productIds },
                     isDeleted: false,
                     isDisable: false
                 }
