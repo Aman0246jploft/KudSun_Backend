@@ -15,24 +15,37 @@ const { toObjectId, apiSuccessRes, apiErrorRes } = require('../../utils/globalFu
 
 const createAddress = async (req, res) => {
     try {
-        let value = { ...req.body, userId: req?.user?.userId };
-
-        // Normalize isActive from string if provided
-        if (typeof req.body.isActive === 'string') {
-            value.isActive = req.body.isActive.toLowerCase() === 'true';
+        const userId = req?.user?.userId;
+        if (!userId) {
+            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "User not found");
         }
 
-        // Default isActive to true if not provided
-        if (value.isActive === undefined) {
+        // Check if user already has any addresses
+        const existingCount = await UserAddress.countDocuments({ userId: toObjectId(userId), isDeleted: false });
+
+        let value = { ...req.body, userId };
+
+        // If first address, force isActive to true
+        if (existingCount === 0) {
             value.isActive = true;
-        }
+        } else {
+            // Normalize isActive from string if provided
+            if (typeof req.body.isActive === 'string') {
+                value.isActive = req.body.isActive.toLowerCase() === 'true';
+            }
 
-        // If new address is active, deactivate all others for the user
-        if (value.isActive === true) {
-            await UserAddress.updateMany(
-                { userId: toObjectId(value.userId), isDeleted: false },
-                { $set: { isActive: false } }
-            );
+            // Default isActive to true if not provided
+            if (value.isActive === undefined) {
+                value.isActive = true;
+            }
+
+            // If new address is active, deactivate all others for the user
+            if (value.isActive === true) {
+                await UserAddress.updateMany(
+                    { userId: toObjectId(userId), isDeleted: false },
+                    { $set: { isActive: false } }
+                );
+            }
         }
 
         const address = new UserAddress(value);
@@ -43,6 +56,7 @@ const createAddress = async (req, res) => {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
     }
 };
+
 
 
 const getById = async (req, res) => {
