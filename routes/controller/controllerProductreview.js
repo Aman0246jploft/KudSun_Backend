@@ -59,8 +59,7 @@ const createOrUpdateReview = async (req, res) => {
         const { productId, rating, ratingText, reviewText } = req.body;
         const userId = req.user.userId;
         const raterUser = await User.findById(userId).lean();
-        const recipientId = raterRole === 'buyer' ? order.sellerId : order.userId;
-        const recipientUser = await User.findById(recipientId).lean();
+
 
         // 2. Find order where user is buyer or seller for this product and order is completed
         const order = await Order.findOne({
@@ -84,7 +83,8 @@ const createOrUpdateReview = async (req, res) => {
         } else {
             return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, 'You are not authorized to rate this product/order.');
         }
-
+        const recipientId = raterRole === 'buyer' ? order.sellerId : order.userId;
+        const recipientUser = await User.findById(recipientId).lean();
         // 4. Upload images if any
         let reviewImages = [];
         if (req.files?.length) {
@@ -900,7 +900,7 @@ const getProductReviews = async (req, res) => {
     }
 };
 
-router.post('/review', perApiLimiter(), upload.array('reviewImages', 3), validateRequest(createReviewValidation), createOrUpdateReview);
+router.post('/review', perApiLimiter(), upload.array('reviewImages', 3), createOrUpdateReview);
 router.get('/user-reviews', perApiLimiter(), getUserReviews);
 // router.get('/reviews-about-user', perApiLimiter(), getReviewsAboutUser);
 router.get('/reviewers-list', perApiLimiter(), getReviewersList);
