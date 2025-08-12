@@ -2464,7 +2464,7 @@ const getSoldProducts = async (req, res) => {
                 allowedNextStatuses = ORDER_STATUS.CONFIRMED;
             } else if (currentStatus === ORDER_STATUS.CONFIRMED) {
                 if (allLocalPickup) {
-                    allowedNextStatuses = ORDER_STATUS.DELIVERED;
+                    allowedNextStatuses = 'Deliver';
                 } else {
                     labalStatuses = "Unsent";
                     allowedNextStatuses = ORDER_STATUS.SHIPPED;
