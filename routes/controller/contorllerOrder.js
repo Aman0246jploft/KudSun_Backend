@@ -6346,12 +6346,12 @@ const cancelOrderByBuyer = async (req, res) => {
 
         // Check if ALL products are local pickup - UNCHANGED
         const allLocalPickup = populatedOrder.items.every(
-            item => item.productId?.deliveryType === "local pickup"
+            item => item.productId?.deliveryType === DeliveryType.LOCAL_PICKUP
         );
 
         // Check if ANY product has shipping - UNCHANGED
         const hasShippingProducts = populatedOrder.items.some(
-            item => item.productId?.deliveryType !== "local pickup"
+            item => item.productId?.deliveryType !== DeliveryType.LOCAL_PICKUP
         );
 
         // Validate cancellation based on delivery type and current status - UNCHANGED

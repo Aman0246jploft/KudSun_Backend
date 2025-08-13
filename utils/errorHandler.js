@@ -4,7 +4,7 @@ const HTTP_STATUS = require('./statusCode');
 const apiErrorRes = globalFunction.apiErrorRes;
 
 function errorHandler(err, req, res, next) {
-    console.log("errerr  ", err);
+
     if (typeof (err) === 'string') {
         return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Eroor");
     }
