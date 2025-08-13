@@ -23,6 +23,8 @@ module.exports = {
     reportType: require("./controller/controllerReportType"),
     disputeType: require("./controller/controllerDisputeType"),
     cancelType: require("./controller/controllerCancelType"),
+    wSetting: require("./controller/controllerWithdrawlSetting"),
+
 
 
     revenue: require("./controller/controllerPlatformRevenue"),

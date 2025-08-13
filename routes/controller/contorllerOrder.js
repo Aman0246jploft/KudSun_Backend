@@ -4,13 +4,13 @@ require('dotenv').config();
 const upload = multer();
 const router = express.Router();
 const moment = require("moment")
-const { UserAddress, Transaction, Order, SellProduct, Bid, FeeSetting, User, Shipping, OrderStatusHistory, ProductReview, ChatRoom, ChatMessage, WalletTnx, SellerWithdrawl, SellerBank, PlatformRevenue, Dispute, CancelType } = require('../../db');
+const { UserAddress, Transaction, Order, SellProduct, Bid, FeeSetting, User, Shipping, OrderStatusHistory, ProductReview, ChatRoom, ChatMessage, WalletTnx, SellerWithdrawl, SellerBank, PlatformRevenue, Dispute, CancelType, WithdrawlSetting } = require('../../db');
 const { findOrCreateOneOnOneRoom } = require('../services/serviceChat');
 const { saveNotification } = require('../services/serviceNotification');
 const perApiLimiter = require('../../middlewares/rateLimiter');
 const HTTP_STATUS = require('../../utils/statusCode');
 const { toObjectId, apiSuccessRes, apiErrorRes, parseItems } = require('../../utils/globalFunction');
-const { SALE_TYPE, DEFAULT_AMOUNT, PAYMENT_METHOD, ORDER_STATUS, PAYMENT_STATUS, CHARGE_TYPE, PRICING_TYPE, SHIPPING_STATUS, TNX_TYPE, NOTIFICATION_TYPES, createStandardizedChatMeta, createStandardizedNotificationMeta, DISPUTE_STATUS, DISPUTE_DECISION, DeliveryType } = require('../../utils/Role');
+const { SALE_TYPE, DEFAULT_AMOUNT, PAYMENT_METHOD, ORDER_STATUS, PAYMENT_STATUS, CHARGE_TYPE, PRICING_TYPE, SHIPPING_STATUS, TNX_TYPE, NOTIFICATION_TYPES, createStandardizedChatMeta, createStandardizedNotificationMeta, DISPUTE_STATUS, DISPUTE_DECISION, DeliveryType, WSETTING } = require('../../utils/Role');
 const { default: mongoose } = require('mongoose');
 const Joi = require('joi');
 const { uploadImageCloudinary } = require('../../utils/cloudinary');
@@ -4119,6 +4119,33 @@ const addrequest = async (req, res) => {
     try {
         const { withDrawMethodId, amount } = req.body;
         const userId = req.user.userId;
+
+        // ✅ Fetch withdrawal settings (min and max)
+        const withdrawalSettings = await WithdrawlSetting.find().lean();
+        const minSetting = withdrawalSettings.find(e => e.name === WSETTING.Minimum_Amount);
+        const maxSetting = withdrawalSettings.find(e => e.name === WSETTING.Maximum_Amount);
+
+        const minAmount = minSetting ? Number(minSetting.value) : 0;
+        const maxAmount = maxSetting ? Number(maxSetting.value) : Infinity;
+
+
+        if (Number(amount) < minAmount) {
+            return apiErrorRes(
+                HTTP_STATUS.BAD_REQUEST,
+                res,
+                `Withdrawal amount cannot be less than ${minAmount}`
+            );
+        }
+
+        if (Number(amount) > maxAmount) {
+            return apiErrorRes(
+                HTTP_STATUS.BAD_REQUEST,
+                res,
+                `Withdrawal amount cannot be more than ${maxAmount}`
+            );
+        }
+
+
 
         await session.withTransaction(async () => {
             const user = await User.findById(userId).session(session);

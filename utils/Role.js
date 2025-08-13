@@ -4,6 +4,16 @@ const roleId = {
     GUEST: 3
 }
 
+
+
+
+const WSETTING = {
+    Maximum_Amount: `Maximum Amount`,
+    Minimum_Amount: `Minimum Amount`,
+}
+
+
+
 const conditions = {
     brand_new: 'brand new',
     like_new: "like new",
@@ -264,7 +274,7 @@ module.exports = {
 
 
 
-
+    WSETTING,
     DISPUTE_DECISION,
     DISPUTE_RESPONSE_TYPE
 }

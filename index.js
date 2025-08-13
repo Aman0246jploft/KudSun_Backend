@@ -35,7 +35,7 @@ app.get('/ping', (req, res) => {
 
 // Loop through the controllers and register routes
 for (const [route, controller] of Object.entries(controllers)) {
-    // console.log(`${API_END_POINT_V1}${route}`);
+    console.log(`${API_END_POINT_V1}${route}`);
     app.use(`${API_END_POINT_V1}${route}`, controller);
 }
 

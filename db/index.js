@@ -71,6 +71,8 @@ module.exports = {
     PlatformRevenue: require("./models/PlatformRevenue"),
     WalletTnx: require("./models/Payment/WalletTnx"),
     SellerWithdrawl: require('./models/Payment/SellerWithdrawl'),
+    WithdrawlSetting: require('./models/WithdrawlSetting'),
+
     //rbac---->
     Module: require("./models/Rbac/Module"),
     Role: require("./models/Rbac/Role"),
