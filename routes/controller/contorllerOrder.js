@@ -4405,6 +4405,20 @@ const getWithdrawalInfo = async (req, res) => {
     try {
         const userId = req.user.userId;
 
+
+
+
+        const withdrawalSettings = await WithdrawlSetting.find().lean();
+        const minSetting = withdrawalSettings.find(e => e.name === WSETTING.Minimum_Amount);
+        const maxSetting = withdrawalSettings.find(e => e.name === WSETTING.Maximum_Amount);
+
+        const minAmount = minSetting ? Number(minSetting.value) : 0;
+        const maxAmount = maxSetting ? Number(maxSetting.value) : Infinity;
+
+
+
+
+
         // Fetch user wallet info
         const user = await User.findById(userId).select('walletBalance FreezWalletBalance').lean();
         if (!user) {
@@ -4437,7 +4451,9 @@ const getWithdrawalInfo = async (req, res) => {
             walletBalance: Number(user.walletBalance),
             FreezWalletBalance: Number(user.FreezWalletBalance),
             withdrawalMethods,
-            withdrawalFeeInfo
+            withdrawalFeeInfo,
+            minAmount,
+            maxAmount
         });
 
     } catch (err) {
