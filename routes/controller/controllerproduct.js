@@ -2518,9 +2518,16 @@ const getProduct = async (req, res) => {
 
         let query = {
             _id: id,
-            isDeleted: false,
-            isDisable: false,
+            // isDeleted: false,
+            // isDisable: false,
         };
+
+        if (req.query.isDeleted) {
+            query.isDeleted = true;
+        }
+        if (req.query.isDisable) {
+            query.isDisable = true;
+        }
 
         if (isDraft) {
             query.isDraft = true;
