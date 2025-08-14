@@ -637,6 +637,66 @@ const toggleProductDisable = async (req, res) => {
 
         await product.save();
 
+        const notifications = [];
+        const actionByAdmin = req.user?.userId;
+        const isNowDisabled = product.isDisable;
+        const productImage = product.productImages?.[0] || product.photo || null;
+
+        const productPrice = product.saleType === SALE_TYPE.AUCTION
+            ? (product.auctionSettings?.startingBid || 0)
+            : (product.fixedPrice || 0);
+        const productTitle = product.title;
+        // Notify the product owner
+        notifications.push({
+            recipientId: product.userId, // product owner
+            userId: actionByAdmin,
+            type: NOTIFICATION_TYPES.ACTIVITY,
+            title: isNowDisabled
+                ? "Your Product Has Been Deactivated"
+                : "Your Product Has Been Activated",
+            message: isNowDisabled
+                ? `An admin has deactivated your product "${product.title.length > 50 ? product.title.substring(0, 50) + '...' : product.title}".`
+                : `An admin has activated your product "${product.title.length > 50 ? product.title.substring(0, 50) + '...' : product.title}".`,
+            meta: createStandardizedNotificationMeta({
+                productId: product._id.toString(),
+                productTitle: product.title,
+                productImage: productImage,
+                productPrice: productPrice,
+                productFixedPrice: product.fixedPrice || null,
+                productDeliveryType: product.deliveryType || null,
+                productSaleType: product.saleType || null,
+                productCondition: product.condition || null,
+                sellerId: product.userId._id.toString(),
+                actionBy: 'admin',
+                timestamp: new Date().toISOString(),
+            }),
+            redirectUrl: `/products/${product._id}`
+        });
+        if (notifications.length > 0) {
+            try {
+                const allowedRecipients = await User.find({
+                    _id: { $in: notifications.map(n => n.recipientId) },
+                    activityNotification: true
+                }).select('_id');
+
+                const allowedIdsSet = new Set(allowedRecipients.map(u => u._id.toString()));
+
+                const filteredNotifications = notifications.filter(n =>
+                    allowedIdsSet.has(n.recipientId.toString())
+                );
+
+                if (filteredNotifications.length > 0) {
+                    await saveNotification(filteredNotifications);
+                    console.log(`✅ Notification sent: product ${isNowDisabled ? 'deactivated' : 'activated'}`);
+                } else {
+                    console.log('⚠️ Product owner has disabled activity notifications. Skipping dispatch.');
+                }
+            } catch (notificationError) {
+                console.error('❌ Failed to send toggle product notifications:', notificationError);
+            }
+        }
+
+
         return apiSuccessRes(200, res, "Product disable status toggled successfully", product);
     } catch (error) {
         return apiErrorRes(500, res, error.message, error);
