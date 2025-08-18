@@ -1429,7 +1429,6 @@ const showAuctionProducts = async (req, res) => {
                 product.timeRemaining = timeLeftMs > 0 ? formatTimeRemaining(timeLeftMs) : 0;
                 product.auctionSettings.biddingEndsAt = localDate.toISO();
                 product.isNew = isNewItem(product.createdAt);
-
             }
 
             let likedProductIds = new Set();
@@ -1465,7 +1464,7 @@ const showAuctionProducts = async (req, res) => {
                 .sort(sortOptions) // Ending soonest first
                 .skip(skip)
                 .limit(limit)
-                .select("title productImages condition isDisable subCategoryId auctionSettings tags description specifics createdAt")
+                .select("title productImages isSold condition isDisable subCategoryId auctionSettings tags description specifics createdAt")
                 .populate("categoryId", "name")
                 .populate("userId", "userName profileImage averageRatting is_Id_verified isLive is_Preferred_seller")
                 .lean(),
@@ -1525,6 +1524,7 @@ const showAuctionProducts = async (req, res) => {
             // const timeLeftMs = endTime - localNow;
             product.timeRemaining = timeLeftMs > 0 ? formatTimeRemaining(timeLeftMs) : 0;
             product.auctionSettings.biddingEndsAt = localDate.toISO(); // with offset
+            product.isSold = product.isSold;
         })
 
         let likedProductIds = new Set();
