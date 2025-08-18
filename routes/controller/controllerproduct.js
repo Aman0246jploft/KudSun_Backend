@@ -2822,7 +2822,12 @@ const getProduct = async (req, res) => {
             isDeleted: false,
             // saleType:SALE_TYPE.FIXED / AUCTION ,
             isDisable: false,
+            isSold: false,
             isDraft: { $ne: true },
+            $or: [
+                { saleType: SALE_TYPE.FIXED },
+                { saleType: SALE_TYPE.AUCTION, "auctionSettings.isBiddingOpen": true }
+            ]
         })
             .sort({ createdAt: -1 })
             .limit(10)
