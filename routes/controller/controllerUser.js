@@ -22,7 +22,7 @@ const globalCrudController = require('./globalCrudController');
 const { default: mongoose } = require('mongoose');
 const Joi = require('joi');
 // Import Algolia service
-const { indexUser, deleteUser, deleteUsers, deleteThreads } = require('../services/serviceAlgolia');
+const { indexUser, deleteUser, deleteUsers, deleteThreads, deleteProducts } = require('../services/serviceAlgolia');
 const { OAuth2Client } = require('google-auth-library');
 const { saveNotification } = require('../services/serviceNotification');
 const { sendOtpSMS } = require('../services/twilioService');
