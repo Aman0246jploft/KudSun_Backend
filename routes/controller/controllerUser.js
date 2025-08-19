@@ -22,7 +22,7 @@ const globalCrudController = require('./globalCrudController');
 const { default: mongoose } = require('mongoose');
 const Joi = require('joi');
 // Import Algolia service
-const { indexUser, deleteUser } = require('../services/serviceAlgolia');
+const { indexUser, deleteUser, deleteUsers, deleteThreads } = require('../services/serviceAlgolia');
 const { OAuth2Client } = require('google-auth-library');
 const { saveNotification } = require('../services/serviceNotification');
 const { sendOtpSMS } = require('../services/twilioService');
@@ -3103,28 +3103,102 @@ const updatePassword = async (req, res) => {
 };
 
 
+// const deleteAccount = async (req, res) => {
+//     try {
+//         const userId = req.user?.userId;
+//         const user = await getDocumentByQuery(User, { _id: userId, isDeleted: false });
+//         if (user.statusCode !== CONSTANTS.SUCCESS) {
+//             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'User not found or already deleted');
+//         }
+//         user.data.isDeleted = true
+//         await user.data.save();
+//         try {
+//             await deleteUsers(userId);
+//         } catch (algoliaError) {
+//             console.error('❌ Algolia deletion failed for user:', userId, algoliaError);
+//             // Don't block account deletion if Algolia fails
+//         }
+
+//         return apiSuccessRes(HTTP_STATUS.OK, res, 'Account deleted successfully');
+//     } catch (err) {
+//         console.error('updatePassword error:', err);
+//         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Something went wrong');
+//     }
+// }
+
 const deleteAccount = async (req, res) => {
     try {
         const userId = req.user?.userId;
+
+        // Find active user
         const user = await getDocumentByQuery(User, { _id: userId, isDeleted: false });
         if (user.statusCode !== CONSTANTS.SUCCESS) {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'User not found or already deleted');
         }
-        user.data.isDeleted = true
+
+        // --- 1. Immediately soft delete user ---
+        user.data.isDeleted = true;
         await user.data.save();
+
         try {
-            await deleteUsers(userId);
+            await deleteUsers(userId); // Algolia user index
         } catch (algoliaError) {
             console.error('❌ Algolia deletion failed for user:', userId, algoliaError);
-            // Don't block account deletion if Algolia fails
         }
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, 'Account deleted successfully');
+        // ✅ Send response early
+        apiSuccessRes(HTTP_STATUS.OK, res, 'Account deletion started. All products & threads will be removed shortly.');
+
+        // --- 2. Continue in background (non-blocking) ---
+        process.nextTick(async () => {
+            try {
+                // Delete Products
+                const products = await SellProduct.find({ userId, isDeleted: false });
+                await Promise.all(products.map(async (product) => {
+                    try {
+                        if (product.photos?.length) {
+                            await Promise.all(product.photos.map(url => deleteImageCloudinary(url).catch(err => {
+                                console.error("Cloudinary delete failed:", url, err);
+                            })));
+                        }
+                        product.isDeleted = true;
+                        await product.save();
+                        await deleteProducts(product._id).catch(err => {
+                            console.error("Algolia product delete failed:", product._id, err);
+                        });
+                    } catch (e) {
+                        console.error("Product delete failed:", product._id, e);
+                    }
+                }));
+
+                // Delete Threads
+                const threads = await Thread.find({ userId, isDeleted: false });
+                await Promise.all(threads.map(async (thread) => {
+                    thread.isDeleted = true;
+                    await thread.save();
+                    await deleteThreads(thread._id).catch(err => {
+                        console.error("Algolia thread delete failed:", thread._id, err);
+                    });
+                }));
+
+                // Delete Drafts (no Algolia)
+                const drafts = await ThreadDraft.find({ userId, isDeleted: false });
+                await Promise.all(drafts.map(async (draft) => {
+                    draft.isDeleted = true;
+                    await draft.save();
+                }));
+
+                console.log(`✅ Cleanup completed for user ${userId}`);
+            } catch (cleanupErr) {
+                console.error("❌ Background cleanup failed for user:", userId, cleanupErr);
+            }
+        });
+
     } catch (err) {
-        console.error('updatePassword error:', err);
+        console.error('deleteAccount error:', err);
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Something went wrong');
     }
-}
+};
 
 
 const blockUser = async (req, res) => {
