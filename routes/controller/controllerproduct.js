@@ -3648,9 +3648,6 @@ const getProductsWithDraft = async (req, res) => {
             filter['auctionSettings.isBiddingOpen'] = isAuctionOpen === 'true';
         }
 
-
-console.log("filter",filter)
-
         // Calculate skip value for pagination
         const skip = (parseInt(page) - 1) * parseInt(limit);
 
