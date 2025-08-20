@@ -2069,6 +2069,8 @@ const getProfile = async (req, res) => {
             dealChatnotification: user?.dealChatnotification,
             activityNotification: user?.activityNotification,
             alertNotification: user?.alertNotification,
+            verifyPhone:user?.verifyPhone,
+            verifyEmail:user?.verifyEmail,
             walletBalance: parseFloat(Number(user?.walletBalance).toFixed(2))
 
         };
