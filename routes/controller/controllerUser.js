@@ -262,7 +262,8 @@ const completeRegistration = async (req, res) => {
     }
 
 
-    const user = new User({
+
+    let obj = {
         phoneNumber: tempUser.phoneNumber,
         email: tempUser.email,
         userName: userName,
@@ -273,7 +274,15 @@ const completeRegistration = async (req, res) => {
         categories: tempUser.categories || [],
         step: 5,
         fcmToken: fcmToken || null
-    });
+    }
+
+
+    if (req.file) {
+        const imageUrl = await uploadImageCloudinary(req.file, 'profile-images');
+        obj.profileImage = imageUrl;
+    }
+
+    const user = new User(obj);
 
 
     const payload = {
