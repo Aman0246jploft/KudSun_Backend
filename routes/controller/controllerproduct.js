@@ -3598,7 +3598,7 @@ const getProductsWithDraft = async (req, res) => {
 
 
         // Text Search
-        if (search) {
+        if (search&&search.trim()!=="") {
             filter.$or = [
                 { title: { $regex: search, $options: 'i' } },
                 { description: { $regex: search, $options: 'i' } }
@@ -3606,18 +3606,18 @@ const getProductsWithDraft = async (req, res) => {
         }
 
         // Category Filters
-        if (categoryId) {
+        if (categoryId&&categoryId.trim()!=="") {
             filter.categoryId = new mongoose.Types.ObjectId(categoryId);
         }
-        if (subCategoryId) {
+        if (subCategoryId&&subCategoryId.trim()!=="") {
             filter.subCategoryId = new mongoose.Types.ObjectId(subCategoryId);
         }
 
         // Price Range
-        if (minPrice !== undefined || maxPrice !== undefined) {
+        if ((minPrice !== undefined&&minPrice!=="") || (maxPrice !== undefined&&maxPrice!=="")) {
             filter.fixedPrice = {};
-            if (minPrice !== undefined) filter.fixedPrice.$gte = Number(minPrice);
-            if (maxPrice !== undefined) filter.fixedPrice.$lte = Number(maxPrice);
+            if (minPrice !== undefined&&minPrice!=="") filter.fixedPrice.$gte = Number(minPrice);
+            if (maxPrice !== undefined&&maxPrice!=="") filter.fixedPrice.$lte = Number(maxPrice);
         }
 
         // Sale Type
@@ -3647,6 +3647,9 @@ const getProductsWithDraft = async (req, res) => {
         if (isAuctionOpen !== undefined && saleType === SALE_TYPE.AUCTION) {
             filter['auctionSettings.isBiddingOpen'] = isAuctionOpen === 'true';
         }
+
+
+console.log("filter",filter)
 
         // Calculate skip value for pagination
         const skip = (parseInt(page) - 1) * parseInt(limit);
