@@ -1821,42 +1821,57 @@ const getBoughtProducts = async (req, res) => {
         // Date filters (fromDate, toDate)
         if ((fromDate && fromDate.trim() !== "") || (toDate && toDate.trim() !== "")) {
             query.createdAt = {};
-            if (fromDate && fromDate.trim() !== "") query.createdAt.$gte = new Date(fromDate);
-            if (toDate && toDate.trim() !== "") query.createdAt.$lte = new Date(toDate);
+
+            if (fromDate && fromDate.trim() !== "") {
+                const from = new Date(fromDate);
+                from.setHours(0, 0, 0, 0); // start of day
+                query.createdAt.$gte = from;
+            }
+
+            if (toDate && toDate.trim() !== "") {
+                const to = new Date(toDate);
+                to.setHours(23, 59, 59, 999); // end of day
+                query.createdAt.$lte = to;
+            }
         }
+
 
         // dateFilter: '1month', '3months', '9months', 'thisyear'
         if (dateFilter && dateFilter.trim() !== "") {
-            const now = new Date();
-            const startOfYear = new Date(now.getFullYear(), 0, 1);
-            let startDate;
+    const now = new Date();
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
 
-            switch (dateFilter.toLowerCase()) {
-                case '1month':
-                    startDate = new Date(now);
-                    startDate.setMonth(now.getMonth() - 1);
-                    break;
-                case '3months':
-                    startDate = new Date(now);
-                    startDate.setMonth(now.getMonth() - 3);
-                    break;
-                case '9months':
-                    startDate = new Date(now);
-                    startDate.setMonth(now.getMonth() - 9);
-                    break;
-                case 'thisyear':
-                    startDate = startOfYear;
-                    break;
-                default:
-                    startDate = null;
-            }
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+    let startDate;
 
-            if (startDate) {
-                query.createdAt = query.createdAt || {};
-                query.createdAt.$gte = startDate;
-                query.createdAt.$lte = now;
-            }
-        }
+    switch (dateFilter.toLowerCase()) {
+        case '1month':
+            startDate = new Date(now);
+            startDate.setMonth(now.getMonth() - 1);
+            break;
+        case '3months':
+            startDate = new Date(now);
+            startDate.setMonth(now.getMonth() - 3);
+            break;
+        case '9months':
+            startDate = new Date(now);
+            startDate.setMonth(now.getMonth() - 9);
+            break;
+        case 'thisyear':
+            startDate = startOfYear;
+            break;
+        default:
+            startDate = null;
+    }
+
+    if (startDate) {
+        startDate.setHours(0, 0, 0, 0); // normalize start to beginning of day
+        query.createdAt = query.createdAt || {};
+        query.createdAt.$gte = startDate;
+        query.createdAt.$lte = endOfToday;
+    }
+}
 
         // Total count with base filters only (keyword filter applies after populate, so counted separately)
         const total = await Order.countDocuments(query);
@@ -1946,15 +1961,15 @@ const getBoughtProducts = async (req, res) => {
             // if (status === "Unreviewed" && order.isReviewed) continue;
             // filteredOrders.push(order);
             if (status === "Unreviewed") {
-    if (
-        (order.status === ORDER_STATUS.CONFIRM_RECEIPT || order.status === ORDER_STATUS.COMPLETED) &&
-        order.paymentStatus === PAYMENT_STATUS.COMPLETED &&
-        !order.isReviewed
-    ) {
-        filteredOrders.push(order);
-    }
-    continue; // skip the default push below
-}
+                if (
+                    (order.status === ORDER_STATUS.CONFIRM_RECEIPT || order.status === ORDER_STATUS.COMPLETED) &&
+                    order.paymentStatus === PAYMENT_STATUS.COMPLETED &&
+                    !order.isReviewed
+                ) {
+                    filteredOrders.push(order);
+                }
+                continue; // skip the default push below
+            }
         }
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Bought products fetched successfully", {
@@ -2358,8 +2373,16 @@ const getSoldProducts = async (req, res) => {
         // Date range filter (fromDate, toDate)
         if ((fromDate && fromDate.trim() !== "") || (toDate && toDate.trim() !== "")) {
             query.createdAt = {};
-            if (fromDate && fromDate.trim() !== "") query.createdAt.$gte = new Date(fromDate);
-            if (toDate && toDate.trim() !== "") query.createdAt.$lte = new Date(toDate);
+
+            if (fromDate && fromDate.trim() !== "") {
+                query.createdAt.$gte = new Date(fromDate);
+            }
+
+            if (toDate && toDate.trim() !== "") {
+                let to = new Date(toDate);
+                to.setHours(23, 59, 59, 999);   // ⬅️ extend to end of day
+                query.createdAt.$lte = to;
+            }
         }
 
         // Predefined dateFilter
@@ -2390,10 +2413,19 @@ const getSoldProducts = async (req, res) => {
 
             if (startDate) {
                 query.createdAt = query.createdAt || {};
+
+                // Normalize startDate to beginning of the day
+                startDate.setHours(0, 0, 0, 0);
+
+                // End of today
+                const endOfToday = new Date();
+                endOfToday.setHours(23, 59, 59, 999);
+
                 query.createdAt.$gte = startDate;
-                query.createdAt.$lte = now;
+                query.createdAt.$lte = endOfToday;
             }
         }
+        console.log("queryquery", query)
 
         // Initial total count before keyword filter
         let total = await Order.countDocuments(query);

@@ -217,16 +217,16 @@ const createOrUpdateReview = async (req, res) => {
             }
         });
 
-        await reviewMessage.save();
+        // await reviewMessage.save();
 
         // Update chat room's last message
-        await ChatRoom.findByIdAndUpdate(
-            room._id,
-            {
-                lastMessage: reviewMessage._id,
-                updatedAt: new Date()
-            }
-        );
+        // await ChatRoom.findByIdAndUpdate(
+        //     room._id,
+        //     {
+        //         lastMessage: reviewMessage._id,
+        //         updatedAt: new Date()
+        //     }
+        // );
 
         // Emit system message
         const io = req.app.get('io');
@@ -288,7 +288,7 @@ const createOrUpdateReview = async (req, res) => {
         }
 
         if (reviewNotifications.length > 0 && recipientUser.alertNotification !== false) {
-            await saveNotification(reviewNotifications);
+            // await saveNotification(reviewNotifications);
         }
 
 
