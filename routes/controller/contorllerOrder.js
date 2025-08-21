@@ -1943,8 +1943,18 @@ const getBoughtProducts = async (req, res) => {
                 order.allowedNextStatuses = "";
             }
 
-            if (status === "Unreviewed" && order.isReviewed) continue;
-            filteredOrders.push(order);
+            // if (status === "Unreviewed" && order.isReviewed) continue;
+            // filteredOrders.push(order);
+            if (status === "Unreviewed") {
+    if (
+        (order.status === ORDER_STATUS.CONFIRM_RECEIPT || order.status === ORDER_STATUS.COMPLETED) &&
+        order.paymentStatus === PAYMENT_STATUS.COMPLETED &&
+        !order.isReviewed
+    ) {
+        filteredOrders.push(order);
+    }
+    continue; // skip the default push below
+}
         }
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Bought products fetched successfully", {
