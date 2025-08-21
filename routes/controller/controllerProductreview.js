@@ -763,8 +763,50 @@ const getProductReviews = async (req, res) => {
                     { path: 'districtId', select: 'value' }
                 ]
             })
+
             .sort(sortConditions)
             .lean();
+
+
+        // Step 1: Collect productIds and reviewerIds from reviews
+        const productIds = reviews.map(r => r.productId);
+        const buyerIds = reviews.filter(r => r.raterRole === 'buyer').map(r => r.userId._id);
+        const sellerIds = reviews.filter(r => r.raterRole === 'seller').map(r => r.userId._id);
+
+        // Step 2: Fetch relevant orders at once
+        const orders = await Order.find({
+            isDeleted: false,
+            isDisable: false,
+            $or: [
+                { userId: { $in: buyerIds } },
+                { sellerId: { $in: sellerIds } }
+            ],
+            "items.productId": { $in: productIds }
+        }).populate([
+            { path: 'userId', select: 'userName profileImage' },
+            { path: 'sellerId', select: 'userName profileImage' },
+            { path: 'addressId', select: 'street city provinceId districtId' }
+        ]).lean();
+
+        // Step 3: Map orders to the product (choose first relevant order for this product)
+        let fullOrder = null;
+        for (let review of reviews) {
+            const order = orders.find(o => {
+                const hasProduct = o.items.some(item => item.productId.toString() === review.productId.toString());
+                if (!hasProduct) return false;
+
+                if (review.raterRole === 'buyer') return o.userId._id.toString() === review.userId._id.toString();
+                if (review.raterRole === 'seller') return o.sellerId._id.toString() === review.userId._id.toString();
+                return false;
+            });
+
+            if (order) {
+                fullOrder = order; // pick the first matching order
+                break; // optional: stop after first match if you just need one
+            }
+        }
+
+
 
 
         // Calculate review statistics
@@ -812,6 +854,7 @@ const getProductReviews = async (req, res) => {
             raterRole: review.raterRole, // 'buyer' or 'seller'
             createdAt: review.createdAt,
             updatedAt: review.updatedAt,
+
             reviewer: {
                 _id: review.userId._id,
                 userName: review.userId.userName,
@@ -892,7 +935,8 @@ const getProductReviews = async (req, res) => {
             //     total: totalReviews,
             //     totalPages: Math.ceil(totalReviews / size)
             // },
-            reviews: formattedReviews
+            reviews: formattedReviews,
+           order: fullOrder || null
         });
 
     } catch (err) {
