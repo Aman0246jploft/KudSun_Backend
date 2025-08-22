@@ -3663,7 +3663,7 @@ const getProductsWithDraft = async (req, res) => {
                     ...(isVerifiedSeller && { is_Verified_Seller: true })
                 }
             })
-            .populate('categoryId', 'name')
+            .populate('categoryId', 'name image')
             .populate('subCategoryId', 'name')
             .sort(sortOptions)
             .skip(skip)
