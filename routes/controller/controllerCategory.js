@@ -469,6 +469,50 @@ const deleteParameterValue = async (req, res) => {
 };
 
 
+// const listCategoryNames = async (req, res) => {
+//     try {
+//         const { keyWord = '', pageNo = 1, size = 10 } = req.query;
+
+//         const searchRegex = new RegExp(keyWord.trim(), 'i');
+//         const skip = (parseInt(pageNo) - 1) * parseInt(size);
+//         const limit = parseInt(size);
+
+//         const query = {
+//             isDeleted: false,
+//             name: { $regex: searchRegex }
+//         };
+
+//         const [categories, total] = await Promise.all([
+//             Category.find(query, { _id: 1, name: 1, image: 1, subCategories: 1, createdAt: 1 })
+//                 .skip(skip)
+//                 .limit(limit)
+//                 .sort({ 'createdAt': -1 }),
+//             Category.countDocuments(query)
+//         ]);
+
+//         const enrichedCategories = categories.map(cat => {
+//             return ({
+//                 _id: cat._id,
+//                 name: cat.name,
+//                 image: cat.image,
+//                 createdAt: cat.createdAt,
+//                 subCategoryCount: cat.subCategories?.length || 0
+//             })
+//         });
+
+
+//         return apiSuccessRes(HTTP_STATUS.OK, res, 'Category names fetched successfully', {
+//             total,
+//             pageNo: parseInt(pageNo),
+//             size: limit,
+//             data: enrichedCategories
+//         });
+//     } catch (error) {
+//         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+//     }
+// };
+
+
 const listCategoryNames = async (req, res) => {
     try {
         const { keyWord = '', pageNo = 1, size = 10 } = req.query;
@@ -496,10 +540,12 @@ const listCategoryNames = async (req, res) => {
                 name: cat.name,
                 image: cat.image,
                 createdAt: cat.createdAt,
-                subCategoryCount: cat.subCategories?.length || 0
+                subCategoryCount: cat.subCategories?.length || 0,
+                subCategoryNames: cat.subCategories
+                    ?.slice(0, 6)                     // take max 6
+                    .map(sub => sub.name) || []      // just names
             })
         });
-
 
         return apiSuccessRes(HTTP_STATUS.OK, res, 'Category names fetched successfully', {
             total,
