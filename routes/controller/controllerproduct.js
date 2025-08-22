@@ -3541,7 +3541,7 @@ const getProductsWithDraft = async (req, res) => {
     try {
         const {
             // Search
-            search,
+            keyWord,
 
             // Categories
             categoryId,
@@ -3598,10 +3598,10 @@ const getProductsWithDraft = async (req, res) => {
 
 
         // Text Search
-        if (search&&search.trim()!=="") {
+        if (keyWord&&keyWord.trim()!=="") {
             filter.$or = [
-                { title: { $regex: search, $options: 'i' } },
-                { description: { $regex: search, $options: 'i' } }
+                { title: { $regex: keyWord, $options: 'i' } },
+                { description: { $regex: keyWord, $options: 'i' } }
             ];
         }
 
