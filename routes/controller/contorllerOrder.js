@@ -1623,9 +1623,11 @@ const updateOrderById = async (req, res) => {
     }
 };
 
+
+
 // const getBoughtProducts = async (req, res) => {
 //     try {
-//         let userId = req.query.userId || req.user.userId
+//         let userId = req.query.userId || req.user.userId;
 //         if (!userId) {
 //             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "userId is required");
 //         }
@@ -1633,138 +1635,197 @@ const updateOrderById = async (req, res) => {
 //         const pageNo = Math.max(1, parseInt(req.query.pageNo) || 1);
 //         const pageSize = Math.min(100, Math.max(1, parseInt(req.query.size) || 10));
 //         const skip = (pageNo - 1) * pageSize;
+
 //         const ALLOWED_BUYER_NEXT_STATUSES = {
-//             [ORDER_STATUS.SHIPPED]: ORDER_STATUS.CONFIRM_RECEIPT,  // Buyer confirms delivery
-//             [ORDER_STATUS.DELIVERED]: ORDER_STATUS.CONFIRM_RECEIPT,  // Buyer confirms delivery
-//             [ORDER_STATUS.CONFIRM_RECEIPT]: ORDER_STATUS.REVIEW,  // Buyer confirms delivery
-
+//             [ORDER_STATUS.SHIPPED]: ORDER_STATUS.CONFIRM_RECEIPT,
+//             [ORDER_STATUS.DELIVERED]: ORDER_STATUS.CONFIRM_RECEIPT,
+//             [ORDER_STATUS.CONFIRM_RECEIPT]: ORDER_STATUS.REVIEW,
 //         };
-//         // Query for active orders by user
+
+//         let {
+//             paymentStatus,
+//             status,
+//             keyWord,
+//             fromDate,
+//             toDate,
+//             dateFilter,
+//         } = req.query;
+
+//         // Base query
 //         const query = {
-//             userId,
+//             userId: new mongoose.Types.ObjectId(userId),
 //             isDeleted: false,
-//             isDisable: false
+//             isDisable: false,
 //         };
 
-//         let { paymentStatus, status, } = req.query
-//         if (paymentStatus ) {
-
-//             query["paymentStatus"] = paymentStatus || PAYMENT_STATUS.COMPLETED
-//         }
-//         // ORDER_STATUS
-//         if (status && status !== "") {
-//             query["status"] = status
-
+//         if (paymentStatus) {
+//             query.paymentStatus = paymentStatus || PAYMENT_STATUS.COMPLETED;
 //         }
 
+//         if (status && status !== "" && status !== "Unreviewed") {
+//             query.status = status;
+//         }
+
+//         // Date filters (fromDate, toDate)
+//         if ((fromDate && fromDate.trim() !== "") || (toDate && toDate.trim() !== "")) {
+//             query.createdAt = {};
+
+//             if (fromDate && fromDate.trim() !== "") {
+//                 const from = new Date(fromDate);
+//                 from.setHours(0, 0, 0, 0); // start of day
+//                 query.createdAt.$gte = from;
+//             }
+
+//             if (toDate && toDate.trim() !== "") {
+//                 const to = new Date(toDate);
+//                 to.setHours(23, 59, 59, 999); // end of day
+//                 query.createdAt.$lte = to;
+//             }
+//         }
+
+
+//         // dateFilter: '1month', '3months', '9months', 'thisyear'
+//         if (dateFilter && dateFilter.trim() !== "") {
+//     const now = new Date();
+//     const endOfToday = new Date();
+//     endOfToday.setHours(23, 59, 59, 999);
+
+//     const startOfYear = new Date(now.getFullYear(), 0, 1);
+//     let startDate;
+
+//     switch (dateFilter.toLowerCase()) {
+//         case '1month':
+//             startDate = new Date(now);
+//             startDate.setMonth(now.getMonth() - 1);
+//             break;
+//         case '3months':
+//             startDate = new Date(now);
+//             startDate.setMonth(now.getMonth() - 3);
+//             break;
+//         case '9months':
+//             startDate = new Date(now);
+//             startDate.setMonth(now.getMonth() - 9);
+//             break;
+//         case 'thisyear':
+//             startDate = startOfYear;
+//             break;
+//         default:
+//             startDate = null;
+//     }
+
+//     if (startDate) {
+//         startDate.setHours(0, 0, 0, 0); // normalize start to beginning of day
+//         query.createdAt = query.createdAt || {};
+//         query.createdAt.$gte = startDate;
+//         query.createdAt.$lte = endOfToday;
+//     }
+// }
+
+//         // Total count with base filters only (keyword filter applies after populate, so counted separately)
 //         const total = await Order.countDocuments(query);
 
-
-//         const orders = await Order.find(query)
+//         // Find orders with pagination & populate
+//         let orders = await Order.find(query)
 //             .sort({ createdAt: -1 })
 //             .skip(skip)
 //             .limit(pageSize)
-//             .populate([{
-//                 path: 'items.productId',
-//                 model: 'SellProduct',
-//                 select: 'title productImages fixedPrice status saleType auctionSettings'
-//             },
-//             {
-//                 path: 'sellerId',
-//                 select: 'userName profileImage isLive is_Id_verified is_Verified_Seller averageRatting'
-//             }])
+//             .populate([
+//                 {
+//                     path: 'items.productId',
+//                     model: 'SellProduct',
+//                     select: 'title productImages fixedPrice status saleType auctionSettings',
+//                 },
+//                 {
+//                     path: 'sellerId',
+//                     select: 'userName profileImage isLive is_Id_verified is_Verified_Seller averageRatting',
+//                 },
+//             ])
 //             .lean();
 
+//         // Apply keyWord filter (client wants search on product title or seller userName)
+//         if (keyWord && keyWord.trim() !== '') {
+//             const lowerKey = keyWord.trim().toLowerCase();
+//             orders = orders.filter(order => {
+//                 // check if any product title matches
+//                 const productMatch = order.items.some(item =>
+//                     item.productId?.title?.toLowerCase().includes(lowerKey)
+//                 );
+//                 // check if seller username matches
+//                 const sellerMatch = order.sellerId?.userName?.toLowerCase().includes(lowerKey);
+//                 return productMatch || sellerMatch;
+//             });
+//         }
+//         const filteredOrders = [];
 
-//         const orderIds = orders.map(o => o._id);
-
-
+//         // Set isReviewed, labalStatuses, allowedNextStatuses on each order
 //         for (const order of orders) {
-
+//             order.isReviewed = false;
 
 //             for (const item of order.items || []) {
 //                 const productId = item.productId?._id;
-//                 order.isReviewed = false;
 //                 if (order.status === ORDER_STATUS.CONFIRM_RECEIPT && productId) {
 //                     const reviewExists = await ProductReview.exists({
 //                         userId,
 //                         productId,
-
 //                         isDeleted: false,
-//                         isDisable: false
+//                         isDisable: false,
 //                     });
-
 //                     order.isReviewed = !!reviewExists;
+//                     if (order.isReviewed) break;
 //                 }
 //             }
 
-//             /** -------- 2. Work out the next step (or none) -------- */
 //             if (order.paymentStatus === PAYMENT_STATUS.PENDING) {
-//                 // Still waiting for payment ⇒ always show "Pay now"
 //                 order.labalStatuses = 'Unpaid';
 //                 order.allowedNextStatuses = 'Pay now';
 //             } else if (!order.isReviewed) {
-//                 // order.labalStatuses = 'Unreviewed';
-
-//                 if (order.status == ORDER_STATUS.SHIPPED) {
+//                 if (order.status === ORDER_STATUS.SHIPPED || order.status === ORDER_STATUS.DELIVERED) {
 //                     order.labalStatuses = 'Shipped';
-
-//                     order.allowedNextStatuses =
-//                         'Confirm Receipt';
-
-//                 } else if (order.status == ORDER_STATUS.DELIVERED) {
-//                     order.labalStatuses = 'Shipped';
-
-//                     order.allowedNextStatuses =
-//                         "Confirm Receipt";
-
-//                 } else if (ORDER_STATUS.CONFIRM_RECEIPT) {
+//                     order.allowedNextStatuses = 'Confirm Receipt';
+//                 } else if (order.status === ORDER_STATUS.CONFIRM_RECEIPT || order.status === ORDER_STATUS.COMPLETED) {
 //                     order.labalStatuses = 'Unreviewed';
-
-//                     order.allowedNextStatuses =
-//                         ALLOWED_BUYER_NEXT_STATUSES[order.status] || '';
-
-//                 }
-
-//                 if (order.status == ORDER_STATUS.DISPUTE) {
+//                     order.allowedNextStatuses = 'REVIEW';
+//                 } else if (order.status === ORDER_STATUS.DISPUTE) {
 //                     order.labalStatuses = 'Disputed';
 //                     order.allowedNextStatuses = "";
-
 //                 }
-//                 // No payment due and not reviewed yet ⇒ show normal progression
-
 //             } else {
-//                 // Already reviewed ⇒ no further action
 //                 order.allowedNextStatuses = '';
 //             }
-//             if (order.status == ORDER_STATUS.PENDING || order.status == ORDER_STATUS.CONFIRMED) {
+
+//             if (order.status === ORDER_STATUS.PENDING || order.status === ORDER_STATUS.CONFIRMED) {
 //                 order.labalStatuses = 'Unsent';
-
-
 //             }
 
-
-//             if (order.status == ORDER_STATUS.COMPLETED) {
+//             if (order.status === ORDER_STATUS.COMPLETED && order.isReviewed) {
 //                 order.labalStatuses = 'Completed';
-
-
 //             }
 
-//             if (order.status == ORDER_STATUS.CANCELLED) {
+//             if (order.status === ORDER_STATUS.CANCELLED) {
 //                 order.labalStatuses = 'Cancelled';
-
-
+//                 order.allowedNextStatuses = "";
 //             }
 
+//             // if (status === "Unreviewed" && order.isReviewed) continue;
+//             // filteredOrders.push(order);
+//             if (status === "Unreviewed") {
+//                 if (
+//                     (order.status === ORDER_STATUS.CONFIRM_RECEIPT || order.status === ORDER_STATUS.COMPLETED) &&
+//                     order.paymentStatus === PAYMENT_STATUS.COMPLETED &&
+//                     !order.isReviewed
+//                 ) {
+//                     filteredOrders.push(order);
+//                 }
+//                 continue; // skip the default push below
+//             }
 //         }
 
 //         return apiSuccessRes(HTTP_STATUS.OK, res, "Bought products fetched successfully", {
 //             pageNo,
 //             size: pageSize,
-//             total,
-//             orders
+//             total: filteredOrders.length,
+//             orders: filteredOrders,
 //         });
-
 //     } catch (err) {
 //         console.error("Get Bought Product Error:", err);
 //         return apiErrorRes(
@@ -1810,7 +1871,7 @@ const getBoughtProducts = async (req, res) => {
             isDisable: false,
         };
 
-        if (paymentStatus) {
+        if (paymentStatus&&paymentStatus!=="") {
             query.paymentStatus = paymentStatus || PAYMENT_STATUS.COMPLETED;
         }
 
@@ -1835,43 +1896,42 @@ const getBoughtProducts = async (req, res) => {
             }
         }
 
-
         // dateFilter: '1month', '3months', '9months', 'thisyear'
         if (dateFilter && dateFilter.trim() !== "") {
-    const now = new Date();
-    const endOfToday = new Date();
-    endOfToday.setHours(23, 59, 59, 999);
+            const now = new Date();
+            const endOfToday = new Date();
+            endOfToday.setHours(23, 59, 59, 999);
 
-    const startOfYear = new Date(now.getFullYear(), 0, 1);
-    let startDate;
+            const startOfYear = new Date(now.getFullYear(), 0, 1);
+            let startDate;
 
-    switch (dateFilter.toLowerCase()) {
-        case '1month':
-            startDate = new Date(now);
-            startDate.setMonth(now.getMonth() - 1);
-            break;
-        case '3months':
-            startDate = new Date(now);
-            startDate.setMonth(now.getMonth() - 3);
-            break;
-        case '9months':
-            startDate = new Date(now);
-            startDate.setMonth(now.getMonth() - 9);
-            break;
-        case 'thisyear':
-            startDate = startOfYear;
-            break;
-        default:
-            startDate = null;
-    }
+            switch (dateFilter.toLowerCase()) {
+                case '1month':
+                    startDate = new Date(now);
+                    startDate.setMonth(now.getMonth() - 1);
+                    break;
+                case '3months':
+                    startDate = new Date(now);
+                    startDate.setMonth(now.getMonth() - 3);
+                    break;
+                case '9months':
+                    startDate = new Date(now);
+                    startDate.setMonth(now.getMonth() - 9);
+                    break;
+                case 'thisyear':
+                    startDate = startOfYear;
+                    break;
+                default:
+                    startDate = null;
+            }
 
-    if (startDate) {
-        startDate.setHours(0, 0, 0, 0); // normalize start to beginning of day
-        query.createdAt = query.createdAt || {};
-        query.createdAt.$gte = startDate;
-        query.createdAt.$lte = endOfToday;
-    }
-}
+            if (startDate) {
+                startDate.setHours(0, 0, 0, 0); // normalize start to beginning of day
+                query.createdAt = query.createdAt || {};
+                query.createdAt.$gte = startDate;
+                query.createdAt.$lte = endOfToday;
+            }
+        }
 
         // Total count with base filters only (keyword filter applies after populate, so counted separately)
         const total = await Order.countDocuments(query);
@@ -1907,6 +1967,7 @@ const getBoughtProducts = async (req, res) => {
                 return productMatch || sellerMatch;
             });
         }
+
         const filteredOrders = [];
 
         // Set isReviewed, labalStatuses, allowedNextStatuses on each order
@@ -1958,8 +2019,6 @@ const getBoughtProducts = async (req, res) => {
                 order.allowedNextStatuses = "";
             }
 
-            // if (status === "Unreviewed" && order.isReviewed) continue;
-            // filteredOrders.push(order);
             if (status === "Unreviewed") {
                 if (
                     (order.status === ORDER_STATUS.CONFIRM_RECEIPT || order.status === ORDER_STATUS.COMPLETED) &&
@@ -1970,12 +2029,15 @@ const getBoughtProducts = async (req, res) => {
                 }
                 continue; // skip the default push below
             }
+
+            // default push
+            filteredOrders.push(order);
         }
 
         return apiSuccessRes(HTTP_STATUS.OK, res, "Bought products fetched successfully", {
             pageNo,
             size: pageSize,
-            total: filteredOrders.length,
+            total, // ✅ lifetime total, matches profile
             orders: filteredOrders,
         });
     } catch (err) {

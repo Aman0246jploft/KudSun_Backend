@@ -1991,6 +1991,7 @@ const getProfile = async (req, res) => {
 
             Thread.countDocuments({ userId, isDeleted: false }),
             SellProducts.countDocuments({ userId, isDeleted: false }),
+            
             Order.countDocuments({ userId, isDeleted: false }),
 
             Order.countDocuments({
