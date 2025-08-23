@@ -45,7 +45,7 @@ async function handleGetChatRooms(socket, data) {
         const chatRooms = await chatRoomsQuery.exec();
 
         // Filter participants and keyword search
-        const filteredRooms = chatRooms 
+        const filteredRooms = chatRooms
             .map(room => {
                 const otherParticipants = room.participants.filter(
                     p => p._id.toString() !== userId.toString()
@@ -88,12 +88,32 @@ async function handleGetChatRooms(socket, data) {
         // Apply pagination
         const paginatedRooms = enrichedRooms.slice(skip, skip + limit);
 
+
+        // Fetch latest activity notification for the user
+        const latestNotification = await Notification.findOne({
+            recipientId: toObjectId(userId),
+            // type: 'activity'
+        })
+            .sort({ createdAt: -1 })  // newest first
+            .lean();
+
+        let activity = null;
+        if (latestNotification) {
+            activity = {
+                title: latestNotification.title,
+                createdAt: latestNotification.createdAt
+            };
+        }
+
+
+
         // Emit chat room list with unread count
         socket.emit('chatRoomsList', {
             total: enrichedRooms.length,
             pageNo: page,
             size: limit,
-            chatRooms: paginatedRooms
+            chatRooms: paginatedRooms,
+            activity: activity
         });
 
     } catch (error) {
@@ -158,7 +178,7 @@ async function handleGetMessageList(socket, data) {
         socket.emit('error', { message: 'Failed to fetch messages' });
     }
 }
-    
+
 
 
 
