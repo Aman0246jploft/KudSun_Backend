@@ -3055,7 +3055,7 @@ const getProduct = async (req, res) => {
         {
           path: "userId",
           select:
-            "userName profileImage is_Id_verified is_Preferred_seller isLive averageRatting provinceId districtId",
+            "userName profileImage is_Id_verified is_Preferred_seller is_Verified_Seller isLive averageRatting provinceId districtId",
           populate: [
             {
               path: "provinceId",
