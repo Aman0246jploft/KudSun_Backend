@@ -606,7 +606,7 @@ async function setupSocket(server) {
 
           // Optional: reverse to send oldest first
           messages = messages.reverse();
-          socket.emit("markRoomMessagesAsRead", { _, otherUserId, userId });
+          socket.emit("markRoomMessagesAsRead", { otherUserId, userIds });
 
           socket.emit("messageList", {
             chatRoomId,
