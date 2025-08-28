@@ -1345,6 +1345,17 @@ async function setupSocket(server) {
     });
   });
 
+  setInterval(async () => {
+    try {
+      for (const [socketId, userId] of Object.entries(connectedUsers)) {
+        if (!userId) continue;
+        await emitTotalUnreadCount(io, userId);
+      }
+    } catch (err) {
+      console.error("Error while pushing unread counts:", err);
+    }
+  }, 30000); //
+
   // Send total unread count to user
   async function emitTotalUnreadCount(io, userId) {
     try {
