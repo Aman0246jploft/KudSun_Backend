@@ -2202,7 +2202,7 @@ const fetchCombinedProducts = async (req, res) => {
       .populate("categoryId", "name")
       .populate(
         "userId",
-        "userName averageRatting profileImage is_Id_verified is_Verified_Seller isLive"
+        "userName averageRatting profileImage is_Id_verified is_Verified_Seller is_Preferred_seller isLive"
       )
       .lean();
 
@@ -2367,7 +2367,7 @@ const fetchCombinedProducts = async (req, res) => {
         .populate("categoryId", "name")
         .populate(
           "userId",
-          "userName averageRatting profileImage is_Id_verified is_Verified_Seller isLive"
+          "userName averageRatting profileImage is_Id_verified is_Verified_Seller is_Preferred_seller isLive"
         )
         .lean(),
       SellProduct.countDocuments(unifiedFilter),
@@ -3298,7 +3298,7 @@ const getProduct = async (req, res) => {
       .populate({
         path: "userId",
         select:
-          "averageRatting userName isLive profileImage is_Verified_Seller is_Id_verified",
+          "averageRatting userName isLive profileImage is_Verified_Seller is_Preferred_seller is_Id_verified",
       })
       .lean();
 
@@ -4237,7 +4237,7 @@ const getProductsWithDraft = async (req, res) => {
       .populate({
         path: "userId",
         select:
-          "userName profileImage isLive is_Id_verified is_Verified_Seller averageRatting",
+          "userName profileImage isLive is_Id_verified is_Verified_Seller is_Preferred_seller averageRatting",
         match: {
           isDeleted: false,
           isDisable: false,
