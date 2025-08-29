@@ -165,17 +165,31 @@ const createOrUpdateReview = async (req, res) => {
       if (!seller) throw new Error("Seller not found");
 
       if (isNewReview) {
-        seller.totalRatingSum += rating;
-        seller.totalRatingCount += 1;
+        // seller.totalRatingSum += rating;
+        // seller.totalRatingCount += 1;
+
+        seller.totalRatingSum = Number(seller.totalRatingSum) + Number(rating);
+        seller.totalRatingCount = Number(seller.totalRatingCount) + 1;
       } else {
-        seller.totalRatingSum = seller.totalRatingSum - oldRating + rating;
+        // seller.totalRatingSum = seller.totalRatingSum - oldRating + rating;
+        seller.totalRatingSum =
+          Number(seller.totalRatingSum) - Number(oldRating) + Number(rating);
         // totalRatingCount stays the same
       }
       // seller.averageRatting = seller.totalRatingCount > 0 ? seller.totalRatingSum / seller.totalRatingCount : 0;
+      //   seller.averageRatting =
+      //     seller.totalRatingCount > 0
+      //       ? parseFloat(
+      //           (seller.totalRatingSum / seller.totalRatingCount).toFixed(2)
+      //         )
+      //       : 0;
+
       seller.averageRatting =
-        seller.totalRatingCount > 0
-          ? parseFloat(
-              (seller.totalRatingSum / seller.totalRatingCount).toFixed(2)
+        Number(seller.totalRatingCount) > 0
+          ? Number(
+              (
+                Number(seller.totalRatingSum) / Number(seller.totalRatingCount)
+              ).toFixed(2)
             )
           : 0;
 
@@ -186,17 +200,35 @@ const createOrUpdateReview = async (req, res) => {
       if (!buyer) throw new Error("Buyer not found");
 
       if (isNewReview) {
-        buyer.totalBuyerRatingSum += rating;
-        buyer.totalBuyerRatingCount += 1;
-      } else {
+        // buyer.totalBuyerRatingSum += rating;
+        // buyer.totalBuyerRatingCount += 1;
         buyer.totalBuyerRatingSum =
-          buyer.totalBuyerRatingSum - oldRating + rating;
+          Number(buyer.totalBuyerRatingSum) + Number(rating);
+        buyer.totalBuyerRatingCount = Number(buyer.totalBuyerRatingCount) + 1;
+      } else {
+        // buyer.totalBuyerRatingSum =
+        //   buyer.totalBuyerRatingSum - oldRating + rating;
+        buyer.totalBuyerRatingSum =
+          Number(buyer.totalBuyerRatingSum) -
+          Number(oldRating) +
+          Number(rating);
         // totalBuyerRatingCount stays the same
       }
+      //   buyer.averageBuyerRatting =
+      //     buyer.totalBuyerRatingCount > 0
+      //       ? buyer.totalBuyerRatingSum / buyer.totalBuyerRatingCount
+      //       : 0;
+      //   await buyer.save();
       buyer.averageBuyerRatting =
-        buyer.totalBuyerRatingCount > 0
-          ? buyer.totalBuyerRatingSum / buyer.totalBuyerRatingCount
+        Number(buyer.totalBuyerRatingCount) > 0
+          ? Number(
+              (
+                Number(buyer.totalBuyerRatingSum) /
+                Number(buyer.totalBuyerRatingCount)
+              ).toFixed(2)
+            )
           : 0;
+
       await buyer.save();
     }
 
