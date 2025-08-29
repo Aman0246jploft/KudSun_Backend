@@ -1682,7 +1682,7 @@ const getThreads = async (req, res) => {
     const threads = await ThreadModel.find(filters)
       .populate(
         "userId",
-        "userName profileImage isLive is_Id_verified is_Preferred_seller averageRatting"
+        "userName profileImage isLive is_Id_verified is_Verified_Seller is_Preferred_seller averageRatting"
       )
       .populate("categoryId", "name subCategoryId image")
       .sort(sortField === "createdAt" ? sortOptions : {})
