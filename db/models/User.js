@@ -80,7 +80,8 @@ const UserSchema = new Schema(
     phoneNumber: {
       type: String,
       trim: true,
-      // unique: true,
+      unique: true,
+      sparse: true,
     },
     dob: {
       type: Date,
