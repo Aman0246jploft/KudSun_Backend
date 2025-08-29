@@ -5610,8 +5610,8 @@ const getSellerPayoutCalculation = async (req, res) => {
         // Seller wins - gets full amount
         calculatedProductCost = originalProductCost;
         disputeAdjustmentDetails = {
-          type: "SELLER_FAVOR",
-          description: "Dispute resolved in seller favor - full payment",
+          type: "SELLER_favour",
+          description: "Dispute resolved in seller favour - full payment",
           originalAmount: originalProductCost,
           adjustedAmount: calculatedProductCost,
           sellerReceivePercent: 100,
@@ -5626,8 +5626,8 @@ const getSellerPayoutCalculation = async (req, res) => {
         const refundAmount = originalProductCost * (disputeAmountPercent / 100);
 
         disputeAdjustmentDetails = {
-          type: "BUYER_FAVOR",
-          description: `Dispute resolved in buyer favor - ${sellerReceivePercent}% to seller, ${disputeAmountPercent}% refund to buyer`,
+          type: "BUYER_favour",
+          description: `Dispute resolved in buyer favour - ${sellerReceivePercent}% to seller, ${disputeAmountPercent}% refund to buyer`,
           originalAmount: originalProductCost,
           adjustedAmount: calculatedProductCost,
           sellerReceivePercent: sellerReceivePercent,
