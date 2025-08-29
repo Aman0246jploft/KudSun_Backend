@@ -47,7 +47,7 @@ const log = {
 const notificationTemplates = {
   user: {
     type: NOTIFICATION_TYPES.USER,
-    title: "Welcome to Kudsun! 👋",
+    title: "Notification Testing! 👋",
     message:
       "Thanks for joining our community. Start exploring amazing products!",
     meta: {
