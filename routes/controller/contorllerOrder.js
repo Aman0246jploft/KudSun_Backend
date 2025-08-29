@@ -2054,7 +2054,7 @@ const getBoughtProducts = async (req, res) => {
 
       for (const item of order.items || []) {
         const productId = item.productId?._id;
-        console.log("order.status", order.status);
+
         if (
           (order.status === ORDER_STATUS.CONFIRM_RECEIPT ||
             order.status === ORDER_STATUS.COMPLETED) &&
@@ -2066,8 +2066,6 @@ const getBoughtProducts = async (req, res) => {
             isDeleted: false,
             isDisable: false,
           });
-          console.log("5554444", reviewExists, userId);
-
           order.isReviewed = !!reviewExists;
 
           if (order.isReviewed) break;
