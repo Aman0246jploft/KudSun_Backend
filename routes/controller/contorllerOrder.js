@@ -2078,9 +2078,8 @@ const getBoughtProducts = async (req, res) => {
           order.labalStatuses = "Shipped";
           order.allowedNextStatuses = "Confirm Receipt";
         } else if (
-          !order.isReviewed &&
-          (order.status === ORDER_STATUS.CONFIRM_RECEIPT ||
-            order.status === ORDER_STATUS.COMPLETED)
+          order.status === ORDER_STATUS.CONFIRM_RECEIPT ||
+          order.status === ORDER_STATUS.COMPLETED
         ) {
           order.labalStatuses = "Unreviewed";
           order.allowedNextStatuses = "REVIEW";
@@ -2091,6 +2090,27 @@ const getBoughtProducts = async (req, res) => {
       } else {
         order.allowedNextStatuses = "";
       }
+
+      // else if (!order.isReviewed) {
+      //   if (
+      //     order.status === ORDER_STATUS.SHIPPED ||
+      //     order.status === ORDER_STATUS.DELIVERED
+      //   ) {
+      //     order.labalStatuses = "Shipped";
+      //     order.allowedNextStatuses = "Confirm Receipt";
+      //   } else if (
+      //     order.status === ORDER_STATUS.CONFIRM_RECEIPT ||
+      //     order.status === ORDER_STATUS.COMPLETED
+      //   ) {
+      //     order.labalStatuses = "Unreviewed";
+      //     order.allowedNextStatuses = "REVIEW";
+      //   } else if (order.status === ORDER_STATUS.DISPUTE) {
+      //     order.labalStatuses = "Disputed";
+      //     order.allowedNextStatuses = "";
+      //   }
+      // } else {
+      //   order.allowedNextStatuses = "";
+      // }
 
       if (
         order.status === ORDER_STATUS.PENDING ||
