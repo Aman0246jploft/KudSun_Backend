@@ -172,7 +172,7 @@ const createOrUpdateReview = async (req, res) => {
         // totalRatingCount stays the same
       }
       // seller.averageRatting = seller.totalRatingCount > 0 ? seller.totalRatingSum / seller.totalRatingCount : 0;
-      seller.averageRating =
+      seller.averageRatting =
         seller.totalRatingCount > 0
           ? parseFloat(
               (seller.totalRatingSum / seller.totalRatingCount).toFixed(2)
