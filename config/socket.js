@@ -534,6 +534,96 @@ async function setupSocket(server) {
       handleGetMessageList(socket, data);
     });
 
+    // socket.on(
+    //   "getMessagesWithUser",
+    //   async ({ otherUserId, pageNo = 1, size = 20 }) => {
+    //     try {
+    //       const userId = socket.user?.userId;
+
+    //       if (!otherUserId) {
+    //         return socket.emit("error", { message: "otherUserId is required" });
+    //       }
+
+    //       const page = Math.max(1, parseInt(pageNo));
+    //       const limit = Math.min(100, parseInt(size));
+    //       const skip = (page - 1) * limit;
+
+    //       // Find existing one-on-one room (check if deleted for user)
+    //       const room = await ChatRoom.findOne({
+    //         isGroup: false,
+    //         participants: {
+    //           $all: [toObjectId(userId), toObjectId(otherUserId)],
+    //           $size: 2,
+    //         },
+    //         $and: [
+    //           { isDeleted: false },
+    //           {
+    //             $or: [
+    //               { deleteBy: { $size: 0 } },
+    //               { "deleteBy.userId": { $ne: toObjectId(userId) } },
+    //             ],
+    //           },
+    //         ],
+    //       });
+
+    //       if (!room) {
+    //         return socket.emit("messageList", {
+    //           chatRoomId: null,
+    //           total: 0,
+    //           pageNo: page,
+    //           size: limit,
+    //           messages: [],
+    //           hasMore: false,
+    //           isNewRoom: true,
+    //         });
+    //       }
+
+    //       const chatRoomId = room._id.toString();
+
+    //       // Get messages visible to this user
+    //       let messages = await ChatMessage.getVisibleMessages(
+    //         { chatRoom: toObjectId(chatRoomId) },
+    //         toObjectId(userId)
+    //       )
+    //         .populate("sender", "userName profileImage")
+    //         .sort({ createdAt: -1 }) // newest first
+    //         .skip(skip)
+    //         .limit(limit)
+    //         .lean();
+
+    //       const totalMessages = await ChatMessage.countDocuments({
+    //         chatRoom: toObjectId(chatRoomId),
+    //         $and: [
+    //           { isDeleted: false },
+    //           {
+    //             $or: [
+    //               { deleteBy: { $size: 0 } },
+    //               { "deleteBy.userId": { $ne: toObjectId(userId) } },
+    //             ],
+    //           },
+    //         ],
+    //       });
+
+    //       // Optional: reverse to send oldest first
+    //       messages = messages.reverse();
+    //       // socket.emit("markRoomMessagesAsRead", { otherUserId, userId });
+
+    //       socket.emit("messageList", {
+    //         chatRoomId,
+    //         total: totalMessages,
+    //         pageNo: page,
+    //         size: limit,
+    //         messages,
+    //         hasMore: totalMessages > page * limit,
+    //         isNewRoom: false,
+    //       });
+    //     } catch (error) {
+    //       console.error("❌ Error in getMessagesWithUser:", error);
+    //       socket.emit("error", { message: "Failed to get messages with user" });
+    //     }
+    //   }
+    // );
+
     socket.on(
       "getMessagesWithUser",
       async ({ otherUserId, pageNo = 1, size = 20 }) => {
@@ -548,7 +638,7 @@ async function setupSocket(server) {
           const limit = Math.min(100, parseInt(size));
           const skip = (page - 1) * limit;
 
-          // Find existing one-on-one room (check if deleted for user)
+          // Find existing one-on-one room
           const room = await ChatRoom.findOne({
             isGroup: false,
             participants: {
@@ -586,7 +676,7 @@ async function setupSocket(server) {
             toObjectId(userId)
           )
             .populate("sender", "userName profileImage")
-            .sort({ createdAt: -1 }) // newest first
+            .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit)
             .lean();
@@ -606,7 +696,24 @@ async function setupSocket(server) {
 
           // Optional: reverse to send oldest first
           messages = messages.reverse();
-          // socket.emit("markRoomMessagesAsRead", { otherUserId, userId });
+
+          // ✅ Automatically mark messages as read
+          await ChatMessage.updateMany(
+            {
+              chatRoom: toObjectId(chatRoomId),
+              seenBy: { $ne: toObjectId(userId) },
+              sender: { $ne: toObjectId(userId) },
+            },
+            { $addToSet: { seenBy: toObjectId(userId) } }
+          );
+
+          // Broadcast seen event to room
+          io.to(chatRoomId).emit("messagesSeen", {
+            roomId: chatRoomId,
+            userId,
+            seenAt: new Date().toISOString(),
+            allMessages: true,
+          });
 
           socket.emit("messageList", {
             chatRoomId,
@@ -617,6 +724,9 @@ async function setupSocket(server) {
             hasMore: totalMessages > page * limit,
             isNewRoom: false,
           });
+
+          // Optional: update unread counts for all participants
+          await emitTotalUnreadCount(io, userId);
         } catch (error) {
           console.error("❌ Error in getMessagesWithUser:", error);
           socket.emit("error", { message: "Failed to get messages with user" });
@@ -658,114 +768,111 @@ async function setupSocket(server) {
     });
 
     // Mark all messages in a specific room as read (accepts roomId or otherUserId)
-    socket.on(
-      "markRoomMessagesAsRead",
-      async ({ roomId, otherUserId, userIds }) => {
-        try {
-          const userId = userIds || socket.user?.userId;
-          if (!userId) return;
+    socket.on("markRoomMessagesAsRead", async ({ roomId, otherUserId }) => {
+      try {
+        const userId = socket.user?.userId;
+        if (!userId) return;
 
-          let targetRoomId = roomId;
+        let targetRoomId = roomId;
 
-          // If roomId not provided, find room using otherUserId
-          if (!targetRoomId && otherUserId) {
-            const room = await ChatRoom.findOne({
-              isGroup: false,
-              participants: {
-                $all: [toObjectId(userId), toObjectId(otherUserId)],
-                $size: 2,
-              },
-              $and: [
-                { isDeleted: false },
-                {
-                  $or: [
-                    { deleteBy: { $size: 0 } },
-                    { "deleteBy.userId": { $ne: toObjectId(userId) } },
-                  ],
-                },
-              ],
-            });
-
-            if (!room) {
-              return socket.emit("error", { message: "Chat room not found" });
-            }
-
-            targetRoomId = room._id.toString();
-          }
-
-          if (!targetRoomId) {
-            return socket.emit("error", {
-              message: "roomId or otherUserId is required",
-            });
-          }
-
-          // Mark ALL messages in this room as read for current user
-          const result = await ChatMessage.updateMany(
-            {
-              chatRoom: toObjectId(targetRoomId),
-              seenBy: { $ne: toObjectId(userId) },
-              sender: { $ne: toObjectId(userId) },
+        // If roomId not provided, find room using otherUserId
+        if (!targetRoomId && otherUserId) {
+          const room = await ChatRoom.findOne({
+            isGroup: false,
+            participants: {
+              $all: [toObjectId(userId), toObjectId(otherUserId)],
+              $size: 2,
             },
-            { $addToSet: { seenBy: toObjectId(userId) } }
-          );
+            $and: [
+              { isDeleted: false },
+              {
+                $or: [
+                  { deleteBy: { $size: 0 } },
+                  { "deleteBy.userId": { $ne: toObjectId(userId) } },
+                ],
+              },
+            ],
+          });
 
-          if (result.modifiedCount > 0) {
-            // Broadcast seen event to room
-            io.to(targetRoomId).emit("messagesSeen", {
-              roomId: targetRoomId,
-              userId,
-              seenAt: new Date().toISOString(),
-              allMessages: true,
-            });
-
-            // Update room info for all participants
-            const room = await ChatRoom.findById(targetRoomId)
-              .populate("participants", "_id userName profileImage")
-              .populate("lastMessage");
-
-            if (room) {
-              const roomObj = room.toObject();
-              await Promise.all(
-                room.participants.map(async (participant) => {
-                  const participantId = participant._id?.toString();
-                  let unreadCount = 0;
-                  if (participantId !== userId) {
-                    unreadCount = await ChatMessage.countDocuments({
-                      chatRoom: targetRoomId,
-                      seenBy: { $ne: toObjectId(participantId) },
-                      sender: { $ne: toObjectId(participantId) },
-                    });
-                  }
-
-                  io.to(`user_${participantId}`).emit("roomUpdated", {
-                    ...roomObj,
-                    participants: roomObj.participants.filter(
-                      (p) => p._id?.toString() !== participantId
-                    ),
-                    unreadCount,
-                  });
-                })
-              );
-            }
-
-            // Emit updated total unread count
-            await emitTotalUnreadCount(io, userId);
+          if (!room) {
+            return socket.emit("error", { message: "Chat room not found" });
           }
 
-          socket.emit("roomMessagesMarkedAsRead", {
-            success: true,
-            roomId: targetRoomId,
-            messagesCount: result.modifiedCount,
-            timestamp: new Date().toISOString(),
-          });
-        } catch (error) {
-          console.error("❌ Error in markRoomMessagesAsRead:", error);
-          socket.emit("error", {
-            message: "Failed to mark room messages as read",
+          targetRoomId = room._id.toString();
+        }
+
+        if (!targetRoomId) {
+          return socket.emit("error", {
+            message: "roomId or otherUserId is required",
           });
         }
+
+        // Mark ALL messages in this room as read for current user
+        const result = await ChatMessage.updateMany(
+          {
+            chatRoom: toObjectId(targetRoomId),
+            seenBy: { $ne: toObjectId(userId) },
+            sender: { $ne: toObjectId(userId) },
+          },
+          { $addToSet: { seenBy: toObjectId(userId) } }
+        );
+
+        if (result.modifiedCount > 0) {
+          // Broadcast seen event to room
+          io.to(targetRoomId).emit("messagesSeen", {
+            roomId: targetRoomId,
+            userId,
+            seenAt: new Date().toISOString(),
+            allMessages: true,
+          });
+
+          // Update room info for all participants
+          const room = await ChatRoom.findById(targetRoomId)
+            .populate("participants", "_id userName profileImage")
+            .populate("lastMessage");
+
+          if (room) {
+            const roomObj = room.toObject();
+            await Promise.all(
+              room.participants.map(async (participant) => {
+                const participantId = participant._id?.toString();
+                let unreadCount = 0;
+                if (participantId !== userId) {
+                  unreadCount = await ChatMessage.countDocuments({
+                    chatRoom: targetRoomId,
+                    seenBy: { $ne: toObjectId(participantId) },
+                    sender: { $ne: toObjectId(participantId) },
+                  });
+                }
+
+                io.to(`user_${participantId}`).emit("roomUpdated", {
+                  ...roomObj,
+                  participants: roomObj.participants.filter(
+                    (p) => p._id?.toString() !== participantId
+                  ),
+                  unreadCount,
+                });
+              })
+            );
+          }
+
+          // Emit updated total unread count
+          await emitTotalUnreadCount(io, userId);
+        }
+
+        socket.emit("roomMessagesMarkedAsRead", {
+          success: true,
+          roomId: targetRoomId,
+          messagesCount: result.modifiedCount,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (error) {
+        console.error("❌ Error in markRoomMessagesAsRead:", error);
+        socket.emit("error", {
+          message: "Failed to mark room messages as read",
+        });
       }
-    );
+    });
 
     // Mark all messages across all chats as read
     socket.on("markAllChatsAsRead", async () => {
