@@ -2062,6 +2062,7 @@ const getBoughtProducts = async (req, res) => {
             isDisable: false,
           });
           order.isReviewed = !!reviewExists;
+
           if (order.isReviewed) break;
         }
       }
@@ -2077,8 +2078,9 @@ const getBoughtProducts = async (req, res) => {
           order.labalStatuses = "Shipped";
           order.allowedNextStatuses = "Confirm Receipt";
         } else if (
-          order.status === ORDER_STATUS.CONFIRM_RECEIPT ||
-          order.status === ORDER_STATUS.COMPLETED
+          !order.isReviewed &&
+          (order.status === ORDER_STATUS.CONFIRM_RECEIPT ||
+            order.status === ORDER_STATUS.COMPLETED)
         ) {
           order.labalStatuses = "Unreviewed";
           order.allowedNextStatuses = "REVIEW";
