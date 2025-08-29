@@ -2025,7 +2025,7 @@ const getBoughtProducts = async (req, res) => {
         {
           path: "sellerId",
           select:
-            "userName profileImage isLive is_Id_verified is_Verified_Seller averageRatting",
+            "userName profileImage isLive is_Id_verified is_Preferred_seller is_Verified_Seller averageRatting",
         },
       ])
       .lean();
@@ -2634,7 +2634,7 @@ const getSoldProducts = async (req, res) => {
         {
           path: "userId",
           select:
-            "userName profileImage isLive is_Id_verified is_Verified_Seller",
+            "userName profileImage isLive is_Id_verified is_Preferred_seller is_Verified_Seller",
         },
       ])
       .lean();
@@ -4001,12 +4001,12 @@ const getOrderDetails = async (req, res) => {
       .populate({
         path: "userId",
         select:
-          "userName profileImage isLive is_Id_verified is_Verified_Seller",
+          "userName profileImage isLive is_Id_verified is_Preferred_seller is_Verified_Seller",
       })
       .populate({
         path: "sellerId",
         select:
-          "userName profileImage isLive is_Id_verified is_Verified_Seller",
+          "userName profileImage isLive is_Id_verified is_Preferred_seller is_Verified_Seller",
       })
       .populate({
         path: "addressId",
@@ -4371,7 +4371,7 @@ const confirmreciptReview = async (req, res) => {
         {
           path: "userId",
           select:
-            "userName profileImage isLive is_Id_verified is_Verified_Seller",
+            "userName profileImage isLive is_Id_verified is_Preferred_seller is_Verified_Seller",
         },
         {
           path: "addressId",
