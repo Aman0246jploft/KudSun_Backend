@@ -2061,6 +2061,8 @@ const getBoughtProducts = async (req, res) => {
             isDeleted: false,
             isDisable: false,
           });
+          console.log("5554444", reviewExists, userId);
+
           order.isReviewed = !!reviewExists;
 
           if (order.isReviewed) break;
