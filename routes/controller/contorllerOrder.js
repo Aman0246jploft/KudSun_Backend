@@ -2054,7 +2054,12 @@ const getBoughtProducts = async (req, res) => {
 
       for (const item of order.items || []) {
         const productId = item.productId?._id;
-        if (order.status === ORDER_STATUS.CONFIRM_RECEIPT && productId) {
+        console.log("order.status", order.status);
+        if (
+          (order.status === ORDER_STATUS.CONFIRM_RECEIPT ||
+            order.status === ORDER_STATUS.COMPLETED) &&
+          productId
+        ) {
           const reviewExists = await ProductReview.exists({
             userId,
             productId,
