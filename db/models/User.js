@@ -81,7 +81,7 @@ const UserSchema = new Schema(
       type: String,
       default: null,
     },
-    phoneNumber: {
+    phoneNumber: { 
       type: String,
       trim: true,
       unique: true,

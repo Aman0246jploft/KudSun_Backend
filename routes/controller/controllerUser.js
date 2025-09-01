@@ -941,7 +941,7 @@ const appleSignIn = async (req, res) => {
     return apiSuccessRes(
       HTTP_STATUS.OK,
       res,
-      `${first_name.charAt(0).toUpperCase() + first_name.slice(1)} sign-in successful`,
+      `Sign-in successful`,
       userResponse
     );
   } catch (err) {
@@ -1131,7 +1131,7 @@ const googleSignIn = async (req, res) => {
     return apiSuccessRes(
       HTTP_STATUS.OK,
       res,
-      "Google sign-in successful",
+      "Sign-in successful",
       userResponse
     );
   } catch (error) {
