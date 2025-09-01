@@ -25,6 +25,9 @@ const CONSTANTS_MSG = require("../../utils/constantsMessage");
 const CONSTANTS = require("../../utils/constants");
 const HTTP_STATUS = require("../../utils/statusCode");
 const axios = require("axios");
+const jwt = require('jsonwebtoken');
+const jwksClient = require('jwks-rsa');
+
 const {
   apiErrorRes,
   verifyPassword,
@@ -774,164 +777,205 @@ const resendLoginOtp = async (req, res) => {
   }
 };
 
-// const googleSignIn = async (req, res) => {
-//     try {
-//         const { idToken, fcmToken } = req.body;
-//         console.log("Received request for Google Sign-In");
-//         console.log("idToken:", idToken ? "Received" : "Missing");
-//         console.log("fcmToken:", fcmToken || "Not Provided");
+//APPLE LOGI
 
-//         if (!idToken) {
-//             console.log("❌ Missing Google ID token");
-//             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Google ID token is required");
-//         }
+const appleSignIn = async (req, res) => {
+  try {
+    console.log("555555555")
+    // Accept both form-data and JSON keys
+    const body = {
+      social_id: req.body.social_id || req.body.socialId || req.body.userIdentifier,
+      email: req.body.email ?? null,
+      first_name: req.body.first_name || req.body.firstName || null,
+      last_name: req.body.last_name || req.body.lastName || null,
+      device_token: req.body.device_token || req.body.fcmToken || null,
+      language: req.body.language || null,
+    };
 
-//         const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+    // Validate input
+    const schema = Joi.object({
+      social_id: Joi.string().min(3).required(),
+      email: Joi.string().email().allow(null, ""),
+      first_name: Joi.string().max(100).allow(null, ""),
+      last_name: Joi.string().max(100).allow(null, ""),
+      device_token: Joi.string().allow(null, ""),
+      language: Joi.string().max(10).allow(null, ""),
+    });
 
-//         let ticket;
-//         try {
-//             console.log("Verifying Google ID token...");
-//             ticket = await client.verifyIdToken({
-//                 idToken: idToken,
-//                 audience: process.env.GOOGLE_CLIENT_ID,
-//             });
-//         } catch (error) {
-//             console.error('❌ Google token verification failed:', error);
-//             return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Invalid Google token");
-//         }
+    const { error, value } = schema.validate(body);
+    if (error) {
+      return apiErrorRes(
+        HTTP_STATUS.BAD_REQUEST,
+        res,
+        error.details?.[0]?.message || "Invalid payload"
+      );
+    }
 
-//         const payload = ticket.getPayload();
-//         const {
-//             email,
-//             name,
-//             picture,
-//             sub: googleId,
-//             given_name: firstName,
-//             family_name: lastName
-//         } = payload;
+    const {
+      social_id: socialId,
+      email,
+      first_name,
+      last_name,
+      device_token,
+      language,
+    } = value;
 
-//         console.log("✅ Google token verified. Extracted email:", email);
+    console.log("🔐 Social Login:", {  socialId, email: email || "N/A" });
 
-//         if (!email) {
-//             console.log("❌ Email not found in Google payload");
-//             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Email not provided by Google");
-//         }
+    // Try to find user by (socialId+type) OR by email (if present)
+    let user = await User.findOne({
+      $or: [
+        { socialId: socialId },
+        ...(email ? [{ email: email.toLowerCase() }] : []),
+      ],
+    }).populate([
+      { path: "provinceId", select: "value" },
+      { path: "districtId", select: "value" },
+    ]);
 
-//         let user = await User.findOne({ email: email.toLowerCase() }).populate([
-//             { path: 'provinceId', select: 'value' },
-//             { path: 'districtId', select: 'value' }
-//         ]);
+    if (user) {
+      console.log("🔍 Existing user:", user._id.toString());
 
-//         if (user) {
-//             console.log("🔍 Existing user found:", user._id.toString());
+      // Guard rails
+      if (user.isDisable) {
+        return apiErrorRes(
+          HTTP_STATUS.UNAUTHORIZED,
+          res,
+          CONSTANTS_MSG.ACCOUNT_DISABLE
+        );
+      }
+      if (user.isDeleted) {
+        return apiErrorRes(
+          HTTP_STATUS.UNAUTHORIZED,
+          res,
+          CONSTANTS_MSG.ACCOUNT_DELETED
+        );
+      }
 
-//             if (user.isDisable) {
-//                 console.log("⚠️ User account is disabled");
-//                 return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, CONSTANTS_MSG.ACCOUNT_DISABLE);
-//             }
+      // Link socialId/provider if missing or changed
+      if (!user.socialId) user.socialId = socialId;
+     
 
-//             if (user.isDeleted) {
-//                 console.log("⚠️ User account is deleted");
-//                 return apiErrorRes(HTTP_STATUS.UNPROCESSABLE_ENTITY, res, CONSTANTS_MSG.ACCOUNT_DELETED);
-//             }
+      // Update basic fields
+      if (device_token) user.fcmToken = device_token;
+      if (language && language !== "") user.language = language;
 
-//             if (fcmToken && fcmToken !== "") {
-//                 console.log("🔄 Updating FCM token for user");
-//                 user.fcmToken = fcmToken;
-//             }
+      // Only set names if not previously set (Apple/FB/Google may not send again)
+      if (!user.firstName && first_name) user.firstName = first_name;
+      if (!user.lastName && last_name) user.lastName = last_name;
 
-//             if (!user.profileImage && picture) {
-//                 console.log("📸 Updating user profile image from Google");
-//                 user.profileImage = picture;
-//             }
+      await user.save();
+    } else {
+      console.log("👤 No user found. Creating new social user...");
 
-//             await user.save();
-//             console.log("✅ Existing user updated and saved");
-//         } else {
-//             console.log("👤 No user found with this email. Creating new user...");
+      // Build a base for username
+      const baseName =
+        first_name ||
+        (email ? email.split("@")[0] : null) ||
+        `${first_name}user-${String(socialId).slice(-6)}`;
 
-//             const userName = await generateUniqueUsername(name || email.split('@')[0]);
-//             console.log("🆕 Generated unique username:", userName);
+      const userName = await generateUniqueUsername(baseName);
 
-//             user = new User({
-//                 email: email.toLowerCase(),
-//                 userName: userName,
-//                 profileImage: picture || null,
-//                 fcmToken: fcmToken || null,
-//                 step: 5,
-//             });
+      let obj = {
+        userName,
+        socialId,
+        email: email ? email.toLowerCase() : null,
+        firstName: first_name || null,
+        lastName: last_name || null,
+        profileImage: null, // Apple/FB may not provide; frontend can update later
+        fcmToken: device_token || null,
+        step: 5,
+      };
+      if (language && language !== "") obj.language = language;
 
-//             await user.save();
-//             console.log("✅ New user created:", user._id.toString());
+      user = new User(obj);
+      await user.save();
 
-//             try {
-//                 await indexUser(user);
-//                 console.log("📦 User indexed to Algolia");
-//             } catch (algoliaError) {
-//                 console.error('⚠️ Algolia indexing failed:', algoliaError);
-//             }
+      // Optional indexing
+      try {
+        await indexUser(user);
+        console.log("📦 Indexed user to Algolia");
+      } catch (e) {
+        console.error("⚠️ Algolia indexing failed:", e?.message || e);
+      }
 
-//             user = await User.findById(user._id).populate([
-//                 { path: 'provinceId', select: 'value' },
-//                 { path: 'districtId', select: 'value' }
-//             ]);
-//         }
+      user = await User.findById(user._id).populate([
+        { path: "provinceId", select: "value" },
+        { path: "districtId", select: "value" },
+      ]);
+    }
 
-//         const [totalFollowers, totalFollowing] = await Promise.all([
-//             Follow.countDocuments({
-//                 userId: user._id,
-//                 isDeleted: false,
-//                 isDisable: false
-//             }),
-//             Follow.countDocuments({
-//                 followedBy: user._id,
-//                 isDeleted: false,
-//                 isDisable: false
-//             })
-//         ]);
+    // Followers/following counts
+    const [totalFollowers, totalFollowing] = await Promise.all([
+      Follow.countDocuments({
+        userId: user._id,
+        isDeleted: false,
+        isDisable: false,
+      }),
+      Follow.countDocuments({
+        followedBy: user._id,
+        isDeleted: false,
+        isDisable: false,
+      }),
+    ]);
 
-//         console.log(`👥 Follower stats - Followers: ${totalFollowers}, Following: ${totalFollowing}`);
+    // App JWT
+    const payload_jwt = {
+      userId: user._id,
+      email: user.email,
+      roleId: user.roleId,
+      role: user.role,
+      userName: user.userName,
+      profileImage: user.profileImage,
+    };
+    const token = signToken(payload_jwt);
 
-//         const payload_jwt = {
-//             userId: user._id,
-//             email: user.email,
-//             roleId: user.roleId,
-//             role: user.role,
-//             userName: user.userName,
-//             profileImage: user.profileImage
-//         };
+    // Keep response structure same as your Google login
+    const userResponse = {
+      token,
+      ...user.toJSON(),
+      totalFollowers,
+      totalFollowing,
+    };
 
-//         const token = signToken(payload_jwt);
-//         console.log("🔐 JWT token generated");
+    return apiSuccessRes(
+      HTTP_STATUS.OK,
+      res,
+      `${first_name.charAt(0).toUpperCase() + first_name.slice(1)} sign-in successful`,
+      userResponse
+    );
+  } catch (err) {
+    console.error("💥 Social Login error:", err);
+    return apiErrorRes(
+      HTTP_STATUS.INTERNAL_SERVER_ERROR,
+      res,
+      "Internal server error",
+      err.message
+    );
+  }
+};
 
-//         const userResponse = {
-//             token,
-//             ...user.toJSON(),
-//             totalFollowers,
-//             totalFollowing
-//         };
 
-//         console.log("✅ Google Sign-In successful. Responding to client.");
-//         return apiSuccessRes(
-//             HTTP_STATUS.OK,
-//             res,
-//             "Google sign-in successful",
-//             userResponse
-//         );
 
-//     } catch (error) {
-//         console.error('💥 Google Sign-In error:', error);
-//         return apiErrorRes(
-//             HTTP_STATUS.INTERNAL_SERVER_ERROR,
-//             res,
-//             "Internal server error",
-//             error.message
-//         );
-//     }
-// };
 
-// Helper function to generate unique username
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//GOOGLE LOGIN
 const googleSignIn = async (req, res) => {
   try {
     const { accessToken, fcmToken, language } = req.body;
@@ -3786,6 +3830,10 @@ router.post(
 );
 router.post("/loginAsGuest", perApiLimiter(), upload.none(), loginAsGuest);
 router.post("/googleSignIn", perApiLimiter(), upload.none(), googleSignIn);
+router.post("/appleSignIn", perApiLimiter(), upload.none(), appleSignIn);
+
+
+
 
 //RESET PASSWORD
 router.post(

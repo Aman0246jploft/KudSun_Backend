@@ -35,6 +35,10 @@ const UserSchema = new Schema(
       trim: true,
       lowercase: true,
     },
+    socialId:{
+      type: String,
+
+    },
     email: {
       type: String,
       trim: true,

@@ -30,7 +30,7 @@ const publicRoutes = [
     `/api/v1/user/resendLoginOtp`,
     `/api/v1/user/resendResetOtp`,
     `/api/v1/user/resendOtp`,
-
+    `/api/v1/user/appleSignIn`,
     `/api/v1/user/googleSignIn`,
 
 

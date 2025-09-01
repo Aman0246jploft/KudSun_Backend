@@ -6,7 +6,7 @@ const transporter = nodemailer.createTransport({
   secure: true, // ✅ true for port 465
   auth: {
     user: "kadsun4@gmail.com",
-    pass: "scsv cwyt uvsb aawy", // ✅ This looks like a valid App Password (16-char)
+    pass: "scsv cwyt uvsb aawx", // ✅ This y looks like a valid App Password (16-char)
   },
 });
 
