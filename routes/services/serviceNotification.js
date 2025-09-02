@@ -25,7 +25,7 @@ const saveNotification = async (payload, data = false) => {
 
     for (const notification of payload) {
       const notificationWithSkip = { ...notification, skip: data };
-      console.log(notificationWithSkip);
+      // console.log(notificationWithSkip);
       await addJobToQueue(notificationQueue, notificationWithSkip);
     }
 
@@ -53,7 +53,7 @@ const notificationProcessor = async (job) => {
     const userInfo = await User.findById(userId).select("fcmToken");
 
     if (userInfo?.fcmToken) {
-      console.log("userID", userId);
+      // console.log("userID", userId);
       await sendFirebaseNotification({
         token: userInfo.fcmToken,
         title,
