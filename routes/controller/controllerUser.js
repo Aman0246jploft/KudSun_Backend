@@ -2316,6 +2316,7 @@ const getProfile = async (req, res) => {
       alertNotification: user?.alertNotification,
       verifyPhone: user?.verifyPhone,
       verifyEmail: user?.verifyEmail,
+      averageRatting: user?.averageRatting,
       walletBalance: parseFloat(Number(user?.walletBalance).toFixed(2)),
     };
 

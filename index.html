@@ -1,0 +1,68 @@
+import * as BABYLON from "babylonjs";
+
+const canvas = document.getElementById("renderCanvas");
+const engine = new BABYLON.Engine(canvas, true);
+
+const scene = new BABYLON.Scene(engine);
+const camera = new BABYLON.ArcRotateCamera("camera", Math.PI / 4, Math.PI / 4, 10, BABYLON.Vector3.Zero(), scene);
+camera.attachControl(canvas, true);
+
+const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(1, 1, 0), scene);
+
+// Cube size
+const cubieSize = 0.95;
+
+// Materials for 6 faces
+const colors = {
+  white: new BABYLON.StandardMaterial("white", scene),
+  yellow: new BABYLON.StandardMaterial("yellow", scene),
+  red: new BABYLON.StandardMaterial("red", scene),
+  orange: new BABYLON.StandardMaterial("orange", scene),
+  blue: new BABYLON.StandardMaterial("blue", scene),
+  green: new BABYLON.StandardMaterial("green", scene)
+};
+colors.white.diffuseColor = BABYLON.Color3.White();
+colors.yellow.diffuseColor = BABYLON.Color3.Yellow();
+colors.red.diffuseColor = BABYLON.Color3.Red();
+colors.orange.diffuseColor = new BABYLON.Color3(1, 0.5, 0);
+colors.blue.diffuseColor = BABYLON.Color3.Blue();
+colors.green.diffuseColor = BABYLON.Color3.Green();
+
+// Function to create a cubie
+function createCubie(x, y, z) {
+  const box = BABYLON.MeshBuilder.CreateBox("cubie", { size: cubieSize }, scene);
+  box.position.set(x, y, z);
+
+  // Multi-material for different face colors
+  const multiMat = new BABYLON.MultiMaterial("multi", scene);
+
+  // Each face: assign a material (example: front=white, right=red, etc.)
+  let faceMats = [
+    colors.white,  // +z front
+    colors.yellow, // -z back
+    colors.red,    // +x right
+    colors.orange, // -x left
+    colors.blue,   // +y top
+    colors.green   // -y bottom
+  ];
+  multiMat.subMaterials = faceMats;
+  box.material = multiMat;
+
+  return box;
+}
+
+// Build 3×3×3 cube
+let cubies = [];
+for (let x = -1; x <= 1; x++) {
+  for (let y = -1; y <= 1; y++) {
+    for (let z = -1; z <= 1; z++) {
+      if (!(x === 0 && y === 0 && z === 0)) {
+        cubies.push(createCubie(x * cubieSize, y * cubieSize, z * cubieSize));
+      }
+    }
+  }
+}
+
+engine.runRenderLoop(() => {
+  scene.render();
+});
