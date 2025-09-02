@@ -635,11 +635,10 @@ const addComment = async (req, res) => {
             userId: req.user?.userId,
             type: NOTIFICATION_TYPES.ACTIVITY,
             title: "New Comment on Your Thread",
-            message: `${commenter.userName} commented on your thread "${
-              thread.title.length > 50
+            message: `${commenter.userName} commented on your thread "${thread.title.length > 50
                 ? thread.title.substring(0, 50) + "..."
                 : thread.title
-            }"`,
+              }"`,
             meta: createStandardizedNotificationMeta({
               threadId: thread._id.toString(),
               threadTitle: thread.title,
@@ -674,11 +673,10 @@ const addComment = async (req, res) => {
               userId: req.user?.userId,
               type: NOTIFICATION_TYPES.ACTIVITY,
               title: "New Reply to Your Comment",
-              message: `${commenter.userName} replied to your comment on "${
-                thread.title.length > 50
+              message: `${commenter.userName} replied to your comment on "${thread.title.length > 50
                   ? thread.title.substring(0, 50) + "..."
                   : thread.title
-              }"`,
+                }"`,
               meta: createStandardizedNotificationMeta({
                 threadId: thread._id.toString(),
                 threadTitle: thread.title,
@@ -708,13 +706,11 @@ const addComment = async (req, res) => {
               userId: req.user?.userId,
               type: NOTIFICATION_TYPES.ACTIVITY,
               title: "New Activity on Your Thread",
-              message: `${
-                commenter.userName
-              } replied to a comment on your thread "${
-                thread.title.length > 50
+              message: `${commenter.userName
+                } replied to a comment on your thread "${thread.title.length > 50
                   ? thread.title.substring(0, 50) + "..."
                   : thread.title
-              }"`,
+                }"`,
               meta: createStandardizedNotificationMeta({
                 threadId: thread._id.toString(),
                 threadTitle: thread.title,
@@ -766,11 +762,10 @@ const addComment = async (req, res) => {
                 userId: req.user?.userId,
                 type: NOTIFICATION_TYPES.ACTIVITY,
                 title: "Your Product Was Mentioned",
-                message: `${commenter.userName} mentioned your product "${
-                  product.title.length > 40
+                message: `${commenter.userName} mentioned your product "${product.title.length > 40
                     ? product.title.substring(0, 40) + "..."
                     : product.title
-                }" in a thread comment`,
+                  }" in a thread comment`,
                 meta: createStandardizedNotificationMeta({
                   threadId: thread._id.toString(),
                   threadTitle: thread.title,
@@ -816,7 +811,7 @@ const addComment = async (req, res) => {
             const firstProduct = associatedProducts[0];
             const productImage =
               firstProduct.productImages &&
-              firstProduct.productImages.length > 0
+                firstProduct.productImages.length > 0
                 ? firstProduct.productImages[0]
                 : firstProduct.photo || null;
 
@@ -1264,11 +1259,11 @@ const getCommentByParentId = async (req, res) => {
           totalReplies: totalRepliesCount,
           firstReply: firstReply
             ? {
-                _id: firstReply?._id,
-                content: firstReply.content,
-                author: firstReply.author,
-                createdAt: firstReply.createdAt,
-              }
+              _id: firstReply?._id,
+              content: firstReply.content,
+              author: firstReply.author,
+              createdAt: firstReply.createdAt,
+            }
             : null,
         };
       })
@@ -2223,9 +2218,9 @@ const getThreadById = async (req, res) => {
         ]),
         currentUserId
           ? ThreadLike.exists({
-              threadId: threadObjectId,
-              likeBy: toObjectId(currentUserId),
-            })
+            threadId: threadObjectId,
+            likeBy: toObjectId(currentUserId),
+          })
           : false,
       ]);
 
@@ -2551,29 +2546,29 @@ const getThreadById = async (req, res) => {
       // Lookup if current user liked this thread
       ...(currentUserId
         ? [
-            {
-              $lookup: {
-                from: "ThreadLike",
-                let: { threadId: "$_id" },
-                pipeline: [
-                  {
-                    $match: {
-                      $expr: {
-                        $and: [
-                          { $eq: ["$threadId", "$$threadId"] },
-                          { $eq: ["$likeBy", toObjectId(currentUserId)] },
-                        ],
-                      },
-                      isDeleted: false,
-                      isDisable: false,
+          {
+            $lookup: {
+              from: "ThreadLike",
+              let: { threadId: "$_id" },
+              pipeline: [
+                {
+                  $match: {
+                    $expr: {
+                      $and: [
+                        { $eq: ["$threadId", "$$threadId"] },
+                        { $eq: ["$likeBy", toObjectId(currentUserId)] },
+                      ],
                     },
+                    isDeleted: false,
+                    isDisable: false,
                   },
-                  { $limit: 1 },
-                ],
-                as: "likedByUser",
-              },
+                },
+                { $limit: 1 },
+              ],
+              as: "likedByUser",
             },
-          ]
+          },
+        ]
         : []),
 
       // Lookup total associated products from comments
@@ -3196,7 +3191,13 @@ const getRecentFollowedUsers = async (req, res) => {
                 pipeline: [
                   {
                     $match: {
-                      $expr: { $eq: ["$thread", "$$threadId"] },
+                      $expr: {
+                        $and: [
+                          { $eq: ["$thread", "$$threadId"] },
+                          { $eq: ["$parent", null] }   // only top-level
+                        ]
+                      },
+                      // $expr: { $eq: ["$thread", "$$threadId"] },
                       isDeleted: false,
                       isDisable: false,
                     },
