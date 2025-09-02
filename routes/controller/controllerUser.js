@@ -3439,28 +3439,6 @@ const updatePassword = async (req, res) => {
   }
 };
 
-// const deleteAccount = async (req, res) => {
-//     try {
-//         const userId = req.user?.userId;
-//         const user = await getDocumentByQuery(User, { _id: userId, isDeleted: false });
-//         if (user.statusCode !== CONSTANTS.SUCCESS) {
-//             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'User not found or already deleted');
-//         }
-//         user.data.isDeleted = true
-//         await user.data.save();
-//         try {
-//             await deleteUsers(userId);
-//         } catch (algoliaError) {
-//             console.error('❌ Algolia deletion failed for user:', userId, algoliaError);
-//             // Don't block account deletion if Algolia fails
-//         }
-
-//         return apiSuccessRes(HTTP_STATUS.OK, res, 'Account deleted successfully');
-//     } catch (err) {
-//         console.error('updatePassword error:', err);
-//         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Something went wrong');
-//     }
-// }
 
 const deleteAccount = async (req, res) => {
   try {

@@ -873,16 +873,14 @@ const toggleProductDisable = async (req, res) => {
         ? "Your Product Has Been Deactivated"
         : "Your Product Has Been Activated",
       message: isNowDisabled
-        ? `An admin has deactivated your product "${
-            product.title.length > 50
-              ? product.title.substring(0, 50) + "..."
-              : product.title
-          }".`
-        : `An admin has activated your product "${
-            product.title.length > 50
-              ? product.title.substring(0, 50) + "..."
-              : product.title
-          }".`,
+        ? `An admin has deactivated your product "${product.title.length > 50
+          ? product.title.substring(0, 50) + "..."
+          : product.title
+        }".`
+        : `An admin has activated your product "${product.title.length > 50
+          ? product.title.substring(0, 50) + "..."
+          : product.title
+        }".`,
       meta: createStandardizedNotificationMeta({
         productId: product._id.toString(),
         productTitle: product.title,
@@ -916,8 +914,7 @@ const toggleProductDisable = async (req, res) => {
         if (filteredNotifications.length > 0) {
           await saveNotification(filteredNotifications);
           console.log(
-            `✅ Notification sent: product ${
-              isNowDisabled ? "deactivated" : "activated"
+            `✅ Notification sent: product ${isNowDisabled ? "deactivated" : "activated"
             }`
           );
         } else {
@@ -2559,6 +2556,7 @@ const fetchUserProducts = async (req, res) => {
       tags,
       specifics,
       keyWord,
+      isSold
     } = req.query;
 
     const allowedSortFields = [
@@ -2588,7 +2586,10 @@ const fetchUserProducts = async (req, res) => {
     } else {
       filter.saleType = SALE_TYPE.FIXED;
     }
-
+    if (isSold !== undefined && isSold !== "") {
+      // Convert string to boolean
+      filter.isSold = isSold === "true";
+    }
     if (userId) {
       filter.userId = toObjectId(userId);
     }
@@ -3432,11 +3433,10 @@ const addComment = async (req, res) => {
             userId: req.user?.userId,
             type: NOTIFICATION_TYPES.ACTIVITY,
             title: "New Comment on Your Product",
-            message: `${commenter.userName} commented on your product "${
-              product.title.length > 50
+            message: `${commenter.userName} commented on your product "${product.title.length > 50
                 ? product.title.substring(0, 50) + "..."
                 : product.title
-            }"`,
+              }"`,
             meta: createStandardizedNotificationMeta({
               productId: product._id.toString(),
               productTitle: product.title,
@@ -3477,11 +3477,10 @@ const addComment = async (req, res) => {
               userId: req.user?.userId,
               type: NOTIFICATION_TYPES.ACTIVITY,
               title: "New Reply to Your Comment",
-              message: `${commenter.userName} replied to your comment on "${
-                product.title.length > 50
+              message: `${commenter.userName} replied to your comment on "${product.title.length > 50
                   ? product.title.substring(0, 50) + "..."
                   : product.title
-              }"`,
+                }"`,
               meta: createStandardizedNotificationMeta({
                 productId: product._id.toString(),
                 productTitle: product.title,
@@ -3511,20 +3510,18 @@ const addComment = async (req, res) => {
           if (
             product.userId._id.toString() !== req.user.userId.toString() &&
             product.userId._id.toString() !==
-              parentComment.author._id.toString()
+            parentComment.author._id.toString()
           ) {
             notifications.push({
               recipientId: product.userId._id,
               userId: req.user?.userId,
               type: NOTIFICATION_TYPES.ACTIVITY,
               title: "New Activity on Your Product",
-              message: `${
-                commenter.userName
-              } replied to a comment on your product "${
-                product.title.length > 50
+              message: `${commenter.userName
+                } replied to a comment on your product "${product.title.length > 50
                   ? product.title.substring(0, 50) + "..."
                   : product.title
-              }"`,
+                }"`,
               meta: createStandardizedNotificationMeta({
                 productId: product._id.toString(),
                 productTitle: product.title,
@@ -3569,7 +3566,7 @@ const addComment = async (req, res) => {
             ) {
               const assocProductImage =
                 assocProduct.productImages &&
-                assocProduct.productImages.length > 0
+                  assocProduct.productImages.length > 0
                   ? assocProduct.productImages[0]
                   : assocProduct.photo || null;
 
@@ -3583,11 +3580,10 @@ const addComment = async (req, res) => {
                 userId: req.user?.userId,
                 type: NOTIFICATION_TYPES.ACTIVITY,
                 title: "Your Product Was Mentioned",
-                message: `${commenter.userName} mentioned your product "${
-                  assocProduct.title.length > 40
+                message: `${commenter.userName} mentioned your product "${assocProduct.title.length > 40
                     ? assocProduct.title.substring(0, 40) + "..."
                     : assocProduct.title
-                }" in a product comment`,
+                  }" in a product comment`,
                 meta: createStandardizedNotificationMeta({
                   productId: assocProduct._id.toString(),
                   productTitle: assocProduct.title,
@@ -3778,11 +3774,11 @@ const getCommentByParentId = async (req, res) => {
           totalReplies: totalRepliesCount,
           firstReply: firstReply
             ? {
-                _id: firstReply._id,
-                content: firstReply.content,
-                author: firstReply.author,
-                createdAt: firstReply.createdAt,
-              }
+              _id: firstReply._id,
+              content: firstReply.content,
+              author: firstReply.author,
+              createdAt: firstReply.createdAt,
+            }
             : null,
         };
       })
