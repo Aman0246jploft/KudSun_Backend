@@ -1,7 +1,7 @@
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 const { createQueue, processQueue } = require("../routes/services/serviceBull");
-const { User, ChatMessage, ChatRoom } = require("../db");
+const { User, ChatMessage, ChatRoom, Notification } = require("../db");
 const { findOrCreateOneOnOneRoom } = require("../routes/services/serviceChat");
 const {
   handleGetChatRooms,
@@ -56,6 +56,7 @@ async function setupSocket(server) {
   io.on("connection", (socket) => {
     const userId = socket.user.userId;
     const userName = socket.user.userName;
+    // console.log("userId",userId)
 
     let socketId = socket.id;
     socket.join(`user_${userId}`);
@@ -70,7 +71,7 @@ async function setupSocket(server) {
       const roomToJoin =
         typeof roomInfo === "string" ? roomInfo : roomInfo.roomId;
       socket.join(roomToJoin);
-      console.log(`User ${userId} joined room ${roomToJoin}`);
+      // console.log(`User ${userId} joined room ${roomToJoin}`);
     });
 
     //sendMessage
@@ -175,7 +176,7 @@ async function setupSocket(server) {
                 }),
               },
             ];
-            if (usersToNotify) {
+            if (usersToNotify&&usersToNotify.length > 0) {
               await saveNotification(notification, true);
             }
           } else {
@@ -356,13 +357,6 @@ async function setupSocket(server) {
             .populate("lastMessage")
             .populate("participants", "userName profileImage");
 
-          const messageWithRoom = {
-            ...newMessage.toObject(),
-            chatRoom: roomId,
-          };
-
-          io.to(roomId).emit("newMessage", messageWithRoom);
-
           // Add null check for updatedRoom
           if (!updatedRoom) {
             console.error(`Room not found with ID: ${roomId}`);
@@ -413,6 +407,22 @@ async function setupSocket(server) {
               },
             ],
           });
+
+          const messageWithRoom = {
+            ...newMessage.toObject(),
+            chatRoom: roomId,
+          };
+
+          // Emit newMessage to the room
+          io.to(roomId).emit("newMessage", messageWithRoom);
+
+          // Auto-update chatRoomsList for the receiver to move latest chat to top
+          if (data.otherUserId) {
+            await autoUpdateChatRoomsList(io, data.otherUserId);
+          }
+
+          // Auto-update chatRoomsList for the sender as well
+          await autoUpdateChatRoomsList(io, userId);
 
           if (isNewRoom || roomRestored) {
             // Emit as new room for both users if it's truly new or was restored
@@ -526,103 +536,14 @@ async function setupSocket(server) {
       }
     });
 
-    socket.on("getChatRooms", (data) => {
-      handleGetChatRooms(socket, data);
+    socket.on("getChatRooms", (data,userId) => {
+      handleGetChatRooms(socket,userId, data);
     });
 
     socket.on("getMessageList", (data) => {
       handleGetMessageList(socket, data);
     });
 
-    // socket.on(
-    //   "getMessagesWithUser",
-    //   async ({ otherUserId, pageNo = 1, size = 20 }) => {
-    //     try {
-    //       const userId = socket.user?.userId;
-
-    //       if (!otherUserId) {
-    //         return socket.emit("error", { message: "otherUserId is required" });
-    //       }
-
-    //       const page = Math.max(1, parseInt(pageNo));
-    //       const limit = Math.min(100, parseInt(size));
-    //       const skip = (page - 1) * limit;
-
-    //       // Find existing one-on-one room (check if deleted for user)
-    //       const room = await ChatRoom.findOne({
-    //         isGroup: false,
-    //         participants: {
-    //           $all: [toObjectId(userId), toObjectId(otherUserId)],
-    //           $size: 2,
-    //         },
-    //         $and: [
-    //           { isDeleted: false },
-    //           {
-    //             $or: [
-    //               { deleteBy: { $size: 0 } },
-    //               { "deleteBy.userId": { $ne: toObjectId(userId) } },
-    //             ],
-    //           },
-    //         ],
-    //       });
-
-    //       if (!room) {
-    //         return socket.emit("messageList", {
-    //           chatRoomId: null,
-    //           total: 0,
-    //           pageNo: page,
-    //           size: limit,
-    //           messages: [],
-    //           hasMore: false,
-    //           isNewRoom: true,
-    //         });
-    //       }
-
-    //       const chatRoomId = room._id.toString();
-
-    //       // Get messages visible to this user
-    //       let messages = await ChatMessage.getVisibleMessages(
-    //         { chatRoom: toObjectId(chatRoomId) },
-    //         toObjectId(userId)
-    //       )
-    //         .populate("sender", "userName profileImage")
-    //         .sort({ createdAt: -1 }) // newest first
-    //         .skip(skip)
-    //         .limit(limit)
-    //         .lean();
-
-    //       const totalMessages = await ChatMessage.countDocuments({
-    //         chatRoom: toObjectId(chatRoomId),
-    //         $and: [
-    //           { isDeleted: false },
-    //           {
-    //             $or: [
-    //               { deleteBy: { $size: 0 } },
-    //               { "deleteBy.userId": { $ne: toObjectId(userId) } },
-    //             ],
-    //           },
-    //         ],
-    //       });
-
-    //       // Optional: reverse to send oldest first
-    //       messages = messages.reverse();
-    //       // socket.emit("markRoomMessagesAsRead", { otherUserId, userId });
-
-    //       socket.emit("messageList", {
-    //         chatRoomId,
-    //         total: totalMessages,
-    //         pageNo: page,
-    //         size: limit,
-    //         messages,
-    //         hasMore: totalMessages > page * limit,
-    //         isNewRoom: false,
-    //       });
-    //     } catch (error) {
-    //       console.error("❌ Error in getMessagesWithUser:", error);
-    //       socket.emit("error", { message: "Failed to get messages with user" });
-    //     }
-    //   }
-    // );
 
     socket.on(
       "getMessagesWithUser",
@@ -1490,6 +1411,25 @@ async function setupSocket(server) {
     }
   }
 
+  // Auto-update chatRoomsList for a user (moves latest conversation to top)
+  async function autoUpdateChatRoomsList(io, userId) {
+    try {
+      // console.log(`🔄 Auto-updating chatRoomsList for user ${userId}`);
+
+      // Create a mock socket object that mimics the required socket structure
+      const mockSocket = {
+        emit: (event, data) => io.to(`user_${userId}`).emit(event, data),
+        user: { userId }
+      };
+
+      // Trigger getChatRooms handler for the specific user with proper parameters
+      await handleGetChatRooms(mockSocket, userId, {});
+
+    } catch (error) {
+      console.error(`Error auto-updating chatRoomsList for user ${userId}:`, error);
+    }
+  }
+
   // Helper function to emit room updates for all participants
   async function emitRoomUpdateToParticipants(
     io,
@@ -1620,20 +1560,20 @@ processQueue(updateNotificationQueue, async (job) => {
     { read: true }
   );
 
-  console.log(`Marked all notifications as read for user ${userId}`);
+  // console.log(`Marked all notifications as read for user ${userId}`);
 });
 
 const liveStatusQueue = createQueue(LIVE_STATUS_QUEUE);
 processQueue(liveStatusQueue, async (job) => {
   const { userId, isLive } = job.data;
   await User.findByIdAndUpdate(userId, { isLive });
-  console.log(`Updated live status for user ${userId} to ${isLive}`);
+  // console.log(`Updated live status for user ${userId} to ${isLive}`);
 });
 
 async function resetAllLiveStatuses() {
   try {
     await User.updateMany({ isLive: true }, { isLive: false });
-    console.log("✅ Reset all user live statuses on server start");
+    // console.log("✅ Reset all user live statuses on server start");
   } catch (err) {
     console.error("❌ Failed to reset live statuses:", err);
   }

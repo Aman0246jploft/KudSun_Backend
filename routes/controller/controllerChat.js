@@ -12,13 +12,22 @@ const {
   toObjectId,
 } = require("../../utils/globalFunction");
 
-async function handleGetChatRooms(socket, data) {
+async function handleGetChatRooms(socket, user, data) {
   try {
-    const userId = socket.user.userId;
-    const page = parseInt(data.pageNo) || 1;
-    const limit = parseInt(data.size) || 10;
+    let userId = user || socket.user.userId;
+    
+    // Safety check for userId
+    if (!userId) {
+      return socket.emit("error", { message: "User ID is required" });
+    }
+    
+    // Ensure data exists
+    const requestData = data || {};
+    
+    const page = Math.max(1, parseInt(requestData.pageNo) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(requestData.size) || 10)); // Limit max to 50
     const skip = (page - 1) * limit;
-    const keyWord = data.keyWord?.toLowerCase() || "";
+    const keyWord = requestData.keyWord?.toLowerCase() || "";
 
     // Use the same filtering logic as getVisibleRooms to exclude deleted rooms
     const chatRoomsQuery = ChatRoom.find({
