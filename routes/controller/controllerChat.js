@@ -4,7 +4,7 @@ const upload = multer();
 const router = express.Router();
 const HTTP_STATUS = require("../../utils/statusCode");
 const CONSTANTS = require("../../utils/constants");
-const { ChatRoom, ChatMessage, Notification } = require("../../db");
+const { ChatRoom, ChatMessage, Notification, BlockUser } = require("../../db");
 const perApiLimiter = require("../../middlewares/rateLimiter");
 const {
   apiErrorRes,
@@ -15,15 +15,15 @@ const {
 async function handleGetChatRooms(socket, user, data) {
   try {
     let userId = user || socket.user.userId;
-    
+
     // Safety check for userId
     if (!userId) {
       return socket.emit("error", { message: "User ID is required" });
     }
-    
+
     // Ensure data exists
     const requestData = data || {};
-    
+
     const page = Math.max(1, parseInt(requestData.pageNo) || 1);
     const limit = Math.min(50, Math.max(1, parseInt(requestData.size) || 10)); // Limit max to 50
     const skip = (page - 1) * limit;
@@ -170,6 +170,29 @@ async function handleGetMessageList(socket, data) {
     // Optional: Reverse if client expects ascending order
     messages = messages.reverse();
 
+
+
+    // ✅ Check block status
+    const otherUserId =
+      messages.length > 0
+        ? messages[0].sender._id.toString() === userId.toString()
+          ? messages[0].receiver?.toString()
+          : messages[0].sender._id
+        : null;
+
+    let blocked = false;
+    if (otherUserId) {
+      const isBlocked = await BlockUser.findOne({
+        $or: [
+          { blockBy: toObjectId(userId), userId: toObjectId(otherUserId) },
+          { blockBy: toObjectId(otherUserId), userId: toObjectId(userId) },
+        ],
+      });
+
+      blocked = !!isBlocked;
+    }
+
+
     socket.emit("messageList", {
       chatRoomId,
       total: totalMessages,
@@ -177,6 +200,7 @@ async function handleGetMessageList(socket, data) {
       size: limit,
       hasMore: totalMessages > page * limit,
       messages,
+      blocked
     });
   } catch (error) {
     console.error("Error fetching message list:", error);

@@ -1,7 +1,7 @@
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 const { createQueue, processQueue } = require("../routes/services/serviceBull");
-const { User, ChatMessage, ChatRoom, Notification } = require("../db");
+const { User, ChatMessage, ChatRoom, Notification, BlockUser } = require("../db");
 const { findOrCreateOneOnOneRoom } = require("../routes/services/serviceChat");
 const {
   handleGetChatRooms,
@@ -176,7 +176,7 @@ async function setupSocket(server) {
                 }),
               },
             ];
-            if (usersToNotify&&usersToNotify.length > 0) {
+            if (usersToNotify && usersToNotify.length > 0) {
               await saveNotification(notification, true);
             }
           } else {
@@ -536,8 +536,8 @@ async function setupSocket(server) {
       }
     });
 
-    socket.on("getChatRooms", (data,userId) => {
-      handleGetChatRooms(socket,userId, data);
+    socket.on("getChatRooms", (data, userId) => {
+      handleGetChatRooms(socket, userId, data);
     });
 
     socket.on("getMessageList", (data) => {
@@ -586,6 +586,7 @@ async function setupSocket(server) {
               messages: [],
               hasMore: false,
               isNewRoom: true,
+              blocked: false, // default
             });
           }
 
@@ -614,6 +615,15 @@ async function setupSocket(server) {
               },
             ],
           });
+
+
+          const isBlocked = await BlockUser.findOne({
+            $or: [
+              { blockBy: toObjectId(userId), userId: toObjectId(otherUserId) },
+              { blockBy: toObjectId(otherUserId), userId: toObjectId(userId) },
+            ],
+          });
+               const blocked = !!isBlocked;
 
           // Optional: reverse to send oldest first
           messages = messages.reverse();
@@ -644,6 +654,7 @@ async function setupSocket(server) {
             messages,
             hasMore: totalMessages > page * limit,
             isNewRoom: false,
+            blocked
           });
 
           // Optional: update unread counts for all participants
