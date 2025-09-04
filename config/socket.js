@@ -15,7 +15,7 @@ const {
   NOTIFICATION_TYPES,
   createStandardizedNotificationMeta,
 } = require("../utils/Role");
-const { saveNotification } = require("../routes/services/serviceNotification");
+const { saveNotification, setSocketInstance } = require("../routes/services/serviceNotification");
 
 // Get base URL from environment or default to localhost
 const BASE_URL = process.env.BASE_URL || "http://localhost:9194";
@@ -28,6 +28,10 @@ async function setupSocket(server) {
       origin: "*",
     },
   });
+
+  // Set socket instance for notification service
+  setSocketInstance(io);
+  
   io.use((socket, next) => {
     // 1. Try to get token from handshake.auth.token (browser clients)
     let token = socket.handshake.auth.token;
@@ -180,8 +184,6 @@ async function setupSocket(server) {
             ];
             if (usersToNotify && usersToNotify.length > 0) {
               await saveNotification(notification, true);
-              // Emit updated total unread count after saving notification
-              await emitTotalUnreadCount(io, data.otherUserId);
             }
           } else {
             const room = await ChatRoom.findById(roomId).lean();
@@ -212,8 +214,6 @@ async function setupSocket(server) {
                 },
               ];
               await saveNotification(notification, true);
-              // Emit updated total unread count after saving notification
-              await emitTotalUnreadCount(io, user._id);
             }
           }
 

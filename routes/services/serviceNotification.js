@@ -12,8 +12,99 @@ const {
   resultDb,
   momentValueFunc,
   objectId,
+  toObjectId,
 } = require("../../utils/globalFunction");
 const { addJobToQueue, createQueue, processQueue } = require("./serviceBull");
+
+// Socket instance holder
+let socketInstance = null;
+
+// Function to set socket instance
+const setSocketInstance = (io) => {
+  socketInstance = io;
+};
+
+// Function to emit total unread count (copied from socket.js)
+const emitTotalUnreadCount = async (userId) => {
+  if (!socketInstance) return;
+  
+  try {
+    const [chatUnreadCount, notificationUnreadCount] = await Promise.all([
+      calculateTotalChatUnreadCount(userId),
+      calculateTotalNotificationUnreadCount(userId),
+    ]);
+
+    const totalUnreadCount = chatUnreadCount + notificationUnreadCount;
+
+    socketInstance.to(`user_${userId}`).emit("totalUnreadCount", {
+      chatUnreadCount,
+      notificationUnreadCount,
+      totalUnreadCount,
+      timestamp: new Date().toISOString(),
+    });
+
+    return { chatUnreadCount, notificationUnreadCount, totalUnreadCount };
+  } catch (error) {
+    console.error("Error emitting total unread count:", error);
+  }
+};
+
+// Helper functions for calculating unread counts
+const calculateTotalChatUnreadCount = async (userId) => {
+  try {
+    const { ChatRoom, ChatMessage } = require("../../db");
+    
+    // Get all chat rooms visible to this user
+    const userRooms = await ChatRoom.find({
+      participants: toObjectId(userId),
+      $and: [
+        { isDeleted: false },
+        {
+          $or: [
+            { deleteBy: { $size: 0 } },
+            { "deleteBy.userId": { $ne: toObjectId(userId) } },
+          ],
+        },
+      ],
+    }).select("_id");
+
+    const roomIds = userRooms.map((room) => room._id);
+
+    // Count all unread messages across all rooms (excluding deleted messages)
+    const totalChatUnread = await ChatMessage.countDocuments({
+      chatRoom: { $in: roomIds },
+      seenBy: { $ne: toObjectId(userId) },
+      sender: { $ne: toObjectId(userId) },
+      $and: [
+        { isDeleted: false },
+        {
+          $or: [
+            { deleteBy: { $size: 0 } },
+            { "deleteBy.userId": { $ne: toObjectId(userId) } },
+          ],
+        },
+      ],
+    });
+
+    return totalChatUnread;
+  } catch (error) {
+    console.error("Error calculating total chat unread:", error);
+    return 0;
+  }
+};
+
+const calculateTotalNotificationUnreadCount = async (userId) => {
+  try {
+    const totalNotificationUnread = await Notification.countDocuments({
+      userId: toObjectId(userId),
+      read: false,
+    });
+    return totalNotificationUnread;
+  } catch (error) {
+    console.error("Error calculating notification unread:", error);
+    return 0;
+  }
+};
 
 const notificationQueue = createQueue("notificationQueue");
 
@@ -78,6 +169,9 @@ const notificationProcessor = async (job) => {
         activityType: userNotification.activityType || null,
         redirectUrl: userNotification.redirectUrl || null,
       });
+      
+      // Emit updated total unread count after saving notification
+      await emitTotalUnreadCount(userId);
     }
   } catch (error) {
     console.error("Error processing notification job:", error);
@@ -131,7 +225,7 @@ const getNotificationByUserIdListed = async (payload) => {
     const total = await Notification.countDocuments(query);
     const list = await Notification.find(query)
       .select(
-        "userId title message notificationType redirectUrl readAt createdAt isRead"
+        "userId title message notificationType redirectUrl readAt createdAt read"
       )
       .skip((pageNo - 1) * limit)
       .limit(limit)
@@ -139,7 +233,7 @@ const getNotificationByUserIdListed = async (payload) => {
       .lean();
 
     let totalUnread = await Notification.countDocuments({
-      isRead: false,
+      read: false,
       userId: payload?.userId,
     });
     return resultDb(SUCCESS, {
@@ -237,7 +331,7 @@ const notificationStatusUpdateRead = async (id) => {
   try {
     const saveData = await Notification.findByIdAndUpdate(
       id,
-      { $set: { isRead: true } },
+      { $set: { read: true } },
       { new: true }
     );
     if (saveData) {
@@ -254,7 +348,7 @@ const notificationStatusUserIdUpdateReadAll = async (userId) => {
   try {
     const saveData = await Notification.updateMany(
       { userId: userId },
-      { $set: { isRead: true } }
+      { $set: { read: true } }
     );
     return resultDb(SUCCESS, saveData);
   } catch (error) {
@@ -414,7 +508,7 @@ const getUserNotification = async (payload) => {
           message: 1,
           status: 1,
           imageUrl: 1,
-          isRead: 1,
+          read: 1,
           createdAt: 1,
           "sender._id": 1,
           "sender.fullName": 1,
@@ -434,7 +528,7 @@ processQueue(notificationQueue, notificationProcessor);
 
 module.exports = {
   saveNotification,
-
+  setSocketInstance,
   getAllNotificationByUserId,
   getNotificationByUserIdListed,
   getNotificationList,
