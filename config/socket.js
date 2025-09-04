@@ -461,6 +461,12 @@ async function setupSocket(server) {
               await emitTotalUnreadCount(io, data.otherUserId);
             }
           }
+
+          // Emit updated total unread counts for both users after sending message
+          await emitTotalUnreadCount(io, userId);
+          if (data.otherUserId) {
+            await emitTotalUnreadCount(io, data.otherUserId);
+          }
         } catch (error) {
           console.error("Error in sendMessage:", error);
           socket.emit("error", { message: "Failed to send message" });
@@ -727,6 +733,9 @@ async function setupSocket(server) {
           queued: true,
           timestamp: new Date().toISOString(),
         });
+
+        // Emit updated total unread count after marking notifications as read
+        await emitTotalUnreadCount(io, userId);
 
         // const { Notification } = require('../db');
         // await Notification.updateMany(
