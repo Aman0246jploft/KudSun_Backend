@@ -863,8 +863,8 @@ const getProductReviews = async (req, res) => {
     // Get product details first
     const product = await SellProduct.findOne({
       _id: productId,
-      isDeleted: false,
-      isDisable: false,
+      // isDeleted: false,
+      // isDisable: false,
     })
       .populate({
         path: "userId",
