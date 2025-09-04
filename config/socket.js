@@ -2,6 +2,8 @@ const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 const { createQueue, processQueue } = require("../routes/services/serviceBull");
 const { User, ChatMessage, ChatRoom, Notification, BlockUser } = require("../db");
+const moment = require("moment");
+
 const { findOrCreateOneOnOneRoom } = require("../routes/services/serviceChat");
 const {
   handleGetChatRooms,
@@ -627,10 +629,44 @@ async function setupSocket(server) {
           });
           const userInfos = await User.findById(otherUserId).select('userName is_Verified_Seller is_Preferred_seller isLive');
 
+
+
+
           const blocked = !!isBlocked;
 
           // Optional: reverse to send oldest first
           messages = messages.reverse();
+          const formattedMessages = [];
+          let lastDateLabel = "";
+
+          messages.forEach((msg) => {
+            const createdAt = moment(msg.createdAt);
+            const today = moment();
+            const yesterday = moment().subtract(1, "day");
+
+            let dateLabel = createdAt.format("MMM DD, YYYY");
+            if (createdAt.isSame(today, "day")) dateLabel = "Today";
+            else if (createdAt.isSame(yesterday, "day")) dateLabel = "Yesterday";
+
+            // Insert a date marker if this message belongs to a new date
+            if (dateLabel !== lastDateLabel) {
+              formattedMessages.push({
+                messageType: "date",
+                content:dateLabel,
+                // time: createdAt.format("hh:mm A") // optional, can remove if not needed
+              });
+              lastDateLabel = dateLabel;
+            }
+
+            // Add the actual message with time
+            formattedMessages.push({
+              ...msg,
+              // time: createdAt.format("hh:mm A") // hh:mm AM/PM
+            });
+          });
+
+          messages = formattedMessages;
+
 
           // ✅ Automatically mark messages as read
           await ChatMessage.updateMany(
@@ -659,8 +695,8 @@ async function setupSocket(server) {
             hasMore: totalMessages > page * limit,
             isNewRoom: false,
             blocked,
-            is_Preferred_seller:userInfos?.is_Preferred_seller||false,
-            is_Verified_Seller:userInfos?.is_Verified_Seller||false
+            is_Preferred_seller: userInfos?.is_Preferred_seller || false,
+            is_Verified_Seller: userInfos?.is_Verified_Seller || false
           });
 
           // Optional: update unread counts for all participants
