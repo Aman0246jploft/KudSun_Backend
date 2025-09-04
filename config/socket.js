@@ -586,7 +586,9 @@ async function setupSocket(server) {
               messages: [],
               hasMore: false,
               isNewRoom: true,
-              blocked: false, // default
+              blocked: false, // default,
+              is_Preferred_seller: false,
+              is_Verified_Seller: false
             });
           }
 
@@ -623,7 +625,9 @@ async function setupSocket(server) {
               { blockBy: toObjectId(otherUserId), userId: toObjectId(userId) },
             ],
           });
-               const blocked = !!isBlocked;
+          const userInfos = await User.findById(otherUserId).select('userName is_Verified_Seller is_Preferred_seller isLive');
+
+          const blocked = !!isBlocked;
 
           // Optional: reverse to send oldest first
           messages = messages.reverse();
@@ -654,7 +658,9 @@ async function setupSocket(server) {
             messages,
             hasMore: totalMessages > page * limit,
             isNewRoom: false,
-            blocked
+            blocked,
+            is_Preferred_seller:userInfos?.is_Preferred_seller||false,
+            is_Verified_Seller:userInfos?.is_Verified_Seller||false
           });
 
           // Optional: update unread counts for all participants
