@@ -49,7 +49,7 @@ async function handleGetChatRooms(socket, user, data) {
       })
       .populate({
         path: "participants",
-        select: "userName profileImage isLive",
+        select: "userName profileImage isLive is_Verified_Seller is_Preferred_seller",
       })
       .sort({ updatedAt: -1 }) // Prefer updatedAt instead of createdAt for relevance
       .lean();
