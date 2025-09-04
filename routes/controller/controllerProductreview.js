@@ -841,8 +841,8 @@ const getProductReviews = async (req, res) => {
     // Build match conditions
     const matchConditions = {
       productId: toObjectId(productId),
-      isDeleted: false,
-      isDisable: false,
+      // isDeleted: false,
+      // isDisable: false,
     };
 
     if (raterRole) {
