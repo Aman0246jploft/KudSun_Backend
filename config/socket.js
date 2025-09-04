@@ -1439,7 +1439,7 @@ async function setupSocket(server) {
     } catch (err) {
       console.error("Error while pushing unread counts:", err);
     }
-  }, 30000); //
+  }, 3000); //
 
   // Send total unread count to user
   async function emitTotalUnreadCount(io, userId) {
