@@ -180,6 +180,8 @@ async function setupSocket(server) {
             ];
             if (usersToNotify && usersToNotify.length > 0) {
               await saveNotification(notification, true);
+              // Emit updated total unread count after saving notification
+              await emitTotalUnreadCount(io, data.otherUserId);
             }
           } else {
             const room = await ChatRoom.findById(roomId).lean();
@@ -210,6 +212,8 @@ async function setupSocket(server) {
                 },
               ];
               await saveNotification(notification, true);
+              // Emit updated total unread count after saving notification
+              await emitTotalUnreadCount(io, user._id);
             }
           }
 
@@ -1439,16 +1443,16 @@ async function setupSocket(server) {
     });
   });
 
-  setInterval(async () => {
-    try {
-      for (const [socketId, userId] of Object.entries(connectedUsers)) {
-        if (!userId) continue;
-        await emitTotalUnreadCount(io, userId);
-      }
-    } catch (err) {
-      console.error("Error while pushing unread counts:", err);
-    }
-  }, 3000); //
+  // setInterval(async () => {
+  //   try {
+  //     for (const [socketId, userId] of Object.entries(connectedUsers)) {
+  //       if (!userId) continue;
+  //       await emitTotalUnreadCount(io, userId);
+  //     }
+  //   } catch (err) {
+  //     console.error("Error while pushing unread counts:", err);
+  //   }
+  // }, 3000); //
 
   // Send total unread count to user
   async function emitTotalUnreadCount(io, userId) {
