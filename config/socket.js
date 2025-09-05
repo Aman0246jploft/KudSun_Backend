@@ -21,6 +21,11 @@ const { saveNotification, setSocketInstance } = require("../routes/services/serv
 const BASE_URL = process.env.BASE_URL || "http://localhost:9194";
 
 const connectedUsers = {};
+// Track users currently viewing chat rooms with timestamps
+const usersInChatRooms = {};
+// Track last activity timestamps for users in chat rooms
+const userChatActivity = {};
+
 async function setupSocket(server) {
   await resetAllLiveStatuses();
   const io = new Server(server, {
@@ -79,6 +84,7 @@ async function setupSocket(server) {
       socket.join(roomToJoin);
       // console.log(`User ${userId} joined room ${roomToJoin}`);
     });
+
 
     //sendMessage
     socket.on(
@@ -466,6 +472,9 @@ async function setupSocket(server) {
             }
           }
 
+          // Check if both users are in the chat room and auto-mark the new message as read
+          await checkAndAutoMarkMessagesAsRead(io, roomId, userId);
+
           // Emit updated total unread counts for both users after sending message
           await emitTotalUnreadCount(io, userId);
           if (data.otherUserId) {
@@ -482,6 +491,9 @@ async function setupSocket(server) {
       try {
         const userId = socket.user?.userId;
         if (!roomId || !userId) return;
+
+        // Track user activity in this chat room
+        trackUserInChatRoom(roomId, userId);
 
         const unseenMessages = await ChatMessage.find({
           chatRoom: toObjectId(roomId),
@@ -605,6 +617,9 @@ async function setupSocket(server) {
           }
 
           const chatRoomId = room._id.toString();
+
+          // Track user as actively viewing this chat room
+          trackUserInChatRoom(chatRoomId, userId);
 
           // Get messages visible to this user
           let messages = await ChatMessage.getVisibleMessages(
@@ -761,6 +776,11 @@ async function setupSocket(server) {
         if (!userId) return;
 
         let targetRoomId = roomId;
+
+        // Track user activity in this chat room
+        if (roomId) {
+          trackUserInChatRoom(roomId, userId);
+        }
 
         // If roomId not provided, find room using otherUserId
         if (!targetRoomId && otherUserId) {
@@ -1393,43 +1413,23 @@ async function setupSocket(server) {
     );
 
     // Restore a deleted message for the current user
-    socket.on("restoreMessage", async ({ messageId }) => {
-      try {
-        const userId = socket.user?.userId;
-        if (!userId || !messageId) {
-          return socket.emit("error", { message: "messageId is required" });
-        }
-
-        // Remove user from deleteBy array
-        const restoredMessage = await ChatMessage.findByIdAndUpdate(
-          messageId,
-          {
-            $pull: {
-              deleteBy: { userId: toObjectId(userId) },
-            },
-          },
-          { new: true }
-        ).populate("sender", "userName profileImage");
-
-        if (!restoredMessage) {
-          return socket.emit("error", { message: "Message not found" });
-        }
-
-        socket.emit("messageRestored", {
-          success: true,
-          message: restoredMessage,
-          timestamp: new Date().toISOString(),
-        });
-      } catch (error) {
-        console.error("❌ Error in restoreMessage:", error);
-        socket.emit("error", { message: "Failed to restore message" });
-      }
-    });
 
     socket.on("disconnect", () => {
       console.log(`🔴 User ${userId} disconnected`);
       delete connectedUsers[socket.id];
+      
+      // Clean up user presence from all chat rooms
       if (userId) {
+        // Clean up from chat room tracking
+        for (const roomId in usersInChatRooms) {
+          removeUserFromChatRoom(roomId, userId);
+        }
+        
+        // Clean up activity tracking
+        if (userChatActivity[userId]) {
+          delete userChatActivity[userId];
+        }
+        
         liveStatusQueue.add({ userId, isLive: false });
         io.to(`user_${userId}`).emit("userLiveStatus", {
           userId,
@@ -1442,6 +1442,27 @@ async function setupSocket(server) {
       console.error("❌ Socket connection error:", err.message, err);
     });
   });
+
+  // Cleanup inactive users from chat room tracking every 5 minutes
+  setInterval(() => {
+    try {
+      const now = Date.now();
+      const inactivityThreshold = 5 * 60 * 1000; // 5 minutes
+      
+      for (const userId in userChatActivity) {
+        const userRooms = userChatActivity[userId];
+        for (const roomId in userRooms) {
+          const lastActivity = userRooms[roomId];
+          if (now - lastActivity > inactivityThreshold) {
+            console.log(`🧹 Cleaning up inactive user ${userId} from room ${roomId}`);
+            removeUserFromChatRoom(roomId, userId);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Error while cleaning up inactive users:", err);
+    }
+  }, 5 * 60 * 1000); // Every 5 minutes
 
   // setInterval(async () => {
   //   try {
@@ -1553,6 +1574,112 @@ async function setupSocket(server) {
   }
 
   return io;
+}
+
+// Helper function to track user activity in a chat room
+function trackUserInChatRoom(roomId, userId) {
+  const now = Date.now();
+  
+  // Track user in chat room
+  if (!usersInChatRooms[roomId]) {
+    usersInChatRooms[roomId] = new Set();
+  }
+  usersInChatRooms[roomId].add(userId);
+  
+  // Update last activity timestamp
+  if (!userChatActivity[userId]) {
+    userChatActivity[userId] = {};
+  }
+  userChatActivity[userId][roomId] = now;
+  
+  console.log(`📱 User ${userId} is active in chat room ${roomId}`);
+}
+
+// Helper function to remove user from chat room tracking
+function removeUserFromChatRoom(roomId, userId) {
+  if (usersInChatRooms[roomId]) {
+    usersInChatRooms[roomId].delete(userId);
+    // Clean up empty room entries
+    if (usersInChatRooms[roomId].size === 0) {
+      delete usersInChatRooms[roomId];
+    }
+  }
+  
+  // Clean up activity tracking
+  if (userChatActivity[userId] && userChatActivity[userId][roomId]) {
+    delete userChatActivity[userId][roomId];
+    if (Object.keys(userChatActivity[userId]).length === 0) {
+      delete userChatActivity[userId];
+    }
+  }
+}
+
+// Helper function to check if user is recently active in a chat room (within last 2 minutes)
+function isUserActiveInChatRoom(roomId, userId) {
+  if (!userChatActivity[userId] || !userChatActivity[userId][roomId]) {
+    return false;
+  }
+  
+  const lastActivity = userChatActivity[userId][roomId];
+  const now = Date.now();
+  const inactivityThreshold = 2 * 60 * 1000; // 2 minutes
+  
+  return (now - lastActivity) < inactivityThreshold;
+}
+
+// Helper function to check if both users are in chat room and auto-mark messages as read
+async function checkAndAutoMarkMessagesAsRead(io, roomId, currentUserId) {
+  try {
+    // Get room participants
+    const room = await ChatRoom.findById(roomId).select('participants');
+    if (!room) return;
+
+    const participants = room.participants.map(p => p.toString());
+    
+    // Check if all participants are recently active in the chat room (within 2 minutes)
+    const allParticipantsActive = participants.every(participantId => 
+      isUserActiveInChatRoom(roomId, participantId)
+    );
+
+    if (allParticipantsActive && participants.length === 2) {
+      console.log(`✅ Both users are active in chat room ${roomId}, auto-marking messages as read`);
+      
+      // Mark messages as read for all participants
+      for (const participantId of participants) {
+        const result = await ChatMessage.updateMany(
+          {
+            chatRoom: toObjectId(roomId),
+            seenBy: { $ne: toObjectId(participantId) },
+            sender: { $ne: toObjectId(participantId) },
+          },
+          { $addToSet: { seenBy: toObjectId(participantId) } }
+        );
+
+        if (result.modifiedCount > 0) {
+          console.log(`📖 Auto-marked ${result.modifiedCount} messages as read for user ${participantId} in room ${roomId}`);
+
+          // Update total unread count
+          await emitTotalUnreadCount(io, participantId);
+        }
+      }
+
+      // Auto-update chatRoomsList for ALL participants to reflect new unread counts
+      for (const participantId of participants) {
+        await autoUpdateChatRoomsList(io, participantId);
+      }
+
+      // Broadcast seen event to room (simplified, no specific userId since it's automatic)
+      io.to(roomId).emit("messagesSeen", {
+        roomId,
+        userId: "system",
+        seenAt: new Date().toISOString(),
+        allMessages: true,
+        autoRead: true,
+      });
+    }
+  } catch (error) {
+    console.error("❌ Error in checkAndAutoMarkMessagesAsRead:", error);
+  }
 }
 
 async function calculateTotalChatUnreadCount(userId) {
