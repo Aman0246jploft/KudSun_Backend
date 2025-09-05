@@ -1464,16 +1464,16 @@ async function setupSocket(server) {
     }
   }, 5 * 60 * 1000); // Every 5 minutes
 
-  // setInterval(async () => {
-  //   try {
-  //     for (const [socketId, userId] of Object.entries(connectedUsers)) {
-  //       if (!userId) continue;
-  //       await emitTotalUnreadCount(io, userId);
-  //     }
-  //   } catch (err) {
-  //     console.error("Error while pushing unread counts:", err);
-  //   }
-  // }, 3000); //
+  setInterval(async () => {
+    try {
+      for (const [socketId, userId] of Object.entries(connectedUsers)) {
+        if (!userId) continue;
+        await emitTotalUnreadCount(io, userId);
+      }
+    } catch (err) {
+      console.error("Error while pushing unread counts:", err);
+    }
+  }, 3000); //
 
   // Send total unread count to user
   async function emitTotalUnreadCount(io, userId) {
