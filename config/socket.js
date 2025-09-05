@@ -473,7 +473,7 @@ async function setupSocket(server) {
           }
 
           // Check if both users are in the chat room and auto-mark the new message as read
-          await checkAndAutoMarkMessagesAsRead(io, roomId, userId);
+          // await checkAndAutoMarkMessagesAsRead(io, roomId, userId);
 
           // Emit updated total unread counts for both users after sending message
           await emitTotalUnreadCount(io, userId);
