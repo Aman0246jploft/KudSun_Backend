@@ -85,6 +85,41 @@ async function setupSocket(server) {
       // console.log(`User ${userId} joined room ${roomToJoin}`);
     });
 
+    // Leave room manually
+    socket.on("leaveRoom", async (roomInfo) => {
+      try {
+        const roomToLeave =
+          typeof roomInfo === "string" ? roomInfo : roomInfo.roomId;
+        
+        // Get room participants before leaving
+        const room = await ChatRoom.findById(roomToLeave).select('participants');
+        
+        // Remove from socket room
+        socket.leave(roomToLeave);
+        
+        // Remove from auto-read tracking
+        removeUserFromChatRoom(roomToLeave, userId);
+        
+        console.log(`User ${userId} left room ${roomToLeave}`);
+        
+        // Update chat rooms list for ALL participants after user leaves
+        if (room && room.participants) {
+          for (const participantId of room.participants) {
+            await autoUpdateChatRoomsList(io, participantId.toString());
+          }
+        }
+        
+        socket.emit("leftRoom", {
+          success: true,
+          roomId: roomToLeave,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (error) {
+        console.error("❌ Error in leaveRoom:", error);
+        socket.emit("error", { message: "Failed to leave room" });
+      }
+    });
+
 
     //sendMessage
     socket.on(
@@ -473,7 +508,7 @@ async function setupSocket(server) {
           }
 
           // Check if both users are in the chat room and auto-mark the new message as read
-          // await checkAndAutoMarkMessagesAsRead(io, roomId, userId);
+          await checkAndAutoMarkMessagesAsRead(io, roomId, userId);
 
           // Emit updated total unread counts for both users after sending message
           await emitTotalUnreadCount(io, userId);
@@ -1464,16 +1499,16 @@ async function setupSocket(server) {
     }
   }, 5 * 60 * 1000); // Every 5 minutes
 
-  setInterval(async () => {
-    try {
-      for (const [socketId, userId] of Object.entries(connectedUsers)) {
-        if (!userId) continue;
-        await emitTotalUnreadCount(io, userId);
-      }
-    } catch (err) {
-      console.error("Error while pushing unread counts:", err);
-    }
-  }, 3000); //
+  // setInterval(async () => {
+  //   try {
+  //     for (const [socketId, userId] of Object.entries(connectedUsers)) {
+  //       if (!userId) continue;
+  //       await emitTotalUnreadCount(io, userId);
+  //     }
+  //   } catch (err) {
+  //     console.error("Error while pushing unread counts:", err);
+  //   }
+  // }, 3000); //
 
   // Send total unread count to user
   async function emitTotalUnreadCount(io, userId) {
@@ -1731,6 +1766,7 @@ async function calculateTotalNotificationUnreadCount(userId) {
       userId: toObjectId(userId),
       read: false,
     });
+    console.log("totalNotificationUnread",totalNotificationUnread)
     return totalNotificationUnread;
   } catch (error) {
     console.error("Error calculating notification unread:", error);

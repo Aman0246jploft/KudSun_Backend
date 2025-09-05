@@ -26,8 +26,9 @@ const setSocketInstance = (io) => {
 
 // Function to emit total unread count (copied from socket.js)
 const emitTotalUnreadCount = async (userId) => {
+
   if (!socketInstance) return;
-  
+ 
   try {
     const [chatUnreadCount, notificationUnreadCount] = await Promise.all([
       calculateTotalChatUnreadCount(userId),
@@ -35,6 +36,7 @@ const emitTotalUnreadCount = async (userId) => {
     ]);
 
     const totalUnreadCount = chatUnreadCount + notificationUnreadCount;
+    console.log("totalUnreadCount",totalUnreadCount)
 
     socketInstance.to(`user_${userId}`).emit("totalUnreadCount", {
       chatUnreadCount,
@@ -96,9 +98,10 @@ const calculateTotalChatUnreadCount = async (userId) => {
 const calculateTotalNotificationUnreadCount = async (userId) => {
   try {
     const totalNotificationUnread = await Notification.countDocuments({
-      userId: toObjectId(userId),
+      recipientId: toObjectId(userId),
       read: false,
     });
+    // console.log("calculateTotalNotificationUnreadCount")
     return totalNotificationUnread;
   } catch (error) {
     console.error("Error calculating notification unread:", error);
@@ -170,6 +173,7 @@ const notificationProcessor = async (job) => {
         redirectUrl: userNotification.redirectUrl || null,
       });
       
+      console.log("hiii")
       // Emit updated total unread count after saving notification
       await emitTotalUnreadCount(userId);
     }
