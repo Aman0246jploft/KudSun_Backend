@@ -82,7 +82,7 @@ async function setupSocket(server) {
       const roomToJoin =
         typeof roomInfo === "string" ? roomInfo : roomInfo.roomId;
       socket.join(roomToJoin);
-      // console.log(`User ${userId} joined room ${roomToJoin}`);
+      console.log(`User ${userId} joined room ${roomToJoin}`);
     });
 
     // Leave room manually
@@ -507,8 +507,8 @@ async function setupSocket(server) {
             }
           }
 
-          // Check if both users are in the chat room and auto-mark the new message as read
-          await checkAndAutoMarkMessagesAsRead(io, roomId, userId);
+          // Auto-mark the new message as seen by all users currently in the room
+          await autoMarkNewMessageAsSeen(io, roomId, newMessage._id, userId);
 
           // Emit updated total unread counts for both users after sending message
           await emitTotalUnreadCount(io, userId);
@@ -1611,6 +1611,48 @@ async function setupSocket(server) {
   return io;
 }
 
+// Global function to emit total unread count to user
+async function emitTotalUnreadCountGlobal(io, userId) {
+  try {
+    const [chatUnreadCount, notificationUnreadCount] = await Promise.all([
+      calculateTotalChatUnreadCount(userId),
+      calculateTotalNotificationUnreadCount(userId),
+    ]);
+
+    const totalUnreadCount = chatUnreadCount + notificationUnreadCount;
+
+    io.to(`user_${userId}`).emit("totalUnreadCount", {
+      chatUnreadCount,
+      notificationUnreadCount,
+      totalUnreadCount,
+      timestamp: new Date().toISOString(),
+    });
+
+    return { chatUnreadCount, notificationUnreadCount, totalUnreadCount };
+  } catch (error) {
+    console.error("Error emitting total unread count:", error);
+  }
+}
+
+// Global function to auto-update chatRoomsList for a user
+async function autoUpdateChatRoomsListGlobal(io, userId) {
+  try {
+    // console.log(`🔄 Auto-updating chatRoomsList for user ${userId}`);
+
+    // Create a mock socket object that mimics the required socket structure
+    const mockSocket = {
+      emit: (event, data) => io.to(`user_${userId}`).emit(event, data),
+      user: { userId }
+    };
+
+    // Trigger getChatRooms handler for the specific user with proper parameters
+    await handleGetChatRooms(mockSocket, userId, {});
+
+  } catch (error) {
+    console.error(`Error auto-updating chatRoomsList for user ${userId}:`, error);
+  }
+}
+
 // Helper function to track user activity in a chat room
 function trackUserInChatRoom(roomId, userId) {
   const now = Date.now();
@@ -1628,6 +1670,8 @@ function trackUserInChatRoom(roomId, userId) {
   userChatActivity[userId][roomId] = now;
   
   console.log(`📱 User ${userId} is active in chat room ${roomId}`);
+  console.log(`🏠 Current users in room ${roomId}:`, Array.from(usersInChatRooms[roomId]));
+  console.log(`📊 Total tracked rooms:`, Object.keys(usersInChatRooms).length);
 }
 
 // Helper function to remove user from chat room tracking
@@ -1662,6 +1706,81 @@ function isUserActiveInChatRoom(roomId, userId) {
   return (now - lastActivity) < inactivityThreshold;
 }
 
+// Helper function to auto-mark new message as seen by all users currently in the room
+async function autoMarkNewMessageAsSeen(io, roomId, messageId, senderId) {
+  try {
+    // Get room participants
+    const room = await ChatRoom.findById(roomId).select('participants');
+    if (!room) return;
+
+    const participants = room.participants.map(p => p.toString());
+    const usersInRoom = usersInChatRooms[roomId];
+    
+    console.log(`📨 New message ${messageId} sent in room ${roomId} by ${senderId}`);
+    console.log(`👥 Room participants:`, participants);
+    console.log(`🏠 Users currently in room:`, usersInRoom ? Array.from(usersInRoom) : []);
+
+    // Get all users currently active in the room (excluding the sender)
+    const activeUsersInRoom = participants.filter(participantId => 
+      participantId !== senderId && // Exclude sender
+      usersInRoom && usersInRoom.has(participantId) // User is in room
+    );
+
+    console.log(`✅ Active users to mark message as seen:`, activeUsersInRoom);
+
+    if (activeUsersInRoom.length > 0) {
+      // Debug: Check message before update
+      const messageBefore = await ChatMessage.findById(messageId);
+      console.log(`🔍 Message before update:`, {
+        id: messageBefore?._id,
+        seenBy: messageBefore?.seenBy,
+        sender: messageBefore?.sender
+      });
+
+      // Convert user IDs to ObjectId and debug
+      const userObjectIds = activeUsersInRoom.map(id => {
+        const objectId = toObjectId(id);
+        console.log(`🔄 Converting userId ${id} to ObjectId:`, objectId);
+        return objectId;
+      }).filter(id => id !== null); // Remove any null values
+
+      console.log(`💾 About to update message ${messageId} with seenBy:`, userObjectIds);
+
+      // Mark the new message as seen by all active users in the room
+      const result = await ChatMessage.findByIdAndUpdate(
+        messageId,
+        { $addToSet: { seenBy: { $each: userObjectIds } } },
+        { new: true }
+      );
+
+      console.log(`📖 Message ${messageId} after update:`, {
+        id: result?._id,
+        seenBy: result?.seenBy,
+        seenByLength: result?.seenBy?.length
+      });
+
+      // Emit messagesSeen event for each user who saw the message
+      for (const userId of activeUsersInRoom) {
+        io.to(roomId).emit("messagesSeen", {
+          roomId,
+          userId,
+          messageId,
+          seenAt: new Date().toISOString(),
+          autoRead: true,
+        });
+
+        // Update total unread count for each user
+        await emitTotalUnreadCountGlobal(io, userId);
+        
+        // Update chat rooms list for each user
+        await autoUpdateChatRoomsListGlobal(io, userId);
+      }
+    }
+  } catch (error) {
+    console.error("❌ Error in autoMarkNewMessageAsSeen:", error);
+  }
+}
+
 // Helper function to check if both users are in chat room and auto-mark messages as read
 async function checkAndAutoMarkMessagesAsRead(io, roomId, currentUserId) {
   try {
@@ -1679,8 +1798,19 @@ async function checkAndAutoMarkMessagesAsRead(io, roomId, currentUserId) {
     if (allParticipantsActive && participants.length === 2) {
       console.log(`✅ Both users are active in chat room ${roomId}, auto-marking messages as read`);
       
-      // Mark messages as read for all participants
+      // Mark messages as read for all participants and track who had updates
+      const participantsWithUpdates = [];
+      
       for (const participantId of participants) {
+        // Debug: Check messages before update
+        const messagesBeforeUpdate = await ChatMessage.find({
+          chatRoom: toObjectId(roomId),
+          seenBy: { $ne: toObjectId(participantId) },
+          sender: { $ne: toObjectId(participantId) },
+        }).select('_id content seenBy sender');
+        
+        console.log(`🔍 Messages to mark as read for user ${participantId}:`, messagesBeforeUpdate.length);
+        
         const result = await ChatMessage.updateMany(
           {
             chatRoom: toObjectId(roomId),
@@ -1690,27 +1820,49 @@ async function checkAndAutoMarkMessagesAsRead(io, roomId, currentUserId) {
           { $addToSet: { seenBy: toObjectId(participantId) } }
         );
 
+        console.log(`📊 Update result for user ${participantId}:`, {
+          acknowledged: result.acknowledged,
+          modifiedCount: result.modifiedCount,
+          matchedCount: result.matchedCount
+        });
+
         if (result.modifiedCount > 0) {
           console.log(`📖 Auto-marked ${result.modifiedCount} messages as read for user ${participantId} in room ${roomId}`);
-
+          participantsWithUpdates.push(participantId);
+          
+          // Debug: Check messages after update
+          const messagesAfterUpdate = await ChatMessage.find({
+            chatRoom: toObjectId(roomId),
+            sender: { $ne: toObjectId(participantId) },
+          }).select('_id content seenBy sender');
+          
+          console.log(`🔍 Messages after update for user ${participantId}:`, messagesAfterUpdate.map(m => ({
+            id: m._id,
+            content: m.content?.substring(0, 20),
+            seenBy: m.seenBy,
+            sender: m.sender
+          })));
+          
           // Update total unread count
-          await emitTotalUnreadCount(io, participantId);
+          await emitTotalUnreadCountGlobal(io, participantId);
         }
       }
 
       // Auto-update chatRoomsList for ALL participants to reflect new unread counts
       for (const participantId of participants) {
-        await autoUpdateChatRoomsList(io, participantId);
+        await autoUpdateChatRoomsListGlobal(io, participantId);
       }
 
-      // Broadcast seen event to room (simplified, no specific userId since it's automatic)
-      io.to(roomId).emit("messagesSeen", {
-        roomId,
-        userId: "system",
-        seenAt: new Date().toISOString(),
-        allMessages: true,
-        autoRead: true,
-      });
+      // Broadcast seen event to room for each participant who actually had messages marked as read
+      for (const participantId of participantsWithUpdates) {
+        io.to(roomId).emit("messagesSeen", {
+          roomId,
+          userId: participantId, // Show actual user who saw the messages
+          seenAt: new Date().toISOString(),
+          allMessages: true,
+          autoRead: true,
+        });
+      }
     }
   } catch (error) {
     console.error("❌ Error in checkAndAutoMarkMessagesAsRead:", error);
