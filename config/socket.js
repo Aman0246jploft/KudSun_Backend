@@ -169,6 +169,8 @@ async function setupSocket(server) {
             }
 
             socket.join(roomId); // join the socket room dynamically
+            // Track user in room for auto-read functionality
+            trackUserInChatRoom(roomId, userId);
           } else {
             // Room ID provided, ensure user can access it
             const room = await ChatRoom.findById(roomId);
@@ -199,6 +201,8 @@ async function setupSocket(server) {
             }
 
             socket.join(roomId);
+            // Track user in room for auto-read functionality
+            trackUserInChatRoom(roomId, userId);
           }
 
           if (data.otherUserId) {
@@ -504,6 +508,18 @@ async function setupSocket(server) {
             await emitTotalUnreadCount(io, userId);
             if (data.otherUserId) {
               await emitTotalUnreadCount(io, data.otherUserId);
+            }
+          }
+
+          // Ensure other user is tracked in room if they're active
+          if (data.otherUserId) {
+            // Check if other user is online and should be tracked in room
+            const otherUserSocket = Object.keys(connectedUsers).find(
+              socketId => connectedUsers[socketId] === data.otherUserId
+            );
+            if (otherUserSocket) {
+              // Track other user in room for auto-read functionality
+              trackUserInChatRoom(roomId, data.otherUserId);
             }
           }
 
@@ -1719,6 +1735,8 @@ async function autoMarkNewMessageAsSeen(io, roomId, messageId, senderId) {
     console.log(`📨 New message ${messageId} sent in room ${roomId} by ${senderId}`);
     console.log(`👥 Room participants:`, participants);
     console.log(`🏠 Users currently in room:`, usersInRoom ? Array.from(usersInRoom) : []);
+    console.log(`🔍 All tracked rooms:`, Object.keys(usersInChatRooms));
+    console.log(`🔍 Current usersInChatRooms state:`, usersInChatRooms);
 
     // Get all users currently active in the room (excluding the sender)
     const activeUsersInRoom = participants.filter(participantId => 
