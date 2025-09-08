@@ -5,7 +5,7 @@ const { roleId } = require('../utils/Role');
 adminCreate = async () => {
     let data = {
         userName: "Superadmin",
-        email: "superadmin@mailinator.com",
+        email: "superadmin@gmail.com",
         password: "123456",
         phoneNumber: "1234567890",
         profileImage: null,

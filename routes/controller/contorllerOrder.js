@@ -357,6 +357,7 @@ const createOrder = async (req, res) => {
         const systemMessage = new ChatMessage({
           chatRoom: room._id,
           messageType: "ORDER_STATUS",
+          content:"Please complete your Order withIn 24 Hrs",
           systemMeta: {
             statusType: "ORDER",
             status: ORDER_STATUS.PENDING,
