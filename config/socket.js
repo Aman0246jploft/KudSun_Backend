@@ -464,8 +464,7 @@ async function setupSocket(server) {
             chatRoom: roomId,
           };
 
-          // Emit newMessage to the room
-          io.to(roomId).emit("newMessage", messageWithRoom);
+          // Don't emit newMessage yet - wait until after auto-mark logic
 
           // Auto-update chatRoomsList for the receiver to move latest chat to top
           if (data.otherUserId) {
@@ -531,6 +530,17 @@ async function setupSocket(server) {
           if (data.otherUserId) {
             await emitTotalUnreadCount(io, data.otherUserId);
           }
+
+          // Auto-mark the new message as seen by all users currently in the room (call at the end)
+          await autoMarkNewMessageAsSeen(io, roomId, newMessage._id, userId);
+
+          // NOW emit newMessage to the room with updated seenBy
+          const updatedMessage = await ChatMessage.findById(newMessage._id).populate("sender", "_id userName profileImage");
+          const messageWithUpdatedRoom = {
+            ...updatedMessage.toObject(),
+            chatRoom: roomId,
+          };
+          io.to(roomId).emit("newMessage", messageWithUpdatedRoom);
         } catch (error) {
           console.error("Error in sendMessage:", error);
           socket.emit("error", { message: "Failed to send message" });
