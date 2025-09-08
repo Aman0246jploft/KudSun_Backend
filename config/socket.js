@@ -169,8 +169,6 @@ async function setupSocket(server) {
             }
 
             socket.join(roomId); // join the socket room dynamically
-            // Track user in room for auto-read functionality
-            trackUserInChatRoom(roomId, userId);
           } else {
             // Room ID provided, ensure user can access it
             const room = await ChatRoom.findById(roomId);
@@ -201,8 +199,6 @@ async function setupSocket(server) {
             }
 
             socket.join(roomId);
-            // Track user in room for auto-read functionality
-            trackUserInChatRoom(roomId, userId);
           }
 
           if (data.otherUserId) {
@@ -459,12 +455,21 @@ async function setupSocket(server) {
             ],
           });
 
+          // Auto-mark the new message as seen by all users currently in the room BEFORE emitting
+          await autoMarkNewMessageAsSeen(io, roomId, newMessage._id, userId);
+
+          // Fetch the updated message with populated seenBy field
+          const updatedMessage = await ChatMessage.findById(newMessage._id)
+            .populate("sender", "_id userName profileImage")
+            .lean();
+
           const messageWithRoom = {
-            ...savedmessage.toObject(),
+            ...updatedMessage,
             chatRoom: roomId,
           };
 
-          // Don't emit newMessage yet - wait until after auto-mark logic
+          // Emit newMessage to the room with updated seenBy
+          io.to(roomId).emit("newMessage", messageWithRoom);
 
           // Auto-update chatRoomsList for the receiver to move latest chat to top
           if (data.otherUserId) {
@@ -510,37 +515,11 @@ async function setupSocket(server) {
             }
           }
 
-          // Ensure other user is tracked in room if they're active
-          if (data.otherUserId) {
-            // Check if other user is online and should be tracked in room
-            const otherUserSocket = Object.keys(connectedUsers).find(
-              socketId => connectedUsers[socketId] === data.otherUserId
-            );
-            if (otherUserSocket) {
-              // Track other user in room for auto-read functionality
-              trackUserInChatRoom(roomId, data.otherUserId);
-            }
-          }
-
-          // Auto-mark the new message as seen by all users currently in the room
-          await autoMarkNewMessageAsSeen(io, roomId, newMessage._id, userId);
-
           // Emit updated total unread counts for both users after sending message
           await emitTotalUnreadCount(io, userId);
           if (data.otherUserId) {
             await emitTotalUnreadCount(io, data.otherUserId);
           }
-
-          // Auto-mark the new message as seen by all users currently in the room (call at the end)
-          await autoMarkNewMessageAsSeen(io, roomId, newMessage._id, userId);
-
-          // NOW emit newMessage to the room with updated seenBy
-          const updatedMessage = await ChatMessage.findById(newMessage._id).populate("sender", "_id userName profileImage");
-          const messageWithUpdatedRoom = {
-            ...updatedMessage.toObject(),
-            chatRoom: roomId,
-          };
-          io.to(roomId).emit("newMessage", messageWithUpdatedRoom);
         } catch (error) {
           console.error("Error in sendMessage:", error);
           socket.emit("error", { message: "Failed to send message" });
@@ -1745,8 +1724,6 @@ async function autoMarkNewMessageAsSeen(io, roomId, messageId, senderId) {
     console.log(`📨 New message ${messageId} sent in room ${roomId} by ${senderId}`);
     console.log(`👥 Room participants:`, participants);
     console.log(`🏠 Users currently in room:`, usersInRoom ? Array.from(usersInRoom) : []);
-    console.log(`🔍 All tracked rooms:`, Object.keys(usersInChatRooms));
-    console.log(`🔍 Current usersInChatRooms state:`, usersInChatRooms);
 
     // Get all users currently active in the room (excluding the sender)
     const activeUsersInRoom = participants.filter(participantId => 
