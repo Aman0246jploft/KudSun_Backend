@@ -383,7 +383,7 @@ async function setupSocket(server) {
             systemMeta,
           });
 
-          await newMessage.save();
+          let savedmessage = await newMessage.save();
 
           // Populate sender info
           newMessage = await newMessage.populate(
@@ -456,7 +456,7 @@ async function setupSocket(server) {
           });
 
           const messageWithRoom = {
-            ...newMessage.toObject(),
+            ...savedmessage.toObject(),
             chatRoom: roomId,
           };
 
