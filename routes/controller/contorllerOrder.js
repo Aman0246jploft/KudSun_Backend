@@ -4184,10 +4184,10 @@ const changeStatus = async (req, res) => {
           tnxStatus:
             status === "Approved"
               ? PAYMENT_STATUS.COMPLETED
-              : PAYMENT_STATUS.REJECTED,
+              : PAYMENT_STATUS.REJECTED,                                                                            
         },
         { session }
-      );
+      );                  
 
       await updateWithdrawalRevenue(withdrawRequest, status, session);
 

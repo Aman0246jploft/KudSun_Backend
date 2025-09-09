@@ -206,14 +206,15 @@ const createDispute = async (req, res) => {
     // Create system message for dispute creation
     const disputeMessage = new ChatMessage({
       chatRoom: room._id,
-      messageType: "TEXT",
+      messageType: "DISPUTE",
+      content:"Buyer filed a dispute. Seller must response in 3 days",
       systemMeta: {
         statusType: "DISPUTE",
         status: DISPUTE_STATUS.PENDING,
         orderId: order._id,
         disputeId: saved._id,
         productId: order.items[0]?.productId,
-        title: "Dispute Raised",
+        title: "Dispute Opened",
         meta: createStandardizedChatMeta({
           orderNumber: order._id.toString(),
           disputeId: saved.disputeId,
@@ -370,7 +371,9 @@ const sellerRespond = async (req, res) => {
     // Create system message for seller response
     const responseMessage = new ChatMessage({
       chatRoom: room._id,
-      messageType: "TEXT",
+      messageType: "DISPUTE",
+        content: "Seller Responded to Dispute",
+
       systemMeta: {
         statusType: "DISPUTE",
         status: DISPUTE_STATUS.UNDER_REVIEW,
