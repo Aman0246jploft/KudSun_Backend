@@ -357,7 +357,7 @@ const createOrder = async (req, res) => {
         const systemMessage = new ChatMessage({
           chatRoom: room._id,
           messageType: "ORDER_STATUS",
-          content:"Please complete your Order within 24 Hrs",
+          content: "Please complete your Order within 24 Hrs",
           systemMeta: {
             statusType: "ORDER",
             status: ORDER_STATUS.PENDING,
@@ -403,9 +403,8 @@ const createOrder = async (req, res) => {
               productId: orderItems[0].productId,
               type: NOTIFICATION_TYPES.ORDER,
               title: "New Order Received!",
-              message: `You have received a new order for ${
-                orderItems.length
-              } item(s). Order amount: ฿${order.grandTotal.toFixed(2)}`,
+              message: `You have received a new order for ${orderItems.length
+                } item(s). Order amount: ฿${order.grandTotal.toFixed(2)}`,
               meta: createStandardizedNotificationMeta({
                 orderNumber: order._id.toString(),
                 orderId: order._id.toString(),
@@ -523,8 +522,7 @@ const beamPaymentWebhook = async (req, res) => {
         await handleBeamPaymentSuccess(data, req);
         if (shouldRedirect) {
           return res.redirect(
-            `/payment-success.html?orderId=${data.referenceId}&paymentId=${
-              data.chargeId || data.id
+            `/payment-success.html?orderId=${data.referenceId}&paymentId=${data.chargeId || data.id
             }&amount=${data.amount || data.total}`
           );
         }
@@ -534,8 +532,7 @@ const beamPaymentWebhook = async (req, res) => {
         await handleBeamPaymentFailure(data, req);
         if (shouldRedirect) {
           return res.redirect(
-            `/payment-cancel.html?orderId=${data.referenceId}&amount=${
-              data.amount || data.total
+            `/payment-cancel.html?orderId=${data.referenceId}&amount=${data.amount || data.total
             }&reason=${data.failureCode || "payment_failed"}`
           );
         }
@@ -950,9 +947,8 @@ const createBeamPaymentLink = async (paymentData) => {
       "https://playground.api.beamcheckout.com/api/v1/payment-links";
     // 'https://api.beamcheckout.com/api/v1/payment-links'
 
-    const idempotencyKey = `order_${
-      paymentData.order.referenceId
-    }_${Date.now()}`;
+    const idempotencyKey = `order_${paymentData.order.referenceId
+      }_${Date.now()}`;
 
     const headers = {
       Authorization:
@@ -1114,24 +1110,24 @@ const originalPaymentCallback = async (req, res) => {
         actions:
           paymentStatus === PAYMENT_STATUS.COMPLETED
             ? [
-                {
-                  label: "View Order",
-                  url: `/order/${order._id}`,
-                  type: "primary",
-                },
-              ]
+              {
+                label: "View Order",
+                url: `/order/${order._id}`,
+                type: "primary",
+              },
+            ]
             : [
-                {
-                  label: "Try Payment Again",
-                  url: `/payment/retry/${order._id}`,
-                  type: "primary",
-                },
-                {
-                  label: "View Order",
-                  url: `/order/${order._id}`,
-                  type: "secondary",
-                },
-              ],
+              {
+                label: "Try Payment Again",
+                url: `/payment/retry/${order._id}`,
+                type: "primary",
+              },
+              {
+                label: "View Order",
+                url: `/order/${order._id}`,
+                type: "secondary",
+              },
+            ],
         theme: paymentStatus === PAYMENT_STATUS.COMPLETED ? "success" : "error",
       },
     });
@@ -2152,14 +2148,14 @@ const getSoldProducts = async (req, res) => {
     // Fetch reviews by seller on those products
     const existingReviews = productIds.length
       ? await ProductReview.find({
-          userId: sellerId,
-          raterRole: "seller",
-          productId: { $in: productIds },
-          isDeleted: false,
-          isDisable: false,
-        })
-          .select("productId")
-          .lean()
+        userId: sellerId,
+        raterRole: "seller",
+        productId: { $in: productIds },
+        isDeleted: false,
+        isDisable: false,
+      })
+        .select("productId")
+        .lean()
       : [];
 
     const reviewedSet = new Set(
@@ -2448,6 +2444,7 @@ const updateOrderStatusBySeller = async (req, res) => {
     let messageTheme = "info";
     let additionalMeta = {};
     let additionalActions = [];
+    let content = ''
 
     switch (newStatus) {
       case ORDER_STATUS.CONFIRMED:
@@ -2456,6 +2453,7 @@ const updateOrderStatusBySeller = async (req, res) => {
         break;
       case ORDER_STATUS.SHIPPED:
         messageTitle = "Order Shipped";
+        content='Your order has been successfully shipped'
         messageTheme = "info";
         if (req.body.carrierId && req.body.trackingNumber) {
           additionalMeta.carrier = req.body.carrierId;
@@ -2470,6 +2468,7 @@ const updateOrderStatusBySeller = async (req, res) => {
       case ORDER_STATUS.DELIVERED:
         messageTitle = "Order Delivered";
         messageTheme = "success";
+        content="Your order has been successfully delivered"
         break;
       case ORDER_STATUS.CANCELLED:
         messageTitle = "Order Cancelled";
@@ -2484,6 +2483,7 @@ const updateOrderStatusBySeller = async (req, res) => {
     const systemMessage = new ChatMessage({
       chatRoom: room._id,
       messageType: "ORDER_STATUS",
+      content:content,
       systemMeta: {
         statusType: "ORDER",
         status: newStatus,
@@ -2880,7 +2880,7 @@ const updateOrderStatusByBuyer = async (req, res) => {
         const deliveredMessage = new ChatMessage({
           chatRoom: room._id,
           messageType: "ORDER_STATUS",
-          content: `Order status updated to ${ORDER_STATUS.DELIVERED}`,
+          content: `Your order has been successfully delivered`,
           systemMeta: {
             statusType: "ORDER",
             status: ORDER_STATUS.DELIVERED,
@@ -3271,7 +3271,7 @@ const getOrderDetails = async (req, res) => {
       // Determine each step's status
       const shippedStep = {
         label: "Shipped",
-        value: `${shipping?.carrier?.name??""} / ${shipping?.trackingNumber??""}`,
+        value: `${shipping?.carrier?.name ?? ""} / ${shipping?.trackingNumber ?? ""}`,
         status: isShipped ? "completed" : "active",
         changedAt: shippedStatus?.changedAt || null,
       };
@@ -3285,7 +3285,7 @@ const getOrderDetails = async (req, res) => {
 
       const deliveredStep = {
         label: "Delivered",
-        value: `${order?.addressId?.provinceId?.value??""} / ${order?.addressId?.districtId?.value??""}`,
+        value: `${order?.addressId?.provinceId?.value ?? ""} / ${order?.addressId?.districtId?.value ?? ""}`,
         status: isDelivered ? "completed" : isShipped ? "upcoming" : "upcoming",
         changedAt: deliveredStatus?.changedAt || null,
       };
@@ -3317,12 +3317,12 @@ const getOrderDetails = async (req, res) => {
       address: order.addressId || null,
       shipping: shipping
         ? {
-            carrier: shipping.carrier?.name || "",
-            trackingNumber: shipping.trackingNumber || "",
-            shippingDate: shipping.updatedAt || null,
-            status: shipping.status || "",
-            createdAt: shipping.createdAt || "",
-          }
+          carrier: shipping.carrier?.name || "",
+          trackingNumber: shipping.trackingNumber || "",
+          shippingDate: shipping.updatedAt || null,
+          status: shipping.status || "",
+          createdAt: shipping.createdAt || "",
+        }
         : null,
       statusHistory: (statusHistory || []).map((h) => ({
         oldStatus: h.oldStatus,
@@ -3333,25 +3333,25 @@ const getOrderDetails = async (req, res) => {
       })),
       dispute: dispute
         ? {
-            status: dispute.status,
-            reason: dispute.reason,
-            description: dispute.description,
-            resolved: dispute.status === "resolved",
-            createdAt: dispute.createdAt,
-          }
+          status: dispute.status,
+          reason: dispute.reason,
+          description: dispute.description,
+          resolved: dispute.status === "resolved",
+          createdAt: dispute.createdAt,
+        }
         : null,
       reviews: (reviews && reviews[0]) || [],
       transaction: transaction
         ? {
-            transactionId: transaction._id,
-            paymentGatewayId: transaction.paymentGatewayId,
-            amount: transaction.amount,
-            paymentMethod: transaction.paymentMethod,
-            paymentStatus: transaction.paymentStatus,
-            cardType: transaction.cardType || "",
-            cardLast4: transaction.cardLast4 || "",
-            createdAt: transaction.createdAt,
-          }
+          transactionId: transaction._id,
+          paymentGatewayId: transaction.paymentGatewayId,
+          amount: transaction.amount,
+          paymentMethod: transaction.paymentMethod,
+          paymentStatus: transaction.paymentStatus,
+          cardType: transaction.cardType || "",
+          cardLast4: transaction.cardLast4 || "",
+          createdAt: transaction.createdAt,
+        }
         : null,
       deliveryProgressSteps,
       progressSteps: progressSteps,
@@ -3510,12 +3510,12 @@ const confirmreciptReview = async (req, res) => {
         });
         return review
           ? {
-              productId: item.productId?._id,
-              rating: review.rating,
-              reviewText: review.reviewText,
-              reviewImages: review.reviewImages,
-              createdAt: review.createdAt,
-            }
+            productId: item.productId?._id,
+            rating: review.rating,
+            reviewText: review.reviewText,
+            reviewImages: review.reviewImages,
+            createdAt: review.createdAt,
+          }
           : null;
       })
     );
@@ -3804,10 +3804,10 @@ const changeStatus = async (req, res) => {
           tnxStatus:
             status === "Approved"
               ? PAYMENT_STATUS.COMPLETED
-              : PAYMENT_STATUS.REJECTED,                                                                            
+              : PAYMENT_STATUS.REJECTED,
         },
         { session }
-      );                  
+      );
 
       await updateWithdrawalRevenue(withdrawRequest, status, session);
 
@@ -3921,9 +3921,9 @@ const getWithdrawalInfo = async (req, res) => {
 
     const withdrawalFeeInfo = feeSetting
       ? {
-          type: feeSetting.type,
-          value: feeSetting.value,
-        }
+        type: feeSetting.type,
+        value: feeSetting.value,
+      }
       : null;
 
     return apiSuccessRes(200, res, "Withdrawal info fetched successfully", {
@@ -4158,40 +4158,40 @@ const getAllTransactionsForAdmin = async (req, res) => {
         // Seller Payout Details
         sellerPayout: creditTnx
           ? {
-              payoutAmount: creditTnx.netAmount || 0,
-              productAmount: creditTnx.amount || 0,
-              serviceCharge: creditTnx.serviceCharge || 0,
-              taxCharge: creditTnx.taxCharge || 0,
-              serviceType: creditTnx.serviceType,
-              taxType: creditTnx.taxType,
-              payoutStatus: creditTnx.tnxStatus,
-              payoutDate: creditTnx.createdAt,
-              transactionId: creditTnx._id,
-              isPaidToSeller: !!withdrawalTnx,
-              withdrawalDetails: withdrawalTnx
-                ? {
-                    withdrawalId: withdrawalTnx._id,
-                    withdrawalAmount: withdrawalTnx.amount,
-                    withdrawalFee: withdrawalTnx.withdrawfee,
-                    netAmountPaid: withdrawalTnx.netAmount,
-                    withdrawalDate: withdrawalTnx.createdAt,
-                    notes: withdrawalTnx.notes,
-                  }
-                : null,
-            }
+            payoutAmount: creditTnx.netAmount || 0,
+            productAmount: creditTnx.amount || 0,
+            serviceCharge: creditTnx.serviceCharge || 0,
+            taxCharge: creditTnx.taxCharge || 0,
+            serviceType: creditTnx.serviceType,
+            taxType: creditTnx.taxType,
+            payoutStatus: creditTnx.tnxStatus,
+            payoutDate: creditTnx.createdAt,
+            transactionId: creditTnx._id,
+            isPaidToSeller: !!withdrawalTnx,
+            withdrawalDetails: withdrawalTnx
+              ? {
+                withdrawalId: withdrawalTnx._id,
+                withdrawalAmount: withdrawalTnx.amount,
+                withdrawalFee: withdrawalTnx.withdrawfee,
+                netAmountPaid: withdrawalTnx.netAmount,
+                withdrawalDate: withdrawalTnx.createdAt,
+                notes: withdrawalTnx.notes,
+              }
+              : null,
+          }
           : null,
 
         // Dispute Information
         dispute: dispute
           ? {
-              disputeId: dispute.disputeId,
-              status: dispute.status,
-              disputeType: dispute.disputeType,
-              description: dispute.description,
-              createdAt: dispute.createdAt,
-              adminReview: dispute.adminReview || null,
-              isResolved: dispute.status === "RESOLVED",
-            }
+            disputeId: dispute.disputeId,
+            status: dispute.status,
+            disputeType: dispute.disputeType,
+            description: dispute.description,
+            createdAt: dispute.createdAt,
+            adminReview: dispute.adminReview || null,
+            isResolved: dispute.status === "RESOLVED",
+          }
           : null,
 
         // Helper flags
@@ -4610,19 +4610,19 @@ const getSellerPayoutStatus = async (req, res) => {
 
         payoutStatus: existingPayout
           ? {
-              isPaid: true,
-              paidAmount: existingPayout.amount,
-              netPaidAmount: existingPayout.netAmount,
-              paidDate: existingPayout.createdAt,
-              transactionId: existingPayout._id,
-              notes: existingPayout.notes,
-            }
+            isPaid: true,
+            paidAmount: existingPayout.amount,
+            netPaidAmount: existingPayout.netAmount,
+            paidDate: existingPayout.createdAt,
+            transactionId: existingPayout._id,
+            notes: existingPayout.notes,
+          }
           : {
-              isPaid: false,
-              canBePaid:
-                order.status === ORDER_STATUS.DELIVERED ||
-                order.status === ORDER_STATUS.CONFIRMED,
-            },
+            isPaid: false,
+            canBePaid:
+              order.status === ORDER_STATUS.DELIVERED ||
+              order.status === ORDER_STATUS.CONFIRMED,
+          },
       }
     );
   } catch (err) {
@@ -4865,21 +4865,21 @@ const getSellerPayoutCalculation = async (req, res) => {
           feeSettings: {
             serviceCharge: serviceChargeSetting
               ? {
-                  value: serviceChargeSetting.value,
-                  type: serviceChargeSetting.type,
-                }
+                value: serviceChargeSetting.value,
+                type: serviceChargeSetting.type,
+              }
               : null,
             tax: taxSetting
               ? {
-                  value: taxSetting.value,
-                  type: taxSetting.type,
-                }
+                value: taxSetting.value,
+                type: taxSetting.type,
+              }
               : null,
             withdrawalFee: withdrawalFeeSetting
               ? {
-                  value: withdrawalFeeSetting.value,
-                  type: withdrawalFeeSetting.type,
-                }
+                value: withdrawalFeeSetting.value,
+                type: withdrawalFeeSetting.type,
+              }
               : null,
           },
         },
@@ -5342,32 +5342,32 @@ const getProductFinancialDetails = async (req, res) => {
           },
           sellerPayout: sellerPayout
             ? {
-                netAmount: sellerPayout.netAmount,
-                serviceCharge: sellerPayout.serviceCharge,
-                taxCharge: sellerPayout.taxCharge,
-                payoutDate: sellerPayout.createdAt,
-                status: sellerPayout.tnxStatus,
-              }
+              netAmount: sellerPayout.netAmount,
+              serviceCharge: sellerPayout.serviceCharge,
+              taxCharge: sellerPayout.taxCharge,
+              payoutDate: sellerPayout.createdAt,
+              status: sellerPayout.tnxStatus,
+            }
             : null,
           withdrawal: withdrawal
             ? {
-                amount: withdrawal.amount,
-                withdrawalFee: withdrawal.withdrawfee,
-                withdrawalDate: withdrawal.createdAt,
-                status: withdrawal.tnxStatus,
-              }
+              amount: withdrawal.amount,
+              withdrawalFee: withdrawal.withdrawfee,
+              withdrawalDate: withdrawal.createdAt,
+              status: withdrawal.tnxStatus,
+            }
             : null,
           dispute: dispute
             ? {
-                disputeId: dispute.disputeId,
-                status: dispute.status,
-                type: dispute.disputeType,
-                financialImpact: dispute.adminReview?.disputeAmountPercent
-                  ? (order.grandTotal *
-                      dispute.adminReview.disputeAmountPercent) /
-                    100
-                  : 0,
-              }
+              disputeId: dispute.disputeId,
+              status: dispute.status,
+              type: dispute.disputeType,
+              financialImpact: dispute.adminReview?.disputeAmountPercent
+                ? (order.grandTotal *
+                  dispute.adminReview.disputeAmountPercent) /
+                100
+                : 0,
+            }
             : null,
         };
       });
@@ -5509,7 +5509,7 @@ const getDetailedMoneyFlow = async (req, res) => {
       const disputeImpact =
         orderDispute && orderDispute.adminReview?.disputeAmountPercent > 0
           ? (order.grandTotal * orderDispute.adminReview.disputeAmountPercent) /
-            100
+          100
           : 0;
 
       return {
@@ -5551,12 +5551,12 @@ const getDetailedMoneyFlow = async (req, res) => {
           sellerPayouts: orderSellerTxns,
           disputeImpact: orderDispute
             ? [
-                {
-                  disputeId: orderDispute.disputeId,
-                  status: orderDispute.status,
-                  financialImpact: disputeImpact,
-                },
-              ]
+              {
+                disputeId: orderDispute.disputeId,
+                status: orderDispute.status,
+                financialImpact: disputeImpact,
+              },
+            ]
             : [],
         },
         paymentTransactions: orderPaymentTxns,

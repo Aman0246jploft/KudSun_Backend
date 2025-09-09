@@ -507,18 +507,18 @@ const adminDecision = async (req, res) => {
     if (decision === "BUYER") {
       messageTitle = "Dispute Resolved - In favour of Buyer";
       messageTheme = "success";
-      messageContent = `Admin has resolved the dispute in favour of the buyer. ${
+      messageContent = `Dispute resolved in favour of the buyer. ${
         disputeAmountPercent > 0 ? `Refund: ${disputeAmountPercent}%` : ""
       }`;
     } else if (decision === "SELLER") {
       messageTitle = "Dispute Resolved - In favour of Seller";
       messageTheme = "success";
       messageContent =
-        "Admin has resolved the dispute in favour of the seller.";
+        "Dispute resolved in favour of the seller.";
     } else {
       messageTitle = "Dispute Resolved";
       messageTheme = "info";
-      messageContent = `Admin has resolved the dispute. Decision: ${decision}`;
+      messageContent = `Dispute resolved  Decision: ${decision}`;
     }
 
     // Create system message for admin decision
