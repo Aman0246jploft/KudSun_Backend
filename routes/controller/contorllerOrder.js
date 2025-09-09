@@ -3651,7 +3651,7 @@ const getOrderDetails = async (req, res) => {
       // Determine each step's status
       const shippedStep = {
         label: "Shipped",
-        value: `${shipping?.carrier?.name} / ${shipping?.trackingNumber}`,
+        value: `${shipping?.carrier?.name??""} / ${shipping?.trackingNumber??""}`,
         status: isShipped ? "completed" : "active",
         changedAt: shippedStatus?.changedAt || null,
       };
@@ -3665,7 +3665,7 @@ const getOrderDetails = async (req, res) => {
 
       const deliveredStep = {
         label: "Delivered",
-        value: `${order?.addressId?.provinceId?.value} / ${order?.addressId?.districtId?.value}`,
+        value: `${order?.addressId?.provinceId?.value??""} / ${order?.addressId?.districtId?.value??""}`,
         status: isDelivered ? "completed" : isShipped ? "upcoming" : "upcoming",
         changedAt: deliveredStatus?.changedAt || null,
       };
