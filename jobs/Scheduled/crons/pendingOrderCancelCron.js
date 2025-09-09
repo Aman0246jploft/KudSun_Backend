@@ -31,9 +31,9 @@ let cronStats = {
 
 // Environment variables with defaults
 // const CRON_SCHEDULE = process.env.PENDING_ORDER_CANCEL_CRON_SCHEDULE || "0 0 * * *"; // Daily at midnight
-const CRON_SCHEDULE = process.env.PENDING_ORDER_CANCEL_CRON_SCHEDULE || "* * * * *"; 
+const CRON_SCHEDULE = process.env.PENDING_ORDER_CANCEL_CRON_SCHEDULE || "0 0 * * *"; 
 
-const HOURS_THRESHOLD = parseInt(process.env.PENDING_ORDER_HOURS_THRESHOLD) || 5||24;
+const HOURS_THRESHOLD = parseInt(process.env.PENDING_ORDER_HOURS_THRESHOLD) || 24;
 
 console.log(`🟡 Pending Order Cancel Cron initialized with schedule: ${CRON_SCHEDULE}`);
 console.log(`🟡 Cancelling orders older than ${HOURS_THRESHOLD} hours`);
