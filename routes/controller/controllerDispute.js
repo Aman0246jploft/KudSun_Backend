@@ -305,6 +305,7 @@ const createDispute = async (req, res) => {
       saved
     );
   } catch (err) {
+    cosnole.log("errerr",err)
     await session.abortTransaction();
     return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
   } finally {
