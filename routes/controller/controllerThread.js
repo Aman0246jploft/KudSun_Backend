@@ -643,12 +643,12 @@ const addComment = async (req, res) => {
               threadId: thread._id.toString(),
               threadTitle: thread.title,
               amount: !thread?.budgetFlexible
-              ? ` ${thread?.budgetRange?.min} - ฿ ${thread?.budgetRange?.max}`
+              ? `฿ ${thread?.budgetRange?.min} - ฿ ${thread?.budgetRange?.max}`
               : "",
 
 
               totalAmount: !thread?.budgetFlexible
-              ? `${thread?.budgetRange?.min} - ฿ ${thread?.budgetRange?.max}`
+              ? `฿ ${thread?.budgetRange?.min} - ฿ ${thread?.budgetRange?.max}`
               : "",
 
 

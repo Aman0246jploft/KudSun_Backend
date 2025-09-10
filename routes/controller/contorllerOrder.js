@@ -412,8 +412,8 @@ const createOrder = async (req, res) => {
                 // totalAmount: order.grandTotal,
                 // amount: order.grandTotal,
 
-                totalAmount: ` ${order.totalAmount}`,
-                amount: `${order.grandTotal}`,
+                totalAmount: `฿ ${order.totalAmount}`,
+                amount: `฿ ${order.grandTotal}`,
                 sellerId: sellerId,
                 buyerId: userId,
                 status: ORDER_STATUS.PENDING,
@@ -2499,8 +2499,8 @@ const updateOrderStatusBySeller = async (req, res) => {
               // totalAmount: order.grandTotal,
               // amount: order.grandTotal,
 
-              totalAmount: `${order.totalAmount}`,
-              amount: `${order.grandTotal}`,
+              totalAmount: `฿ ${order.totalAmount}`,
+              amount: `฿ ${order.grandTotal}`,
 
               itemCount: order.items.length,
               productTitle,
@@ -2846,8 +2846,8 @@ const updateOrderStatusByBuyer = async (req, res) => {
             // totalAmount: order.grandTotal,
             // amount: order.grandTotal,
 
-            totalAmount: ` ${order.grandTotal}`,
-            amount: `${order.grandTotal}`,
+            totalAmount: `฿ ${order.grandTotal}`,
+            amount: `฿ ${order.grandTotal}`,
 
             itemCount: order.items.length,
             paymentMethod: order.paymentMethod,
@@ -3448,7 +3448,7 @@ const addrequest = async (req, res) => {
               // amount: amount,
 
 
-              amount: `${amount}`,
+              amount: `฿ ${amount}`,
 
 
               withdrawalAmount: amount,
@@ -5388,8 +5388,8 @@ const cancelOrderByBuyer = async (req, res) => {
               // totalAmount: order.grandTotal,
               // amount: order.grandTotal,
 
-        totalAmount: `${order.grandTotal}`,
-              amount: `${order.grandTotal}`,
+        totalAmount: `฿ ${order.grandTotal}`,
+              amount: `฿ ${order.grandTotal}`,
 
 
               itemCount: order.items.length,
@@ -5459,7 +5459,7 @@ const cancelOrderByBuyer = async (req, res) => {
                 amount: refundAmount,
 
         // totalAmount: `฿ ${order.grandTotal}`,
-              amount: ` ${refundAmount}`,
+              amount: `฿ ${refundAmount}`,
 
                 refundAmount: refundAmount,
                 cancellationReason: cancellationReason,

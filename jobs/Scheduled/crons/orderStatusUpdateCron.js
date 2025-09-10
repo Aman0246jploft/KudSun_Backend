@@ -1281,8 +1281,8 @@ async function sendStatusUpdateNotification(order, newStatus, message) {
           orderNumber: order._id.toString(),
           orderId: order._id.toString(),
           itemCount: order.items?.length || 0,
-          totalAmount: `${order.totalAmount}`,
-          amount: `${order.grandTotal}`,
+          totalAmount: `฿ ${order.totalAmount}`,
+          amount: `฿ ${order.grandTotal}`,
           oldStatus: order.status,
           newStatus: newStatus,
           paymentMethod: order.paymentMethod,
@@ -1355,8 +1355,8 @@ async function sendCompletionNotifications(order, disputeInfo = null) {
           // totalAmount: order.totalAmount,
           // amount: order.grandTotal,
 
-          totalAmount: ` ${order.totalAmount}`,
-          amount: `${order.grandTotal}`,
+          totalAmount: `฿ ${order.totalAmount}`,
+          amount: `฿ ${order.grandTotal}`,
           oldStatus: ORDER_STATUS.DELIVERED,
           newStatus: ORDER_STATUS.COMPLETED,
           paymentMethod: order.paymentMethod,
@@ -1402,8 +1402,8 @@ async function sendCompletionNotifications(order, disputeInfo = null) {
           itemCount: order.items?.length || 0,
           // totalAmount: order.totalAmount,
           // amount: order.grandTotal,
-          totalAmount: `${order.totalAmount}`,
-          amount: ` ${order.grandTotal}`,
+          totalAmount: `฿ ${order.totalAmount}`,
+          amount: `฿ ${order.grandTotal}`,
 
           oldStatus: ORDER_STATUS.DELIVERED,
           newStatus: ORDER_STATUS.COMPLETED,
@@ -1513,8 +1513,8 @@ async function sendDisputeResolutionCompletionNotifications(
           // totalAmount: order.totalAmount,
           // amount: order.grandTotal,
 
-                    totalAmount: `${order.totalAmount}`,
-          amount: ` ${order.grandTotal}`,
+                    totalAmount: `฿ ${order.totalAmount}`,
+          amount: `฿ ${order.grandTotal}`,
 
           oldStatus: ORDER_STATUS.DISPUTE,
           newStatus: ORDER_STATUS.COMPLETED,
@@ -1562,8 +1562,8 @@ async function sendDisputeResolutionCompletionNotifications(
           // totalAmount: order.totalAmount,
           // amount: order.grandTotal,
 
-                    totalAmount: `${order.totalAmount}`,
-          amount: ` ${order.grandTotal}`,
+                    totalAmount: `฿ ${order.totalAmount}`,
+          amount: `฿ ${order.grandTotal}`,
 
           oldStatus: ORDER_STATUS.DISPUTE,
           newStatus: ORDER_STATUS.COMPLETED,
