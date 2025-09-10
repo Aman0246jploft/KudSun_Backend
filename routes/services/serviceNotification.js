@@ -175,7 +175,12 @@ const notificationProcessor = async (job) => {
         body: translatedMessage,
         imageUrl: userNotification.imageUrl || "",
         language: userLanguage, // Add language to data payload
-        ...userNotification, // Pass the rest of the meta if needed
+        // Pass other meta data but exclude title/message to avoid overriding translations
+        ...Object.fromEntries(
+          Object.entries(userNotification).filter(([key]) => 
+            !['title', 'message', 'recipientId', 'userId'].includes(key)
+          )
+        ),
       });
     }
 

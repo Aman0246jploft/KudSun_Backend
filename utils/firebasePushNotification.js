@@ -24,6 +24,8 @@ async function sendFirebaseNotification({ token, title, body, imageUrl, language
                 priority: "high",
                 notification: {
                     sound: "default",
+                    icon: "ic_notification", // Default notification icon
+                    color: "#FF6B35", // Notification color
                     ...(imageUrl && { imageUrl })
                 }
             },
@@ -39,13 +41,16 @@ async function sendFirebaseNotification({ token, title, body, imageUrl, language
                             body
                         },
                         sound: "default",
-                        "mutable-content": 1
+                        "mutable-content": 1,
+                        badge: 1 // Show badge on app icon
                     }
                 }
             },
             data: {
                 // Add language information to data payload
                 language: language || 'english',
+                // Add notification type for icon customization
+                notificationType: customData.type || 'default',
                 // Convert everything to strings because FCM `data` must be string values
                 ...Object.entries(customData).reduce((acc, [key, val]) => {
                     acc[key] = typeof val === 'object' ? JSON.stringify(val) : String(val ?? '');
