@@ -240,7 +240,7 @@ async function updateShippedToDelivered(cutoffDate, session) {
       .populate({
         path: "items.productId",
         model: "SellProduct",
-        select: "title description price images category subCategory condition"
+        select: "title description fixedPrice productImages categoryId subCategoryId condition"
       })
       .session(session);
 
@@ -373,7 +373,7 @@ async function updateDeliveredToCompleted(cutoffDate, session) {
       .populate({
         path: "items.productId",
         model: "SellProduct",
-        select: "title description price images category subCategory condition"
+        select: "title description fixedPrice productImages categoryId subCategoryId condition"
       })
       .session(session);
 
@@ -542,7 +542,7 @@ async function updateConfirmReceiptToCompleted(cutoffDate, session) {
       .populate({
         path: "items.productId",
         model: "SellProduct",
-        select: "title description price images category subCategory condition"
+        select: "title description fixedPrice productImages categoryId subCategoryId condition"
       })
       .session(session);
 
@@ -717,7 +717,7 @@ async function updateDisputedToCompleted(session) {
       .populate({
         path: "items.productId",
         model: "SellProduct",
-        select: "title description price images category subCategory condition"
+        select: "title description fixedPrice productImages categoryId subCategoryId condition"
       })
       .session(session);
 
@@ -1297,8 +1297,8 @@ async function sendStatusUpdateNotification(order, newStatus, message) {
           paymentId: order.paymentId,
           productId: order.items[0]?.productId?._id || order.items[0]?.productId,
           productTitle: order.items[0]?.productId?.title,
-          productPrice: order.items[0]?.productId?.price,
-          productImage: order.items[0]?.productId?.images?.[0],
+          productPrice: order.items[0]?.productId?.fixedPrice,
+          productImage: order.items[0]?.productId?.productImages?.[0],
           productCondition: order.items[0]?.productId?.condition,
           sellerId: order.sellerId,
           buyerId: order.userId,
@@ -1372,8 +1372,8 @@ async function sendCompletionNotifications(order, disputeInfo = null) {
           paymentId: order.paymentId,
           productId: order.items[0]?.productId?._id || order.items[0]?.productId,
           productTitle: order.items[0]?.productId?.title,
-          productPrice: order.items[0]?.productId?.price,
-          productImage: order.items[0]?.productId?.images?.[0],
+          productPrice: order.items[0]?.productId?.fixedPrice,
+          productImage: order.items[0]?.productId?.productImages?.[0],
           productCondition: order.items[0]?.productId?.condition,
           sellerId: order.sellerId,
           buyerId: order.userId,
@@ -1417,8 +1417,8 @@ async function sendCompletionNotifications(order, disputeInfo = null) {
           paymentId: order.paymentId,
           productId: order.items[0]?.productId?._id || order.items[0]?.productId,
           productTitle: order.items[0]?.productId?.title,
-          productPrice: order.items[0]?.productId?.price,
-          productImage: order.items[0]?.productId?.images?.[0],
+          productPrice: order.items[0]?.productId?.fixedPrice,
+          productImage: order.items[0]?.productId?.productImages?.[0],
           productCondition: order.items[0]?.productId?.condition,
           sellerId: order.sellerId,
           buyerId: order.userId,
@@ -1528,8 +1528,8 @@ async function sendDisputeResolutionCompletionNotifications(
           paymentId: order.paymentId,
           productId: order.items[0]?.productId?._id || order.items[0]?.productId,
           productTitle: order.items[0]?.productId?.title,
-          productPrice: order.items[0]?.productId?.price,
-          productImage: order.items[0]?.productId?.images?.[0],
+          productPrice: order.items[0]?.productId?.fixedPrice,
+          productImage: order.items[0]?.productId?.productImages?.[0],
           productCondition: order.items[0]?.productId?.condition,
           sellerId: order.sellerId,
           buyerId: order.userId,
@@ -1573,8 +1573,8 @@ async function sendDisputeResolutionCompletionNotifications(
           paymentId: order.paymentId,
           productId: order.items[0]?.productId?._id || order.items[0]?.productId,
           productTitle: order.items[0]?.productId?.title,
-          productPrice: order.items[0]?.productId?.price,
-          productImage: order.items[0]?.productId?.images?.[0],
+          productPrice: order.items[0]?.productId?.fixedPrice,
+          productImage: order.items[0]?.productId?.productImages?.[0],
           productCondition: order.items[0]?.productId?.condition,
           sellerId: order.sellerId,
           buyerId: order.userId,
