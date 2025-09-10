@@ -619,6 +619,8 @@ const handleBeamPaymentSuccess = async (paymentData, req) => {
         orderId: order._id,
         productId: order.items[0].productId,
         title: "Payment Completed",
+        content: `Your payment has been completed.`,
+
         meta: createStandardizedChatMeta({
           orderNumber: order._id.toString(),
           totalAmount: order.grandTotal,
@@ -1094,6 +1096,10 @@ const originalPaymentCallback = async (req, res) => {
           paymentStatus === PAYMENT_STATUS.COMPLETED
             ? "Payment Completed"
             : "Payment Failed",
+
+        content: paymentStatus === PAYMENT_STATUS.COMPLETED ? `Your payment has been completed.` : `Your payment has been Failed.`,
+
+
         meta: createStandardizedChatMeta({
           orderNumber: order._id.toString(),
           totalAmount: order.grandTotal,
@@ -2285,6 +2291,7 @@ const updateOrderStatusBySeller = async (req, res) => {
       case ORDER_STATUS.CONFIRMED:
         messageTitle = "Order Confirmed";
         messageTheme = "success";
+        content="Your order has been successfully confirmed";
         break;
       case ORDER_STATUS.SHIPPED:
         messageTitle = "Order Shipped";
@@ -5388,7 +5395,7 @@ const cancelOrderByBuyer = async (req, res) => {
               // totalAmount: order.grandTotal,
               // amount: order.grandTotal,
 
-        totalAmount: `฿ ${order.grandTotal}`,
+              totalAmount: `฿ ${order.grandTotal}`,
               amount: `฿ ${order.grandTotal}`,
 
 
@@ -5458,8 +5465,8 @@ const cancelOrderByBuyer = async (req, res) => {
                 orderId: order._id.toString(),
                 amount: refundAmount,
 
-        // totalAmount: `฿ ${order.grandTotal}`,
-              amount: `฿ ${refundAmount}`,
+                // totalAmount: `฿ ${order.grandTotal}`,
+                amount: `฿ ${refundAmount}`,
 
                 refundAmount: refundAmount,
                 cancellationReason: cancellationReason,
