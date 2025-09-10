@@ -428,7 +428,7 @@ async function updateDeliveredToCompleted(cutoffDate, session) {
           //   },
           //   { session, new: true }
           // );
-          const updatedOrder = await Order.findOneAndUpdate(
+          const updated = await Order.findOneAndUpdate(
             { _id: order._id },
             {
               status: ORDER_STATUS.COMPLETED,
