@@ -642,6 +642,16 @@ const addComment = async (req, res) => {
             meta: createStandardizedNotificationMeta({
               threadId: thread._id.toString(),
               threadTitle: thread.title,
+              amount: thread?.budgetFlexible
+              ? `฿${thread?.budgetRange?.min} - ฿${thread?.budgetRange?.max}`
+              : "",
+
+
+              totalAmount: thread?.budgetFlexible
+              ? `฿${thread?.budgetRange?.min} - ฿${thread?.budgetRange?.max}`
+              : "",
+
+
               threadImage: thread?.photos[0] || null,
               commentId: saved._id.toString(),
               commentContent: value.content || "",
