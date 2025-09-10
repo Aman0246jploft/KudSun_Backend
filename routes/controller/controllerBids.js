@@ -117,7 +117,9 @@ const placeBid = async (req, res) => {
                 productSaleType: product.saleType,
                 productId: product._id,
                 userImage: BidderInfo.profileImage || null,
-                amount,
+                // amount,
+                          amount: `฿ ${amount}`,
+                
                 actionBy: 'user',
                 timestamp: new Date().toISOString(),
             }),
