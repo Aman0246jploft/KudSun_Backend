@@ -207,7 +207,7 @@ const createDispute = async (req, res) => {
     const disputeMessage = new ChatMessage({
       chatRoom: room._id,
       messageType: "ORDER_STATUS",
-      content:"Buyer filed a dispute. Seller must response in 3 days",
+      content:"Buyer raised dispute .Seller must response in 3 days",
       systemMeta: {
         title: "Dispute Opened",
         statusType: "DISPUTE",
@@ -507,14 +507,14 @@ const adminDecision = async (req, res) => {
     if (decision === "BUYER") {
       messageTitle = "Dispute Resolved - In favour of Buyer";
       messageTheme = "success";
-      messageContent = `Dispute resolved in favour of the buyer. ${
+      messageContent = `Dispute resolved for buyer. ${
         disputeAmountPercent > 0 ? `Refund: ${disputeAmountPercent}%` : ""
       }`;
     } else if (decision === "SELLER") {
       messageTitle = "Dispute Resolved - In favour of Seller";
       messageTheme = "success";
       messageContent =
-        "Dispute resolved in favour of the seller.";
+        "Dispute resolved for seller.";
     } else {
       messageTitle = "Dispute Resolved";
       messageTheme = "info";
