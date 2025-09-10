@@ -409,8 +409,11 @@ const createOrder = async (req, res) => {
                 orderNumber: order._id.toString(),
                 orderId: order._id.toString(),
                 itemCount: orderItems.length,
-                totalAmount: order.grandTotal,
-                amount: order.grandTotal,
+                // totalAmount: order.grandTotal,
+                // amount: order.grandTotal,
+
+                totalAmount: `฿ ${order.totalAmount}`,
+                amount: `฿ ${order.grandTotal}`,
                 sellerId: sellerId,
                 buyerId: userId,
                 status: ORDER_STATUS.PENDING,
@@ -2286,7 +2289,7 @@ const updateOrderStatusBySeller = async (req, res) => {
         break;
       case ORDER_STATUS.SHIPPED:
         messageTitle = "Order Shipped";
-        content='Your order has been successfully shipped'
+        content = 'Your order has been successfully shipped'
         messageTheme = "info";
         if (req.body.carrierId && req.body.trackingNumber) {
           additionalMeta.carrier = req.body.carrierId;
@@ -2301,7 +2304,7 @@ const updateOrderStatusBySeller = async (req, res) => {
       case ORDER_STATUS.DELIVERED:
         messageTitle = "Order Delivered";
         messageTheme = "success";
-        content="Your order has been successfully delivered"
+        content = "Your order has been successfully delivered"
         break;
       case ORDER_STATUS.CANCELLED:
         messageTitle = "Order Cancelled";
@@ -2316,7 +2319,7 @@ const updateOrderStatusBySeller = async (req, res) => {
     const systemMessage = new ChatMessage({
       chatRoom: room._id,
       messageType: "ORDER_STATUS",
-      content:content,
+      content: content,
       systemMeta: {
         statusType: "ORDER",
         status: newStatus,
@@ -2494,8 +2497,12 @@ const updateOrderStatusBySeller = async (req, res) => {
               carrier: req.body.carrierId || null,
               sellerId: sellerId,
               buyerId: order.userId,
-              totalAmount: order.grandTotal,
-              amount: order.grandTotal,
+              // totalAmount: order.grandTotal,
+              // amount: order.grandTotal,
+
+              totalAmount: `฿ ${order.totalAmount}`,
+              amount: `฿ ${order.grandTotal}`,
+
               itemCount: order.items.length,
               productTitle,
               productImage,
@@ -2886,8 +2893,12 @@ const updateOrderStatusByBuyer = async (req, res) => {
             actionBy: "buyer",
             sellerId: order.sellerId,
             buyerId: buyerId,
-            totalAmount: order.grandTotal,
-            amount: order.grandTotal,
+            // totalAmount: order.grandTotal,
+            // amount: order.grandTotal,
+
+            totalAmount: `฿ ${order.grandTotal}`,
+            amount: `฿ ${order.grandTotal}`,
+
             itemCount: order.items.length,
             paymentMethod: order.paymentMethod,
             status: newStatus,
@@ -3484,7 +3495,12 @@ const addrequest = async (req, res) => {
             message: `Your withdrawal request for ฿${amount} has been submitted successfully and is pending approval.`,
             meta: createStandardizedNotificationMeta({
               withdrawalId: newRequest._id.toString(),
-              amount: amount,
+              // amount: amount,
+
+
+              amount: `฿ ${amount}`,
+
+
               withdrawalAmount: amount,
               withdrawalFee: withdrawfee,
               status: newRequest.status,
@@ -5419,8 +5435,13 @@ const cancelOrderByBuyer = async (req, res) => {
               sellerId: order.sellerId,
               buyerId: buyerId,
               userImage: buyer.userImage,
-              totalAmount: order.grandTotal,
-              amount: order.grandTotal,
+              // totalAmount: order.grandTotal,
+              // amount: order.grandTotal,
+
+        totalAmount: `฿ ${order.grandTotal}`,
+              amount: `฿ ${order.grandTotal}`,
+
+
               itemCount: order.items.length,
               paymentMethod: order.paymentMethod,
               cancellationReason: cancellationReason,
@@ -5486,6 +5507,10 @@ const cancelOrderByBuyer = async (req, res) => {
                 orderNumber: order._id.toString(),
                 orderId: order._id.toString(),
                 amount: refundAmount,
+
+        // totalAmount: `฿ ${order.grandTotal}`,
+              amount: `฿ ${refundAmount}`,
+
                 refundAmount: refundAmount,
                 cancellationReason: cancellationReason,
                 actionBy: "buyer",
