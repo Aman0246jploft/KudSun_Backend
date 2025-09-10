@@ -1,4 +1,4 @@
-const translate = require('translate');
+const translator = require('open-google-translator');
 
 // Language mapping for better compatibility
 const LANGUAGE_MAPPING = {
@@ -26,16 +26,14 @@ async function translateText(text, userLanguage, fromLanguage = 'en') {
       return text;
     }
 
-    // Configure translate with options
-    translate.engine = 'google';
-    translate.key = process.env.GOOGLE_TRANSLATE_API_KEY; // Optional API key for better rate limits
-    
-    const translatedText = await translate(text, {
-      from: fromLanguage,
-      to: normalizedLanguage
+    // Use open-google-translator package
+    const data = await translator.TranslateLanguageData({
+      listOfWordsToTranslate: [text],
+      fromLanguage: fromLanguage,
+      toLanguage: normalizedLanguage,
     });
 
-    return translatedText || text; // Fallback to original text if translation fails
+    return data[0]?.translation || text; // Fallback to original text if translation fails
   } catch (error) {
     console.error('Translation error:', error.message);
     // Return original text if translation fails
