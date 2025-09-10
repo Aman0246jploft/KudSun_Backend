@@ -319,8 +319,7 @@ async function updateShippedToDelivered(cutoffDate, session) {
           console.log(`✅ Order ${order._id} updated to DELIVERED`);
         } else {
           console.log(
-            `⏳ Order ${
-              order._id
+            `⏳ Order ${order._id
             } not yet ready for delivery (shipped ${shippedDate.fromNow()})`
           );
         }
@@ -421,14 +420,27 @@ async function updateDeliveredToCompleted(cutoffDate, session) {
           );
 
           // Update order status to COMPLETED
-          const updated = await Order.findByIdAndUpdate(
-            order._id,
+          // const updated = await Order.findByIdAndUpdate(
+          //   order._id,
+          //   {
+          //     status: ORDER_STATUS.COMPLETED,
+          //     updatedAt: new Date(),
+          //   },
+          //   { session, new: true }
+          // );
+          const updatedOrder = await Order.findOneAndUpdate(
+            { _id: order._id },
             {
               status: ORDER_STATUS.COMPLETED,
               updatedAt: new Date(),
             },
             { session, new: true }
-          );
+          )
+            .populate("userId")          // populate buyer
+            .populate("sellerId")        // populate seller
+            .populate("addressId")       // populate address
+            .populate("items.productId") // populate products inside items
+            .exec();
 
           if (!updated || updated.status !== ORDER_STATUS.COMPLETED) {
             stats.errors.push(
@@ -470,8 +482,11 @@ async function updateDeliveredToCompleted(cutoffDate, session) {
             );
           }
 
+
+          console.log(updated)
+
           // Send comprehensive notifications
-          await sendCompletionNotifications(order, disputeInfo.disputeData);
+          await sendCompletionNotifications(updated, disputeInfo.disputeData);
 
           if (disputeInfo.disputeData) {
             stats.disputesHandled++;
@@ -479,14 +494,12 @@ async function updateDeliveredToCompleted(cutoffDate, session) {
 
           stats.updated++;
           console.log(
-            `✅ Order ${order._id} completed${
-              disputeInfo.disputeData ? " (with dispute resolution)" : ""
+            `✅ Order ${order._id} completed${disputeInfo.disputeData ? " (with dispute resolution)" : ""
             }`
           );
         } else {
           console.log(
-            `⏳ Order ${
-              order._id
+            `⏳ Order ${order._id
             } not yet ready for completion (delivered ${deliveredDate.fromNow()})`
           );
         }
@@ -557,8 +570,7 @@ async function updateConfirmReceiptToCompleted(cutoffDate, session) {
         // Check if N days have passed since confirm receipt
         if (confirmReceiptDate.isBefore(cutoffDate)) {
           console.log(
-            `📅 Order ${
-              order._id
+            `📅 Order ${order._id
             } confirm receipt on ${confirmReceiptDate.format(
               "YYYY-MM-DD"
             )}, checking for disputes...`
@@ -649,14 +661,12 @@ async function updateConfirmReceiptToCompleted(cutoffDate, session) {
 
           stats.updated++;
           console.log(
-            `✅ Order ${order._id} completed from CONFIRM_RECEIPT${
-              disputeInfo.disputeData ? " (with dispute resolution)" : ""
+            `✅ Order ${order._id} completed from CONFIRM_RECEIPT${disputeInfo.disputeData ? " (with dispute resolution)" : ""
             }`
           );
         } else {
           console.log(
-            `⏳ Order ${
-              order._id
+            `⏳ Order ${order._id
             } not yet ready for completion (confirm receipt ${confirmReceiptDate.fromNow()})`
           );
         }
@@ -1054,9 +1064,8 @@ async function processSellerPaymentEnhanced(
         }
         adjustedProductCost =
           originalProductCost * ((100 - disputeAmountPercent) / 100);
-        disputeAdjustmentNote = `Dispute resolved in buyer favour. Seller receives ${
-          100 - disputeAmountPercent
-        }% of original amount. Buyer gets ${disputeAmountPercent}% refund.`;
+        disputeAdjustmentNote = `Dispute resolved in buyer favour. Seller receives ${100 - disputeAmountPercent
+          }% of original amount. Buyer gets ${disputeAmountPercent}% refund.`;
       }
 
       console.log(
@@ -1261,9 +1270,8 @@ async function sendStatusUpdateNotification(order, newStatus, message) {
         orderId: order._id,
         productId: order.items[0]?.productId,
         type: NOTIFICATION_TYPES.ORDER,
-        title: `Order ${
-          newStatus.charAt(0).toUpperCase() + newStatus.slice(1)
-        }`,
+        title: `Order ${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)
+          }`,
         message: message,
         meta: createStandardizedNotificationMeta({
           orderNumber: order._id.toString(),
@@ -1302,9 +1310,8 @@ async function sendCompletionNotifications(order, disputeInfo = null) {
   try {
     // Buyer notification
     const buyerMessage = disputeInfo
-      ? `Your order has been automatically completed after ${PROCESSING_DAY_LIMIT} days. A dispute was resolved in ${
-          disputeInfo.decision === DISPUTE_DECISION.BUYER ? "your" : "seller"
-        } favour. Thank you for your purchase!`
+      ? `Your order has been automatically completed after ${PROCESSING_DAY_LIMIT} days. A dispute was resolved in ${disputeInfo.decision === DISPUTE_DECISION.BUYER ? "your" : "seller"
+      } favour. Thank you for your purchase!`
       : `Your order has been automatically completed after ${PROCESSING_DAY_LIMIT} days. Thank you for your purchase!`;
 
     // Seller notification
@@ -1314,16 +1321,13 @@ async function sendCompletionNotifications(order, disputeInfo = null) {
     if (disputeInfo) {
       if (disputeInfo.decision === DISPUTE_DECISION.SELLER) {
         sellerTitle = "Order Completed - Dispute Resolved in Your favour!";
-        sellerMessage = `Your order has been completed and full payment has been credited to your wallet. Dispute was resolved in your favour. ${
-          disputeInfo.decisionNote || ""
-        }`;
+        sellerMessage = `Your order has been completed and full payment has been credited to your wallet. Dispute was resolved in your favour. ${disputeInfo.decisionNote || ""
+          }`;
       } else {
         sellerTitle = "Order Completed - Partial Payment Due to Dispute";
-        sellerMessage = `Your order has been completed with partial payment (${
-          100 - disputeInfo.disputeAmountPercent
-        }% of order value) credited to your wallet. Dispute was resolved in buyer favour. ${
-          disputeInfo.decisionNote || ""
-        }`;
+        sellerMessage = `Your order has been completed with partial payment (${100 - disputeInfo.disputeAmountPercent
+          }% of order value) credited to your wallet. Dispute was resolved in buyer favour. ${disputeInfo.decisionNote || ""
+          }`;
       }
     }
 
@@ -1408,8 +1412,8 @@ async function sendCompletionNotifications(order, disputeInfo = null) {
               disputeInfo.decision === DISPUTE_DECISION.SELLER
                 ? order.totalAmount
                 : (order.totalAmount *
-                    (100 - disputeInfo.disputeAmountPercent)) /
-                  100,
+                  (100 - disputeInfo.disputeAmountPercent)) /
+                100,
             refundAmount:
               disputeInfo.decision === DISPUTE_DECISION.BUYER
                 ? (order.grandTotal * disputeInfo.disputeAmountPercent) / 100
@@ -1444,14 +1448,12 @@ async function sendDisputeResolutionCompletionNotifications(
 
     if (disputeInfo.decision === DISPUTE_DECISION.BUYER) {
       buyerTitle = "Dispute Resolved in Your favour - Order Completed";
-      buyerMessage = `Your disputed order has been completed with the dispute resolved in your favour. You received a ${
-        disputeInfo.disputeAmountPercent
-      }% refund of the order value. ${disputeInfo.decisionNote || ""}`;
+      buyerMessage = `Your disputed order has been completed with the dispute resolved in your favour. You received a ${disputeInfo.disputeAmountPercent
+        }% refund of the order value. ${disputeInfo.decisionNote || ""}`;
     } else {
       buyerTitle = "Dispute Resolved - Order Completed";
-      buyerMessage = `Your disputed order has been completed with the dispute resolved in the seller's favour. The full payment has been released to the seller. ${
-        disputeInfo.decisionNote || ""
-      }`;
+      buyerMessage = `Your disputed order has been completed with the dispute resolved in the seller's favour. The full payment has been released to the seller. ${disputeInfo.decisionNote || ""
+        }`;
     }
 
     // Seller notification based on dispute decision
@@ -1461,9 +1463,8 @@ async function sendDisputeResolutionCompletionNotifications(
 
     if (disputeInfo.decision === DISPUTE_DECISION.SELLER) {
       sellerTitle = "Dispute Resolved in Your favour - Payment Received!";
-      sellerMessage = `Your disputed order has been completed with the dispute resolved in your favour. Full payment has been credited to your wallet. ${
-        disputeInfo.decisionNote || ""
-      }`;
+      sellerMessage = `Your disputed order has been completed with the dispute resolved in your favour. Full payment has been credited to your wallet. ${disputeInfo.decisionNote || ""
+        }`;
       netAmountPaid = order.totalAmount;
     } else {
       sellerTitle = "Disputed Order Completed - Partial Payment";
@@ -1471,9 +1472,8 @@ async function sendDisputeResolutionCompletionNotifications(
       sellerMessage = `Your disputed order has been completed with the dispute resolved in the buyer's favour. ${sellerPercentage}% of the order value (₿${(
         (order.totalAmount * sellerPercentage) /
         100
-      ).toFixed(2)}) has been credited to your wallet. ${
-        disputeInfo.decisionNote || ""
-      }`;
+      ).toFixed(2)}) has been credited to your wallet. ${disputeInfo.decisionNote || ""
+        }`;
       netAmountPaid = (order.totalAmount * sellerPercentage) / 100;
     }
 

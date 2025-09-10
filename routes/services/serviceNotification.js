@@ -173,7 +173,6 @@ const notificationProcessor = async (job) => {
         redirectUrl: userNotification.redirectUrl || null,
       });
       
-      console.log("hiii")
       // Emit updated total unread count after saving notification
       await emitTotalUnreadCount(userId);
     }
