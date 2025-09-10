@@ -14,6 +14,10 @@ const {
   objectId,
   toObjectId,
 } = require("../../utils/globalFunction");
+const {
+  translateNotification,
+  getUserLanguage,
+} = require("../../utils/translation");
 const { addJobToQueue, createQueue, processQueue } = require("./serviceBull");
 
 // Socket instance holder
@@ -143,61 +147,43 @@ const notificationProcessor = async (job) => {
       return;
     }
 
-    // Fetch user info including language preference and FCM token
-    const userInfo = await User.findById(userId).select("fcmToken language");
-
-    // Get user's language preference (default to 'english' if not set)
-    const userLanguage = userInfo?.language || 'english';
-
-    // Import translation utilities
-    const { translateNotification, extractNotificationVariables } = require('../../utils/notificationTranslations');
-
-    // Extract variables from notification metadata for translation
-    const variables = extractNotificationVariables(message, userNotification.meta || {});
-
-    // Translate title and message based on user's language preference
-    const translatedTitle = translateNotification(title, userLanguage, variables);
-    const translatedMessage = translateNotification(message, userLanguage, variables);
+    // Get user's language preference and translate notification
+    const userLanguage = await getUserLanguage(userId);
+    const translatedNotification = await translateNotification(userNotification, userLanguage);
 
     // Send Firebase notification if token exists
+    const userInfo = await User.findById(userId).select("fcmToken");
+
     if (userInfo?.fcmToken) {
-      console.log("🔔 Firebase Notification Debug:");
-      console.log("   UserID:", userId);
-      console.log("   Language:", userLanguage);
-      console.log("   Original Title:", title);
-      console.log("   Translated Title:", translatedTitle);
-      console.log("   Original Message:", message);
-      console.log("   Translated Message:", translatedMessage);
-      
+      // console.log("userID", userId);
       await sendFirebaseNotification({
         token: userInfo.fcmToken,
-        title: translatedTitle,
-        body: translatedMessage,
-        imageUrl: userNotification.imageUrl || "",
-        language: userLanguage, // Add language to data payload
-        // Pass other meta data but exclude title/message to avoid overriding translations
-        ...Object.fromEntries(
-          Object.entries(userNotification).filter(([key]) => 
-            !['title', 'message', 'recipientId', 'userId'].includes(key)
-          )
-        ),
+        title: translatedNotification.title,
+        body: translatedNotification.message,
+        imageUrl: translatedNotification.imageUrl || "",
+        ...translatedNotification, // Pass the rest of the meta if needed
       });
     }
 
-    // Save notification in DB with translated content
+    // Save notification in DB
     if (!skip) {
       await Notification.create({
-        recipientId: userNotification.recipientId,
-        type: userNotification.type,
-        userId: userNotification.userId,
-        chatId: userNotification.chatId,
-        orderId: userNotification.orderId,
-        productId: userNotification.productId,
-        title: translatedTitle,
-        message: translatedMessage,
-        meta: userNotification.meta || {},
-        activityType: userNotification.activityType || null,
-        redirectUrl: userNotification.redirectUrl || null,
+        recipientId: translatedNotification.recipientId,
+        type: translatedNotification.type,
+        userId: translatedNotification.userId,
+        chatId: translatedNotification.chatId,
+        orderId: translatedNotification.orderId,
+        productId: translatedNotification.productId,
+        title: translatedNotification.title,
+        message: translatedNotification.message,
+        meta: {
+          ...translatedNotification.meta,
+          userLanguage: userLanguage,
+          originalTitle: translatedNotification.originalTitle,
+          originalMessage: translatedNotification.originalMessage
+        },
+        activityType: translatedNotification.activityType || null,
+        redirectUrl: translatedNotification.redirectUrl || null,
       });
       
       // Emit updated total unread count after saving notification
@@ -394,31 +380,22 @@ const notificationStatusUserIdUpdateReadAll = async (userId) => {
 // }
 const notifyUserOnEventNonSession = async (data) => {
   try {
-    // Import translation utilities
-    const { translateNotification, extractNotificationVariables } = require('../../utils/notificationTranslations');
-
     if (Array.isArray(data)) {
       let notifyDoc = await Promise.all(
         data?.filter(async (d) => {
-          let userInfo = await User.findOne({ _id: d.userId }).select(
-            "fcmToken notification language"
+          let deviceId = await User.findOne({ _id: d.userId }).select(
+            "deviceId notification language"
           );
-          if (userInfo) {
-            if (userInfo?.notification && userInfo?.fcmToken) {
-              // Get user's language preference
-              const userLanguage = userInfo?.language || 'english';
+          if (deviceId) {
+            if (deviceId?.notification) {
+              // Translate notification for user's language
+              const translatedNotification = await translateNotification(d, deviceId.language);
               
-              // Extract variables and translate notification content
-              const variables = extractNotificationVariables(d.message, d.meta || {});
-              const translatedTitle = translateNotification(d.title, userLanguage, variables);
-              const translatedMessage = translateNotification(d.message, userLanguage, variables);
-
               await sendFirebaseNotification({
-                token: userInfo.fcmToken,
-                title: translatedTitle,
-                body: translatedMessage,
-                imageUrl: d.imageUrl,
-                language: userLanguage,
+                token: deviceId.deviceId,
+                title: translatedNotification.title,
+                body: translatedNotification.message,
+                imageUrl: translatedNotification.imageUrl,
               });
               return d;
             }
@@ -442,39 +419,24 @@ const notifyUserOnEventNonSession = async (data) => {
 
 const notifyUserOnEvent = async (data, session) => {
   try {
-    // Import translation utilities
-    const { translateNotification, extractNotificationVariables } = require('../../utils/notificationTranslations');
-
     if (Array.isArray(data)) {
       let notifyDoc = await Promise.all(
         data?.filter(async (d) => {
-          let userInfo = await User.findOne({ _id: d.userId }).select(
-            "fcmToken notification language"
+          let deviceId = await User.findOne({ _id: d.userId }).select(
+            "deviceId notification language"
           );
-          if (userInfo) {
-            if (userInfo?.notification && userInfo?.fcmToken) {
-              // Get user's language preference
-              const userLanguage = userInfo?.language || 'english';
+          if (deviceId) {
+            if (deviceId?.notification) {
+              // Translate notification for user's language
+              const translatedNotification = await translateNotification(d, deviceId.language);
               
-              // Extract variables and translate notification content
-              const variables = extractNotificationVariables(d.message, d.meta || {});
-              const translatedTitle = translateNotification(d.title, userLanguage, variables);
-              const translatedMessage = translateNotification(d.message, userLanguage, variables);
-
               await sendFirebaseNotification({
-                token: userInfo.fcmToken,
-                title: translatedTitle,
-                body: translatedMessage,
-                imageUrl: d.imageUrl,
-                language: userLanguage,
+                token: deviceId.deviceId,
+                title: translatedNotification.title,
+                body: translatedNotification.message,
+                imageUrl: translatedNotification.imageUrl,
               });
-              
-              // Return notification data with translated content
-              return {
-                ...d,
-                title: translatedTitle,
-                message: translatedMessage
-              };
+              return d;
             }
           }
         })
@@ -497,31 +459,23 @@ const notifyUserOnEvent = async (data, session) => {
       let ids = data?.userId;
       let notifyDoc = await Promise.all(
         ids?.map(async (id) => {
-          let userInfo = await User.findOne({ _id: id }).select(
-            "fcmToken notification language"
+          let deviceId = await User.findOne({ _id: id }).select(
+            "deviceId notification language"
           );
-          if (userInfo) {
-            if (userInfo?.notification && userInfo?.fcmToken) {
-              // Get user's language preference
-              const userLanguage = userInfo?.language || 'english';
+          if (deviceId) {
+            if (deviceId?.notification) {
+              // Translate notification for user's language
+              const translatedNotification = await translateNotification(data, deviceId.language);
               
-              // Extract variables and translate notification content
-              const variables = extractNotificationVariables(data.message, data.meta || {});
-              const translatedTitle = translateNotification(data.title, userLanguage, variables);
-              const translatedMessage = translateNotification(data.message, userLanguage, variables);
-
               await sendFirebaseNotification({
-                token: userInfo.fcmToken,
-                title: translatedTitle,
-                body: translatedMessage,
-                imageUrl: data.imageUrl,
+                token: deviceId.deviceId,
+                title: translatedNotification.title,
+                body: translatedNotification.message,
+                imageUrl: translatedNotification.imageUrl,
               });
-              
               return {
-                ...data,
+                ...translatedNotification,
                 userId: id,
-                title: translatedTitle,
-                message: translatedMessage
               };
             }
           }
@@ -532,7 +486,19 @@ const notifyUserOnEvent = async (data, session) => {
       }
       notify = await Notification.insertMany(notifyDoc, { session });
     } else {
-      notify = new Notification(data);
+      // For single user notification, get user language and translate
+      const userLanguage = await getUserLanguage(data.userId);
+      const translatedNotification = await translateNotification(data, userLanguage);
+      
+      notify = new Notification({
+        ...translatedNotification,
+        meta: {
+          ...translatedNotification.meta,
+          userLanguage: userLanguage,
+          originalTitle: translatedNotification.originalTitle,
+          originalMessage: translatedNotification.originalMessage
+        }
+      });
       notify = await notify.save({ session });
       if (notify) {
         return resultDb(SUCCESS, notify);
@@ -595,52 +561,6 @@ const getUserNotification = async (payload) => {
   }
 };
 
-/**
- * Helper function to add language translation support to notification data
- * This function can be used by any controller to ensure notifications are translated
- * @param {Array|Object} notificationData - Notification data (array or single object)
- * @returns {Array|Object} Notification data with translation support
- */
-const addTranslationSupport = async (notificationData) => {
-  // Import translation utilities
-  const { translateNotification, extractNotificationVariables } = require('../../utils/notificationTranslations');
-  
-  // Helper function to process a single notification
-  const processNotification = async (notification) => {
-    if (!notification.recipientId) return notification;
-    
-    try {
-      // Fetch user's language preference
-      const userInfo = await User.findById(notification.recipientId).select("language");
-      const userLanguage = userInfo?.language || 'english';
-      
-      // Extract variables for translation
-      const variables = extractNotificationVariables(notification.message, notification.meta || {});
-      
-      // Translate title and message
-      const translatedTitle = translateNotification(notification.title, userLanguage, variables);
-      const translatedMessage = translateNotification(notification.message, userLanguage, variables);
-      
-      return {
-        ...notification,
-        title: translatedTitle,
-        message: translatedMessage
-      };
-    } catch (error) {
-      console.error('Translation error:', error);
-      return notification; // Return original if translation fails
-    }
-  };
-  
-  // Handle array of notifications
-  if (Array.isArray(notificationData)) {
-    return await Promise.all(notificationData.map(processNotification));
-  }
-  
-  // Handle single notification
-  return await processNotification(notificationData);
-};
-
 processQueue(notificationQueue, notificationProcessor);
 
 module.exports = {
@@ -654,5 +574,4 @@ module.exports = {
   notifyUserOnEvent,
   getUserNotification,
   notifyUserOnEventNonSession,
-  addTranslationSupport,
 };

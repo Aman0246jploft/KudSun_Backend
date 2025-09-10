@@ -1,18 +1,11 @@
 const admin = require("./createFirebaseUser");
 
-async function sendFirebaseNotification({ token, title, body, imageUrl, language, ...customData }) {
+async function sendFirebaseNotification({ token, title, body, imageUrl, ...customData }) {
     try {
         if (!token || !title || !body) {
             console.warn("Missing required fields for notification.");
             return;
         }
-        
-        console.log("📱 Firebase Message Details:");
-        console.log("   Token:", token.substring(0, 20) + "...");
-        console.log("   Title:", title);
-        console.log("   Body:", body);
-        console.log("   Language:", language);
-        
         const message = {
             token,
             notification: {
@@ -21,36 +14,17 @@ async function sendFirebaseNotification({ token, title, body, imageUrl, language
                 ...(imageUrl && { image: imageUrl }),
             },
             android: {
-                priority: "high",
-                notification: {
-                    sound: "default",
-                    icon: "ic_notification", // Default notification icon
-                    color: "#FF6B35", // Notification color
-                    ...(imageUrl && { imageUrl })
-                }
+                priority: "high"
             },
             apns: {
-                headers: {
-                    "apns-priority": "10",
-                    "apns-push-type": "alert"
-                },
                 payload: {
                     aps: {
-                        alert: {
-                            title,
-                            body
-                        },
                         sound: "default",
-                        "mutable-content": 1,
-                        badge: 1 // Show badge on app icon
+                        "mutable-content": 1
                     }
                 }
             },
             data: {
-                // Add language information to data payload
-                language: language || 'english',
-                // Add notification type for icon customization
-                notificationType: customData.type || 'default',
                 // Convert everything to strings because FCM `data` must be string values
                 ...Object.entries(customData).reduce((acc, [key, val]) => {
                     acc[key] = typeof val === 'object' ? JSON.stringify(val) : String(val ?? '');
@@ -60,12 +34,11 @@ async function sendFirebaseNotification({ token, title, body, imageUrl, language
         };
 
         const response = await admin.messaging().send(message);
-        console.log("✅ Firebase notification sent successfully:", response);
-        console.log("   Message ID:", response);
+                console.log("✅ Firebase notification sent:", response);
+
 
     } catch (error) {
-        console.error("❌ Error sending Firebase notification:", error.message);
-        console.error("   Full error:", error);
+        console.error("Error sending Firebase notification:", error.message);
     }
 }
 
