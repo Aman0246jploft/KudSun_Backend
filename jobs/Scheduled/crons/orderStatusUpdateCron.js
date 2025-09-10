@@ -483,7 +483,7 @@ async function updateDeliveredToCompleted(cutoffDate, session) {
           }
 
 
-          console.log(updated)
+          console.log("updatedupdated",updated)
 
           // Send comprehensive notifications
           await sendCompletionNotifications(updated, disputeInfo.disputeData);
