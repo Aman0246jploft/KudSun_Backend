@@ -3638,8 +3638,8 @@ const getBlockedUsers = async (req, res) => {
         username: user?.userName,
         email: user?.email,
         profileImage: user?.profileImage,
-        province: user?.provinceId?.value || null,
-        district: user?.districtId?.value || null,
+        province: user?.provinceId?.value || "",
+        district: user?.districtId?.value || "",
         followerCount: countMap[userIdStr] || 0,
         blockedAt: item.createdAt,
       };

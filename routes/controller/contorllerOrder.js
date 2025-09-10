@@ -1931,7 +1931,6 @@ const getSoldProducts = async (req, res) => {
         query.createdAt.$lte = endOfToday;
       }
     }
-    console.log("queryquery", query);
 
     // Initial total count before keyword filter
     let total = await Order.countDocuments(query);
