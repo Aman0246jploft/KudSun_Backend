@@ -167,11 +167,11 @@ const createStandardizedNotificationMeta = (data = {}) => {
     orderId: data.orderId || null,
     itemCount: data.itemCount || null,
     // totalAmount: data.totalAmount || null,
-          totalAmount: data.totalAmount? `฿ ${data.totalAmount}`:null,
+          totalAmount: data.totalAmount? ` ${data.totalAmount}`:null,
 
     // amount: data.amount || null,
 
-          amount: data.amount? `฿ ${data.amount}`:null,
+          amount: data.amount? `${data.amount}`:null,
 
     trackingNumber: data.trackingNumber || null,
     oldStatus: data.oldStatus || null,
