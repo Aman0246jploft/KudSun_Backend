@@ -1,11 +1,18 @@
 const admin = require("./createFirebaseUser");
 
-async function sendFirebaseNotification({ token, title, body, imageUrl, ...customData }) {
+async function sendFirebaseNotification({ token, title, body, imageUrl, language, ...customData }) {
     try {
         if (!token || !title || !body) {
             console.warn("Missing required fields for notification.");
             return;
         }
+        
+        console.log("📱 Firebase Message Details:");
+        console.log("   Token:", token.substring(0, 20) + "...");
+        console.log("   Title:", title);
+        console.log("   Body:", body);
+        console.log("   Language:", language);
+        
         const message = {
             token,
             notification: {
@@ -14,17 +21,31 @@ async function sendFirebaseNotification({ token, title, body, imageUrl, ...custo
                 ...(imageUrl && { image: imageUrl }),
             },
             android: {
-                priority: "high"
+                priority: "high",
+                notification: {
+                    sound: "default",
+                    ...(imageUrl && { imageUrl })
+                }
             },
             apns: {
+                headers: {
+                    "apns-priority": "10",
+                    "apns-push-type": "alert"
+                },
                 payload: {
                     aps: {
+                        alert: {
+                            title,
+                            body
+                        },
                         sound: "default",
                         "mutable-content": 1
                     }
                 }
             },
             data: {
+                // Add language information to data payload
+                language: language || 'english',
                 // Convert everything to strings because FCM `data` must be string values
                 ...Object.entries(customData).reduce((acc, [key, val]) => {
                     acc[key] = typeof val === 'object' ? JSON.stringify(val) : String(val ?? '');
@@ -34,11 +55,12 @@ async function sendFirebaseNotification({ token, title, body, imageUrl, ...custo
         };
 
         const response = await admin.messaging().send(message);
-                console.log("✅ Firebase notification sent:", response);
-
+        console.log("✅ Firebase notification sent successfully:", response);
+        console.log("   Message ID:", response);
 
     } catch (error) {
-        console.error("Error sending Firebase notification:", error.message);
+        console.error("❌ Error sending Firebase notification:", error.message);
+        console.error("   Full error:", error);
     }
 }
 

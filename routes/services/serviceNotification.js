@@ -161,12 +161,20 @@ const notificationProcessor = async (job) => {
 
     // Send Firebase notification if token exists
     if (userInfo?.fcmToken) {
-      // console.log("userID", userId, "language", userLanguage);
+      console.log("🔔 Firebase Notification Debug:");
+      console.log("   UserID:", userId);
+      console.log("   Language:", userLanguage);
+      console.log("   Original Title:", title);
+      console.log("   Translated Title:", translatedTitle);
+      console.log("   Original Message:", message);
+      console.log("   Translated Message:", translatedMessage);
+      
       await sendFirebaseNotification({
         token: userInfo.fcmToken,
         title: translatedTitle,
         body: translatedMessage,
         imageUrl: userNotification.imageUrl || "",
+        language: userLanguage, // Add language to data payload
         ...userNotification, // Pass the rest of the meta if needed
       });
     }
@@ -405,6 +413,7 @@ const notifyUserOnEventNonSession = async (data) => {
                 title: translatedTitle,
                 body: translatedMessage,
                 imageUrl: d.imageUrl,
+                language: userLanguage,
               });
               return d;
             }
@@ -452,6 +461,7 @@ const notifyUserOnEvent = async (data, session) => {
                 title: translatedTitle,
                 body: translatedMessage,
                 imageUrl: d.imageUrl,
+                language: userLanguage,
               });
               
               // Return notification data with translated content
