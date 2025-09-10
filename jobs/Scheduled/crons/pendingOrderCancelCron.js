@@ -31,7 +31,7 @@ let cronStats = {
 
 // Environment variables with defaults
 // const CRON_SCHEDULE = process.env.PENDING_ORDER_CANCEL_CRON_SCHEDULE || "0 0 * * *"; // Daily at midnight
-const CRON_SCHEDULE = process.env.PENDING_ORDER_CANCEL_CRON_SCHEDULE || "0 0 * * *"; 
+const CRON_SCHEDULE = process.env.PENDING_ORDER_CANCEL_CRON_SCHEDULE || "0 0 * * *";
 
 const HOURS_THRESHOLD = parseInt(process.env.PENDING_ORDER_HOURS_THRESHOLD) || 24;
 
@@ -50,12 +50,12 @@ mongoose
     // Schedule the cron job
     cron.schedule(CRON_SCHEDULE, async () => {
       const session = await mongoose.startSession();
-      
+
       try {
         session.startTransaction();
         cronStats.lastRun = new Date();
         cronStats.totalRuns++;
-        
+
         console.log(`🔄 Starting Pending Order Cancel cron job at ${moment().format('YYYY-MM-DD HH:mm:ss')}`);
 
         // Calculate cutoff time (24 hours ago)
@@ -195,7 +195,7 @@ mongoose
 
         cronStats.successfulRuns++;
         cronStats.lastSuccessfulRun = new Date();
-        
+
         console.log(`✅ Pending Order Cancel cron completed successfully`);
         console.log(`📊 Total orders cancelled: ${cronStats.ordersCancelled}`);
         console.log(`📊 Cron stats: ${cronStats.successfulRuns}/${cronStats.totalRuns} successful runs`);
@@ -206,7 +206,7 @@ mongoose
           await session.abortTransaction();
         }
         session.endSession();
-        
+
         cronStats.failedRuns++;
         console.error("❌ Pending Order Cancel cron job error:", error);
         console.error("❌ Stack trace:", error.stack);
@@ -223,14 +223,19 @@ mongoose
     process.exit(1);
   });
 
-// Graceful shutdown
-process.on('SIGINT', () => {
-  console.log('🟡 Received SIGINT. Graceful shutdown...');
-  mongoose.connection.close(() => {
+
+process.on('SIGINT', async () => {
+  try {
+    console.log('🟡 Received SIGINT. Graceful shutdown...');
+    await mongoose.connection.close();
     console.log('🔴 MongoDB connection closed.');
     process.exit(0);
-  });
+  } catch (err) {
+    console.error('Error during shutdown', err);
+    process.exit(1);
+  }
 });
+
 
 process.on('SIGTERM', () => {
   console.log('🟡 Received SIGTERM. Graceful shutdown...');

@@ -2804,55 +2804,6 @@ const updateOrderStatusByBuyer = async (req, res) => {
     const io = req.app.get("io");
     await emitSystemMessage(io, systemMessage, room, order.sellerId, buyerId);
 
-    // if (newStatus === ORDER_STATUS.CONFIRM_RECEIPT) {
-    //     const reviewPendingMessage = new ChatMessage({
-    //         chatRoom: room._id,
-    //         messageType: 'TEXT',
-    //         systemMeta: {
-    //             statusType: 'REVIEW',
-    //             status: 'PENDING',
-    //             orderId: order._id,
-    //             productId: order.items[0].productId,
-    //             title: 'Reviews Pending',
-    //             meta: createStandardizedChatMeta({
-    //                 orderNumber: order._id.toString(),
-    //                 totalAmount: order.grandTotal,
-    //                 amount: order.grandTotal,
-    //                 itemCount: order.items.length,
-    //                 sellerId: order.sellerId,
-    //                 buyerId: buyerId,
-    //                 orderStatus: newStatus,
-    //                 paymentStatus: order.paymentStatus,
-    //                 paymentMethod: order.paymentMethod
-    //             }),
-    //             actions: [
-    //                 {
-    //                     label: "Leave Review",
-    //                     url: `/order/${order._id}/review`,
-    //                     type: "primary"
-    //                 },
-    //                 {
-    //                     label: "View Order",
-    //                     url: `/order/${order._id}`,
-    //                     type: "secondary"
-    //                 }
-    //             ],
-    //             theme: 'info',
-    //             content: 'Reviews are pending. Both buyer and seller can now leave reviews for this completed transaction.'
-    //         }
-    //     });
-
-    //     await reviewPendingMessage.save();
-    //     await ChatRoom.findByIdAndUpdate(
-    //         room._id,
-    //         {
-    //             lastMessage: reviewPendingMessage._id,
-    //             updatedAt: new Date()
-    //         }
-    //     );
-    //     await emitSystemMessage(io, reviewPendingMessage, room, order.sellerId, buyerId);
-    // }
-
     // Send notification to seller about buyer action
     let notificationTitle = "";
     let notificationMessage = "";
