@@ -126,6 +126,7 @@ const notificationTranslations = {
     'New bid on Your Product': 'มีการประมูลใหม่ในสินค้าของคุณ',
     '{{userName}} bid on your auction "{{productTitle}}"': '{{userName}} ประมูลในการประมูล "{{productTitle}}" ของคุณ',
     'New Comment on Your Thread': 'ความคิดเห็นใหม่ในเธรดของคุณ',
+    'Someone commented on your thread': 'มีคนแสดงความคิดเห็นในเธรดของคุณ',
     'Products Associated with Your Thread': 'สินค้าที่เชื่อมโยงกับเธรดของคุณ',
     '{{userName}} associated {{count}} product(s) with your thread: {{products}}': '{{userName}} เชื่อมโยง {{count}} สินค้ากับเธรดของคุณ: {{products}}',
     

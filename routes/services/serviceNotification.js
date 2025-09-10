@@ -580,6 +580,52 @@ const getUserNotification = async (payload) => {
   }
 };
 
+/**
+ * Helper function to add language translation support to notification data
+ * This function can be used by any controller to ensure notifications are translated
+ * @param {Array|Object} notificationData - Notification data (array or single object)
+ * @returns {Array|Object} Notification data with translation support
+ */
+const addTranslationSupport = async (notificationData) => {
+  // Import translation utilities
+  const { translateNotification, extractNotificationVariables } = require('../../utils/notificationTranslations');
+  
+  // Helper function to process a single notification
+  const processNotification = async (notification) => {
+    if (!notification.recipientId) return notification;
+    
+    try {
+      // Fetch user's language preference
+      const userInfo = await User.findById(notification.recipientId).select("language");
+      const userLanguage = userInfo?.language || 'english';
+      
+      // Extract variables for translation
+      const variables = extractNotificationVariables(notification.message, notification.meta || {});
+      
+      // Translate title and message
+      const translatedTitle = translateNotification(notification.title, userLanguage, variables);
+      const translatedMessage = translateNotification(notification.message, userLanguage, variables);
+      
+      return {
+        ...notification,
+        title: translatedTitle,
+        message: translatedMessage
+      };
+    } catch (error) {
+      console.error('Translation error:', error);
+      return notification; // Return original if translation fails
+    }
+  };
+  
+  // Handle array of notifications
+  if (Array.isArray(notificationData)) {
+    return await Promise.all(notificationData.map(processNotification));
+  }
+  
+  // Handle single notification
+  return await processNotification(notificationData);
+};
+
 processQueue(notificationQueue, notificationProcessor);
 
 module.exports = {
@@ -593,4 +639,5 @@ module.exports = {
   notifyUserOnEvent,
   getUserNotification,
   notifyUserOnEventNonSession,
+  addTranslationSupport,
 };
