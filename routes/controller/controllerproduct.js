@@ -472,7 +472,7 @@ const addSellerProduct = async (req, res) => {
       }
     }
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       CONSTANTS_MSG.SUCCESS,
@@ -820,7 +820,7 @@ const updateSellerProduct = async (req, res) => {
       }
     }
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       200,
       res,
       "Product updated successfully",
@@ -930,7 +930,7 @@ const toggleProductDisable = async (req, res) => {
       }
     }
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       200,
       res,
       "Product disable status toggled successfully",
@@ -1101,7 +1101,7 @@ const showNormalProducts = async (req, res) => {
         filter.userId = { $in: matchedUserIds };
       } else {
         // If no users match, return empty
-        return apiSuccessRes(
+        return apiSuccessRes(req,
           HTTP_STATUS.OK,
           res,
           "Auction products fetched successfully",
@@ -1236,7 +1236,7 @@ const showNormalProducts = async (req, res) => {
         }
       }
 
-      return apiSuccessRes(
+      return apiSuccessRes(req,
         HTTP_STATUS.OK,
         res,
         "Products fetched successfully",
@@ -1313,7 +1313,7 @@ const showNormalProducts = async (req, res) => {
       }
     }
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Products fetched successfully", {
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Products fetched successfully", {
       pageNo: page,
       size: limit,
       total,
@@ -1491,7 +1491,7 @@ const showAuctionProducts = async (req, res) => {
         filter.userId = { $in: matchedUserIds };
       } else {
         // If no users match, return empty
-        return apiSuccessRes(
+        return apiSuccessRes(req,
           HTTP_STATUS.OK,
           res,
           "Auction products fetched successfully",
@@ -1651,7 +1651,7 @@ const showAuctionProducts = async (req, res) => {
         product.isLiked = likedProductIds.has(product._id.toString());
       });
 
-      return apiSuccessRes(
+      return apiSuccessRes(req,
         HTTP_STATUS.OK,
         res,
         "Auction products fetched successfully",
@@ -1783,7 +1783,7 @@ const showAuctionProducts = async (req, res) => {
         product.isLiked = likedProductIds.has(product._id.toString());
       });
 
-      return apiSuccessRes(
+      return apiSuccessRes(req,
         HTTP_STATUS.OK,
         res,
         "Auction products fetched successfully",
@@ -1912,7 +1912,7 @@ const showAuctionProducts = async (req, res) => {
       product.isLiked = likedProductIds.has(product._id.toString());
     });
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Auction products fetched successfully",
@@ -2030,7 +2030,7 @@ const getLimitedTimeDeals = async (req, res) => {
       product.totalBidsPlaced = bidsCountMap[product._id.toString()] || 0;
     });
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Limited time deals fetched successfully",
@@ -2523,7 +2523,7 @@ const fetchCombinedProducts = async (req, res) => {
       ...(subCategoryGroups.length && { subCategoryGroups }),
     };
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Products fetched successfully", {
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Products fetched successfully", {
       pageNo: page,
       size: limit,
       total: totalCount,
@@ -2672,7 +2672,7 @@ const fetchUserProducts = async (req, res) => {
         filter.userId = { $in: matchedUserIds };
       } else {
         // If no users match, return empty
-        return apiSuccessRes(
+        return apiSuccessRes(req,
           HTTP_STATUS.OK,
           res,
           "Auction products fetched successfully",
@@ -2741,7 +2741,7 @@ const fetchUserProducts = async (req, res) => {
       isNew: now - new Date(product.createdAt).getTime() <= ONE_DAY_MS,
     }));
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "User products fetched successfully",
@@ -2821,7 +2821,7 @@ const createHistory = async (req, res) => {
     .skip(skip)
     .limit(limit);
 
-  return apiSuccessRes(HTTP_STATUS.CREATED, res, "History updated", {
+  return apiSuccessRes(req,HTTP_STATUS.CREATED, res, "History updated", {
     pageNo: page,
     size: limit,
     total,
@@ -2872,7 +2872,7 @@ const trackProductView = async (req, res) => {
     // Increment product view count
     await SellProduct.findByIdAndUpdate(productId, { $inc: { viewCount: 1 } });
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Product view tracked");
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Product view tracked");
   } catch (error) {
     console.error("Track product view error:", error);
     return apiErrorRes(
@@ -2923,7 +2923,7 @@ const getViewHistory = async (req, res) => {
     // Filter out products that may have been deleted
     const validHistory = viewHistory.filter((item) => item.productId);
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "View history fetched", {
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "View history fetched", {
       pageNo: page,
       size: limit,
       total,
@@ -2948,7 +2948,7 @@ const clearAllHistory = async (req, res) => {
       { $set: { isDeleted: true } }
     );
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "All search history cleared");
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "All search history cleared");
   } catch (error) {
     console.error("clearAllHistory error:", error);
     return apiErrorRes(
@@ -2977,7 +2977,7 @@ const clearOneHistory = async (req, res) => {
       );
     }
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Search history item deleted");
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Search history item deleted");
   } catch (error) {
     console.error("clearOneHistory error:", error);
     return apiErrorRes(
@@ -3005,7 +3005,7 @@ const getSearchHistory = async (req, res) => {
       SearchHistory.countDocuments({ userId, isDeleted: false }),
     ]);
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Fetched search history", {
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Fetched search history", {
       pageNo: parseInt(pageNo),
       size: parseInt(size),
       total,
@@ -3353,7 +3353,7 @@ const getProduct = async (req, res) => {
 
     product.totalLike = totalLike;
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Product fetched successfully.",
@@ -3655,7 +3655,7 @@ const addComment = async (req, res) => {
       }
     }
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, saved);
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, saved);
   } catch (error) {
     console.error("Error in addComment:", error);
     return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
@@ -3715,7 +3715,7 @@ const getProductComment = async (req, res) => {
       totalReplies: replyCountMap[comment._id.toString()] || 0,
     }));
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Comments fetched successfully", {
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Comments fetched successfully", {
       pageNo: page,
       size: limit,
       total: totalCount,
@@ -3797,7 +3797,7 @@ const getCommentByParentId = async (req, res) => {
       data: enrichedReplies,
     };
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Replies fetched successfully",
@@ -3838,7 +3838,7 @@ const getDraftProducts = async (req, res) => {
       .limit(pageSize)
       .lean();
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Draft products fetched successfully.",
@@ -3918,7 +3918,7 @@ const deleteProduct = async (req, res) => {
       // Don't fail the main operation if Algolia fails
     }
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Product deleted successfully.");
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Product deleted successfully.");
   } catch (error) {
     return apiErrorRes(
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
@@ -3991,7 +3991,7 @@ const deleteProductDraft = async (req, res) => {
       // Don't fail the main operation if Algolia fails
     }
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Product deleted successfully.");
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Product deleted successfully.");
   } catch (error) {
     return apiErrorRes(
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
@@ -4014,7 +4014,7 @@ const trending = async (req, res) => {
     existing.isTrending = !existing.isTrending;
     await existing.save();
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, `Product updated successfully.`);
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, `Product updated successfully.`);
   } catch (error) {
     return apiErrorRes(
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
@@ -4030,7 +4030,7 @@ const updateAllTrending = async (req, res) => {
     const { updateAllTrendingStatus } = require("../services/serviceTrending");
     const result = await updateAllTrendingStatus();
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Trending status updated successfully",
@@ -4090,7 +4090,7 @@ const otherUserReview = async (req, res) => {
         ],
       })
       .lean();
-    return apiSuccessRes(HTTP_STATUS.OK, res, `ProductReview List`, {
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, `ProductReview List`, {
       pageNo,
       size,
       total: totalReviews,
@@ -4351,7 +4351,7 @@ const getProductsWithDraft = async (req, res) => {
       }),
     };
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Products fetched successfully",
@@ -4372,7 +4372,7 @@ const adminSearchProducts = async (req, res) => {
     const { q = "", limit = 10 } = req.query;
 
     if (!q || q.length < 2) {
-      return apiSuccessRes(HTTP_STATUS.OK, res, "Search results", []);
+      return apiSuccessRes(req,HTTP_STATUS.OK, res, "Search results", []);
     }
 
     const searchFilter = {
@@ -4391,7 +4391,7 @@ const adminSearchProducts = async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Products found", products);
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Products found", products);
   } catch (error) {
     console.error("Admin product search error:", error);
     return apiErrorRes(

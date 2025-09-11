@@ -430,7 +430,7 @@ const createOrder = async (req, res) => {
         }
       });
 
-      return apiSuccessRes(
+      return apiSuccessRes(req,
         HTTP_STATUS.CREATED,
         res,
         "Order placed successfully",
@@ -892,7 +892,7 @@ const initiateBeamPayment = async (req, res) => {
     const beamResponse = await createBeamPaymentLink(paymentData);
 
     if (beamResponse.success) {
-      return apiSuccessRes(
+      return apiSuccessRes(req,
         HTTP_STATUS.OK,
         res,
         "Payment link created successfully",
@@ -1235,7 +1235,7 @@ const originalPaymentCallback = async (req, res) => {
       await saveNotification(paymentNotifications);
     }
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Payment status updated", {
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Payment status updated", {
       orderId: order._id,
       paymentStatus: order.paymentStatus,
       orderStatus: order.status,
@@ -1612,7 +1612,7 @@ const getBoughtProducts = async (req, res) => {
       filteredOrders.push(order);
     }
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Bought products fetched successfully",
@@ -1823,7 +1823,7 @@ const previewOrder = async (req, res) => {
 
     const grandTotal = totalAmount + shippingCharge + buyerProtectionFee + tax;
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Order preview", {
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Order preview", {
       items: previewItems,
       address,
       totalAmount,
@@ -2095,7 +2095,7 @@ const getSoldProducts = async (req, res) => {
       total = filteredOrders.length;
     }
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Sold products fetched successfully",
@@ -2523,7 +2523,7 @@ const updateOrderStatusBySeller = async (req, res) => {
         await saveNotification(statusNotifications);
       }
 
-      return apiSuccessRes(
+      return apiSuccessRes(req,
         HTTP_STATUS.OK,
         res,
         "Order status updated successfully",
@@ -2875,7 +2875,7 @@ const updateOrderStatusByBuyer = async (req, res) => {
         "Order marked as received. Thank you for confirming receipt!";
     }
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, successMessage, {
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, successMessage, {
       orderId: order._id,
       status: order.status,
     });
@@ -3158,7 +3158,7 @@ const getOrderDetails = async (req, res) => {
       progressSteps: progressSteps,
     };
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Order details fetched",
@@ -3234,7 +3234,7 @@ const retryOrderPayment = async (req, res) => {
     }
 
     // Return order details needed for payment
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Order ready for payment retry", {
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Order ready for payment retry", {
       orderId: order._id,
       amount: order.grandTotal,
       items: order.items.map((item) => ({
@@ -3339,7 +3339,7 @@ const confirmreciptReview = async (req, res) => {
     if (!order) {
       return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Order not found");
     }
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Order details fetched", obj);
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Order details fetched", obj);
   } catch (err) {
     console.error("Retry payment error:", err);
     return apiErrorRes(
@@ -3472,7 +3472,7 @@ const addrequest = async (req, res) => {
         await saveNotification(withdrawalRequestNotifications);
       }
 
-      return apiSuccessRes(
+      return apiSuccessRes(req,
         HTTP_STATUS.CREATED,
         res,
         "Withdraw request added successfully",
@@ -3656,7 +3656,7 @@ const changeStatus = async (req, res) => {
       }
     });
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       `Withdraw request ${status} successfully`
@@ -3732,7 +3732,7 @@ const getWithdrawalInfo = async (req, res) => {
       }
       : null;
 
-    return apiSuccessRes(200, res, "Withdrawal info fetched successfully", {
+    return apiSuccessRes(req,200, res, "Withdrawal info fetched successfully", {
       walletBalance: Number(user.walletBalance),
       FreezWalletBalance: Number(user.FreezWalletBalance),
       withdrawalMethods,
@@ -3785,7 +3785,7 @@ const getAllWithdrawRequests = async (req, res) => {
       .limit(size)
       .lean();
 
-    return apiSuccessRes(200, res, "Withdrawal requests fetched successfully", {
+    return apiSuccessRes(req,200, res, "Withdrawal requests fetched successfully", {
       pageNo,
       size,
       totalPages: Math.ceil(total / size),
@@ -4061,7 +4061,7 @@ const getAllTransactionsForAdmin = async (req, res) => {
     const filteredTotal = formattedOrders.length;
     const totalPages = Math.ceil(filteredTotal / size);
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Transactions fetched successfully",
@@ -4284,7 +4284,7 @@ const getSellerPayoutCalculation = async (req, res) => {
 
     const netAmountAfterWithdrawalFee = finalAmounts.netAmount - withdrawalFee;
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Payout calculation fetched successfully",
@@ -4588,7 +4588,7 @@ const getAdminFinancialDashboard = async (req, res) => {
       { $sort: { date: 1 } },
     ]);
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Financial dashboard data fetched successfully",
@@ -4835,7 +4835,7 @@ const getProductFinancialDetails = async (req, res) => {
       });
     }
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Product financial details fetched successfully",
@@ -5057,7 +5057,7 @@ const getDetailedMoneyFlow = async (req, res) => {
       }, 0),
     };
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Detailed money flow fetched successfully",
@@ -5506,7 +5506,7 @@ const cancelOrderByBuyer = async (req, res) => {
     });
 
     // Return success response - UNCHANGED
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Order cancelled successfully",

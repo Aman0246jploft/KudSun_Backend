@@ -136,7 +136,7 @@ const placeBid = async (req, res) => {
 
         session.endSession();
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, 'Bid placed successfully', newBid);
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Bid placed successfully', newBid);
 
     } catch (err) {
         // await session.abortTransaction();
@@ -216,7 +216,7 @@ const productBidList = async (req, res) => {
             data: bids
         }
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, 'Bid list', obj);
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Bid list', obj);
 
 
 
@@ -287,7 +287,7 @@ const myBids = async (req, res) => {
             data: bids
         };
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Your bids", result);
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, "Your bids", result);
     } catch (err) {
         console.error("Error in myBids:", err);
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Internal server error");
@@ -354,7 +354,7 @@ const getBidInfo = async (req, res) => {
             biddingEndsAt: auctionEnd.toISOString(), // optional: full UTC timestamp
         };
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, 'Auction bid info', data);
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Auction bid info', data);
 
     } catch (err) {
         console.error("Error in getBidInfo:", err);

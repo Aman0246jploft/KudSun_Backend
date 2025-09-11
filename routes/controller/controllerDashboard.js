@@ -99,7 +99,7 @@ const getMonthlyAnalytics = async (req, res) => {
         };
 
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Monthly analytics fetched successfully", response);
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, "Monthly analytics fetched successfully", response);
     } catch (err) {
         console.error("Get monthly analytics error:", err);
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to fetch monthly analytics");
@@ -171,7 +171,7 @@ const getDashboardSummary = async (req, res) => {
             totalOrders
         };
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Dashboard summary fetched successfully", response);
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, "Dashboard summary fetched successfully", response);
     } catch (err) {
         console.error("Get dashboard summary error:", err);
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to fetch dashboard summary");
@@ -206,7 +206,7 @@ const getAvailableYears = async (req, res) => {
 
         const uniqueYears = [...new Set(allYears)].sort((a, b) => b - a);
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Available years fetched successfully", {
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, "Available years fetched successfully", {
             years: uniqueYears
         });
     } catch (err) {

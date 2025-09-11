@@ -51,7 +51,7 @@ const createOrUpdateCategory = async (req, res) => {
 
             await existingCategory.save();
 
-            return apiSuccessRes(HTTP_STATUS.OK, res, 'Category updated successfully', {
+            return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Category updated successfully', {
                 _id: existingCategory._id,
                 name: existingCategory.name,
                 image: existingCategory.image
@@ -80,7 +80,7 @@ const createOrUpdateCategory = async (req, res) => {
                 if (imageUrl) softDeleted.image = imageUrl;
                 await softDeleted.save();
 
-                return apiSuccessRes(HTTP_STATUS.OK, res, "Category restored successfully", {
+                return apiSuccessRes(req,HTTP_STATUS.OK, res, "Category restored successfully", {
                     _id: softDeleted._id,
                     name: softDeleted.name,
                     image: softDeleted.image,
@@ -91,7 +91,7 @@ const createOrUpdateCategory = async (req, res) => {
             const newCategory = new Category({ name: normalizedName, image: imageUrl });
             await newCategory.save();
 
-            return apiSuccessRes(HTTP_STATUS.CREATED, res, 'Category created successfully', {
+            return apiSuccessRes(req,HTTP_STATUS.CREATED, res, 'Category created successfully', {
                 _id: newCategory._id,
                 name: newCategory.name,
                 image: newCategory.image
@@ -143,7 +143,7 @@ const addOrUpdateSubCategory = async (req, res) => {
             if (req.body.isDeleted === true || req.body.isDeleted === 'true') {
                 subCategory.deleteOne(); // Mongoose subdocument deletion
                 await category.save();
-                return apiSuccessRes(HTTP_STATUS.OK, res, 'Subcategory deleted successfully');
+                return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Subcategory deleted successfully');
             }
 
             // Check if the new name is unique among other subcategories
@@ -160,7 +160,7 @@ const addOrUpdateSubCategory = async (req, res) => {
 
             await category.save();
 
-            return apiSuccessRes(HTTP_STATUS.OK, res, 'Subcategory updated successfully', {
+            return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Subcategory updated successfully', {
                 _id: subCategory._id,
                 name: subCategory.name,
                 image: subCategory.image,
@@ -183,7 +183,7 @@ const addOrUpdateSubCategory = async (req, res) => {
 
             const newSubCat = category.subCategories[category.subCategories.length - 1];
 
-            return apiSuccessRes(HTTP_STATUS.CREATED, res, 'Subcategory added successfully', {
+            return apiSuccessRes(req,HTTP_STATUS.CREATED, res, 'Subcategory added successfully', {
                 _id: newSubCat._id,
                 name: newSubCat.name,
                 image: newSubCat.image,
@@ -242,7 +242,7 @@ const addParameterToSubCategory = async (req, res) => {
             const uniqueValuesToAdd = newValues.filter(v => !existingValueSet.has(v.value));
 
             if (uniqueValuesToAdd.length === 0) {
-                return apiSuccessRes(HTTP_STATUS.OK, res, 'Parameter already up to date');
+                return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Parameter already up to date');
             }
 
             existingParam.values.push(...uniqueValuesToAdd);
@@ -256,7 +256,7 @@ const addParameterToSubCategory = async (req, res) => {
 
         await category.save();
 
-        return apiSuccessRes(HTTP_STATUS.CREATED, res, 'Parameter added/updated successfully', {
+        return apiSuccessRes(req,HTTP_STATUS.CREATED, res, 'Parameter added/updated successfully', {
             key: paramKey,
             addedValues: newValues.map(v => v.value)
         });
@@ -310,7 +310,7 @@ const updateParameterForSubCategory = async (req, res) => {
 
         await category.save();
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, 'Parameter updated successfully', {
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Parameter updated successfully', {
             key: parameter.key,
             values: parameter.values.map(v => v.value)
         });
@@ -362,14 +362,14 @@ const deleteParameterFromSubCategory = async (req, res) => {
             }
 
             await category.save();
-            return apiSuccessRes(HTTP_STATUS.OK, res, 'Value deleted from parameter');
+            return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Value deleted from parameter');
         }
 
         // Delete the entire parameter
         subCategory.parameters.splice(parameterIndex, 1);
         await category.save();
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, 'Parameter deleted successfully');
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Parameter deleted successfully');
 
     } catch (error) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
@@ -419,7 +419,7 @@ const addParameterValue = async (req, res) => {
 
         await categoryDoc.save();
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, 'Value added successfully', param.values);
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Value added successfully', param.values);
     } catch (error) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
@@ -462,7 +462,7 @@ const deleteParameterValue = async (req, res) => {
         param.values.splice(index, 1);
         await categoryDoc.save();
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, 'Value deleted successfully', param.values);
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Value deleted successfully', param.values);
     } catch (error) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
@@ -501,7 +501,7 @@ const deleteParameterValue = async (req, res) => {
 //         });
 
 
-//         return apiSuccessRes(HTTP_STATUS.OK, res, 'Category names fetched successfully', {
+//         return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Category names fetched successfully', {
 //             total,
 //             pageNo: parseInt(pageNo),
 //             size: limit,
@@ -547,7 +547,7 @@ const listCategoryNames = async (req, res) => {
             })
         });
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, 'Category names fetched successfully', {
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Category names fetched successfully', {
             total,
             pageNo: parseInt(pageNo),
             size: limit,
@@ -604,7 +604,7 @@ const listCategories = async (req, res) => {
 
         const paginatedCategories = filteredCategories.slice(skip, skip + parseInt(size));
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, 'Categories fetched successfully', {
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Categories fetched successfully', {
             total: filteredCategories.length,
             pageNo: parseInt(pageNo),
             size: parseInt(size),
@@ -656,7 +656,7 @@ const listCategoriesForAdmin = async (req, res) => {
 
         const paginatedCategories = filteredCategories.slice(skip, skip + parseInt(size));
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, 'Admin category list fetched successfully', {
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Admin category list fetched successfully', {
             total: filteredCategories.length,
             pageNo: parseInt(pageNo),
             size: parseInt(size),
@@ -702,7 +702,7 @@ const approveParameterValueByAdmin = async (req, res) => {
 
         await category.save();
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, 'Parameter value approved successfully', paramValue);
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Parameter value approved successfully', paramValue);
 
     } catch (error) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
@@ -740,7 +740,7 @@ const getSubCategoriesByCategoryId = async (req, res) => {
             }
         });
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, 'Subcategories fetched successfully', {
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Subcategories fetched successfully', {
             categoryId,
             total: subCategories.length,
             data: subCategories
@@ -786,7 +786,7 @@ const getSubCategoriesByCategoryId = async (req, res) => {
 //             };
 //         }).filter(param => param.values.length > 0); // optionally exclude params with no visible values
 
-//         return apiSuccessRes(HTTP_STATUS.OK, res, 'Parameters fetched successfully', {
+//         return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Parameters fetched successfully', {
 //             subCategoryId,
 //             parameters
 //         });
@@ -884,7 +884,7 @@ const getParametersBySubCategoryId = async (req, res) => {
         // Optionally, filter out parameters with no visible values for non-admins
         const finalParameters = isAdmin ? parameters : parameters.filter(p => p.values.length > 0);
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, 'Parameters fetched successfully', {
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Parameters fetched successfully', {
             subCategoryId,
             parameters: finalParameters
         });
@@ -929,7 +929,7 @@ const addUserParameterValue = async (req, res) => {
         const uniqueValuesToAdd = newValuesToAdd.filter(v => !existingValuesSet.has(v));
 
         if (uniqueValuesToAdd.length === 0) {
-            return apiSuccessRes(HTTP_STATUS.OK, res, 'No new values to add, all values already exist');
+            return apiSuccessRes(req,HTTP_STATUS.OK, res, 'No new values to add, all values already exist');
         }
 
         uniqueValuesToAdd.forEach(value => {
@@ -942,7 +942,7 @@ const addUserParameterValue = async (req, res) => {
 
         await category.save();
 
-        return apiSuccessRes(HTTP_STATUS.CREATED, res, 'User values added successfully', {
+        return apiSuccessRes(req,HTTP_STATUS.CREATED, res, 'User values added successfully', {
             key: paramKey,
             addedValues: uniqueValuesToAdd
         });
@@ -990,7 +990,7 @@ const addUserParameterAndValue = async (req, res) => {
             const uniqueValuesToAdd = trimmedValues.filter(val => !existingValuesSet.has(val));
 
             if (uniqueValuesToAdd.length === 0) {
-                return apiSuccessRes(HTTP_STATUS.OK, res, 'No new values to add, all already exist');
+                return apiSuccessRes(req,HTTP_STATUS.OK, res, 'No new values to add, all already exist');
             }
 
             uniqueValuesToAdd.forEach(value => {
@@ -1018,7 +1018,7 @@ const addUserParameterAndValue = async (req, res) => {
 
         await category.save();
 
-        return apiSuccessRes(HTTP_STATUS.CREATED, res, 'Parameter and values added successfully', {
+        return apiSuccessRes(req,HTTP_STATUS.CREATED, res, 'Parameter and values added successfully', {
             key: paramKey,
             addedValues: trimmedValues
         });
@@ -1076,7 +1076,7 @@ const acceptParameterValueByAdmin = async (req, res) => {
 
         await category.save();
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, 'Parameter value accepted by admin successfully', {
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Parameter value accepted by admin successfully', {
             key: paramKey,
             value: targetValue
         });
@@ -1126,7 +1126,7 @@ const rejectParameterValueByAdmin = async (req, res) => {
         parameter.values.splice(index, 1);
         await category.save();
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, 'Parameter value rejected and removed successfully', {
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Parameter value rejected and removed successfully', {
             key: paramKey,
             value: targetValue
         });
@@ -1169,7 +1169,7 @@ const deleteCategory = async (req, res) => {
         category.isDeleted = true;
         await category.save();
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Category deleted successfully");
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, "Category deleted successfully");
     } catch (error) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }

@@ -156,7 +156,7 @@ const uploadfile = async (req, res) => {
         profileImageUrl = imageResult;
       }
     }
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       CONSTANTS_MSG.SUCCESS,
@@ -225,7 +225,7 @@ const requestOtp = async (req, res) => {
     await tempUser.save();
   }
 
-  return apiSuccessRes(HTTP_STATUS.OK, res, "OTP sent", {
+  return apiSuccessRes(req,HTTP_STATUS.OK, res, "OTP sent", {
     phoneNumber,
     step: 1,
   });
@@ -242,7 +242,7 @@ const verifyOtp = async (req, res) => {
   tempUser.step = 2;
   await tempUser.save();
 
-  return apiSuccessRes(HTTP_STATUS.OK, res, "OTP verified", {
+  return apiSuccessRes(req,HTTP_STATUS.OK, res, "OTP verified", {
     phoneNumber,
     step: 2,
   });
@@ -289,7 +289,7 @@ const resendOtp = async (req, res) => {
 
   // Send OTP via SMS/email here...
 
-  return apiSuccessRes(HTTP_STATUS.OK, res, "OTP resent successfully", {
+  return apiSuccessRes(req,HTTP_STATUS.OK, res, "OTP resent successfully", {
     phoneNumber,
     step: tempUser.step,
   });
@@ -315,7 +315,7 @@ const saveEmailPassword = async (req, res) => {
   tempUser.step = 3;
   await tempUser.save();
 
-  return apiSuccessRes(HTTP_STATUS.OK, res, "Email and password saved", {
+  return apiSuccessRes(req,HTTP_STATUS.OK, res, "Email and password saved", {
     phoneNumber,
     step: 3,
   });
@@ -337,7 +337,7 @@ const saveCategories = async (req, res) => {
   tempUser.step = 4;
   await tempUser.save();
 
-  return apiSuccessRes(HTTP_STATUS.OK, res, "Categories saved", {
+  return apiSuccessRes(req,HTTP_STATUS.OK, res, "Categories saved", {
     phoneNumber,
     step: 4,
   });
@@ -348,7 +348,7 @@ const getOnboardingStep = async (req, res) => {
   const user = await User.findOne({ phoneNumber });
   if (!user) return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
 
-  return apiSuccessRes(HTTP_STATUS.OK, res, "Current onboarding step", {
+  return apiSuccessRes(req,HTTP_STATUS.OK, res, "Current onboarding step", {
     phoneNumber,
     step: user.step,
   });
@@ -413,7 +413,7 @@ const completeRegistration = async (req, res) => {
 
   await TempUser.deleteOne({ phoneNumber });
 
-  return apiSuccessRes(HTTP_STATUS.OK, res, "Registration completed", {
+  return apiSuccessRes(req,HTTP_STATUS.OK, res, "Registration completed", {
     token,
     ...user.toJSON(),
   });
@@ -485,7 +485,7 @@ const loginStepOne = async (req, res) => {
     // No token needed here, frontend just proceeds with step 2
     let obj = { token: null, ...user.toJSON(), detectedType };
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "User verified, proceed with login",
@@ -582,7 +582,7 @@ const loginStepTwoPassword = async (req, res) => {
         isDisable: false,
       });
 
-      return apiSuccessRes(
+      return apiSuccessRes(req,
         HTTP_STATUS.OK,
         res,
         "Login successful",
@@ -624,7 +624,7 @@ const loginStepTwoPassword = async (req, res) => {
 
       // console.log(`OTP for ${user.phoneNumber}: ${otp}`);
 
-      return apiSuccessRes(HTTP_STATUS.OK, res, "OTP sent");
+      return apiSuccessRes(req,HTTP_STATUS.OK, res, "OTP sent");
     }
 
     return apiErrorRes(
@@ -720,7 +720,7 @@ const loginStepThreeVerifyOtp = async (req, res) => {
       isDisable: false,
     });
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "OTP verified, login successful",
@@ -771,7 +771,7 @@ const resendLoginOtp = async (req, res) => {
 
     // console.log(`Resent OTP to ${user.phoneNumber}: ${newOtp}`);
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "OTP resent successfully");
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "OTP resent successfully");
   } catch (err) {
     return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
   }
@@ -938,7 +938,7 @@ const appleSignIn = async (req, res) => {
       totalFollowing,
     };
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       `Sign-in successful`,
@@ -1128,7 +1128,7 @@ const googleSignIn = async (req, res) => {
       totalFollowing,
     };
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Sign-in successful",
@@ -1192,7 +1192,7 @@ const follow = async (req, res) => {
     });
     if (followData.statusCode === CONSTANTS.SUCCESS) {
       await Follow.findByIdAndDelete(followData.data._id);
-      return apiSuccessRes(
+      return apiSuccessRes(req,
         HTTP_STATUS.OK,
         res,
         "Unfollowed successfully",
@@ -1260,7 +1260,7 @@ const follow = async (req, res) => {
       // Don't fail the main operation if notifications fail
     }
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.CREATED,
       res,
       "Followed successfully",
@@ -1285,7 +1285,7 @@ const threadlike = async (req, res) => {
     });
     if (threadData.statusCode === CONSTANTS.SUCCESS) {
       await ThreadLike.findByIdAndDelete(threadData.data._id);
-      return apiSuccessRes(
+      return apiSuccessRes(req,
         HTTP_STATUS.OK,
         res,
         "Thread DisLike successfully",
@@ -1297,7 +1297,7 @@ const threadlike = async (req, res) => {
       threadId: toObjectId(threadId),
     });
     await newFollow.save();
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.CREATED,
       res,
       "Thread Like successfully",
@@ -1322,7 +1322,7 @@ const productLike = async (req, res) => {
     });
     if (threadData.statusCode === CONSTANTS.SUCCESS) {
       await ProductLike.findByIdAndDelete(threadData.data._id);
-      return apiSuccessRes(
+      return apiSuccessRes(req,
         HTTP_STATUS.OK,
         res,
         "Product DisLike successfully",
@@ -1334,7 +1334,7 @@ const productLike = async (req, res) => {
       productId: toObjectId(productId),
     });
     await newFollow.save();
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.CREATED,
       res,
       "Product Like successfully",
@@ -1375,7 +1375,7 @@ const getLikedProducts = async (req, res) => {
     const likedProductIds = likedDocs.map((doc) => doc.productId);
 
     if (likedProductIds.length === 0) {
-      return apiSuccessRes(HTTP_STATUS.OK, res, "No liked products found", {
+      return apiSuccessRes(req,HTTP_STATUS.OK, res, "No liked products found", {
         products: [],
         total: 0,
         pageNo: page,
@@ -1517,7 +1517,7 @@ const getLikedProducts = async (req, res) => {
       })
     );
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Liked products fetched successfully",
@@ -1565,7 +1565,7 @@ const getLikedThreads = async (req, res) => {
     const likedThreadIds = likedThreadDocs.map((doc) => doc.threadId);
 
     if (likedThreadIds.length === 0) {
-      return apiSuccessRes(HTTP_STATUS.OK, res, "No liked threads found", {
+      return apiSuccessRes(req,HTTP_STATUS.OK, res, "No liked threads found", {
         threads: [],
         pagination: { total: 0, page, limit, totalPages: 0 },
       });
@@ -1731,7 +1731,7 @@ const getLikedThreads = async (req, res) => {
       size: limit,
     };
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Liked threads fetched successfully",
@@ -1776,7 +1776,7 @@ const requestResetOtp = async (req, res) => {
 
     // Optionally send OTP via SMS here...
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "OTP sent for password reset");
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "OTP sent for password reset");
   } catch (error) {
     return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
   }
@@ -1814,7 +1814,7 @@ const verifyResetOtp = async (req, res) => {
     // Remove OTP key so it can't be reused
     await removeKey(`reset:${phoneNumber}`);
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "OTP verified successfully");
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "OTP verified successfully");
   } catch (error) {
     return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
   }
@@ -1853,7 +1853,7 @@ const resetPassword = async (req, res) => {
 
     await removeKey(`reset-verified:${phoneNumber}`);
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Password has been reset successfully"
@@ -1887,7 +1887,7 @@ const resendResetOtp = async (req, res) => {
 
     // Optionally send OTP via SMS here...
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "OTP resent successfully");
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "OTP resent successfully");
   } catch (error) {
     return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
   }
@@ -1923,7 +1923,7 @@ const requestResetOtpByEmail = async (req, res) => {
     // TODO: Send OTP via email (e.g., sendEmailOtp(email, otp))
     // console.log(`[RESET OTP] OTP (to be sent): ${otp}`);
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "OTP sent for password reset");
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "OTP sent for password reset");
   } catch (error) {
     console.error(`[RESET OTP] Error:`, error);
     return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
@@ -1966,7 +1966,7 @@ const verifyResetOtpByEmail = async (req, res) => {
     await removeKey(`reset:${email}`);
     // console.log(`[VERIFY OTP] OTP verified successfully for email: ${email}`);
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "OTP verified successfully");
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "OTP verified successfully");
   } catch (error) {
     console.error(`[VERIFY OTP] Error:`, error);
     return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
@@ -2010,7 +2010,7 @@ const resetPasswordByEmail = async (req, res) => {
     await removeKey(`reset-verified:${email}`);
 
     // console.log(`[RESET PASSWORD] Password reset successful for email: ${email}`);
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Password has been reset successfully"
@@ -2047,7 +2047,7 @@ const resendResetOtpByEmail = async (req, res) => {
     // TODO: Send OTP via email (e.g., sendEmailOtp(email, otp))
     // console.log(`[RESEND OTP] OTP (to be sent): ${otp}`);
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "OTP resent successfully");
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "OTP resent successfully");
   } catch (error) {
     console.error(`[RESEND OTP] Error:`, error);
     return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
@@ -2108,7 +2108,7 @@ const login = async (req, res) => {
         email: userCheckEmail.data.email,
       };
 
-      return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, output);
+      return apiSuccessRes(req,HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, output);
     } else {
       return apiErrorRes(
         HTTP_STATUS.BAD_REQUEST,
@@ -2185,7 +2185,7 @@ const loginAsGuest = async (req, res) => {
         ? userCheckEmail.data.toObject()
         : userCheckEmail?.data;
 
-      return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, {
+      return apiSuccessRes(req,HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, {
         ...userData,
         ...output,
       });
@@ -2320,7 +2320,7 @@ const getProfile = async (req, res) => {
       walletBalance: parseFloat(Number(user?.walletBalance).toFixed(2)),
     };
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, output);
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, output);
   } catch (error) {
     return apiErrorRes(
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
@@ -2428,7 +2428,7 @@ const updateProfile = async (req, res) => {
       // Don't fail the main operation if Algolia fails
     }
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Profile updated successfully",
@@ -2478,7 +2478,7 @@ const requestPhoneNumberUpdateOtp = async (req, res) => {
 
     await setKeyWithTime(`verify-update:${userId}:${phoneNumber}`, otp, 5);
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "OTP sent successfully");
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "OTP sent successfully");
   } catch (error) {
     return apiErrorRes(
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
@@ -2534,7 +2534,7 @@ const verifyPhoneNumberUpdateOtp = async (req, res) => {
 
     await removeKey(redisKey);
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Phone number updated successfully",
@@ -2600,7 +2600,7 @@ const resendPhoneNumberUpdateOtp = async (req, res) => {
 
     await setKeyWithTime(redisKey, newOtp, 5); // 5-minute TTL
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "OTP resent successfully");
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "OTP resent successfully");
   } catch (error) {
     return apiErrorRes(
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
@@ -2648,7 +2648,7 @@ const requestEmailUpdateOtp = async (req, res) => {
       5
     );
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "OTP sent to email successfully");
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "OTP sent to email successfully");
   } catch (error) {
     return apiErrorRes(
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
@@ -2703,7 +2703,7 @@ const verifyEmailUpdateOtp = async (req, res) => {
     // Clean up OTP
     await removeKey(redisKey);
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Email updated successfully",
@@ -2763,7 +2763,7 @@ const resendEmailUpdateOtp = async (req, res) => {
 
     await setKeyWithTime(redisKey, newOtp, 5); // 5-minute TTL
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "OTP resent to email successfully"
@@ -2983,7 +2983,7 @@ const userList = async (req, res) => {
       { $limit: parseInt(size, 10) },
     ]);
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Users fetched successfully", {
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Users fetched successfully", {
       total,
       pageNo: parseInt(pageNo, 10),
       size: parseInt(size, 10),
@@ -3064,7 +3064,7 @@ const getDashboardSummary = async (req, res) => {
       liveAuctions,
     };
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Dashboard summary fetched successfully",
@@ -3116,7 +3116,7 @@ const adminChangeUserPassword = async (req, res) => {
     user.password = newPassword;
     await user.save();
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Password updated successfully");
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Password updated successfully");
   } catch (error) {
     console.error("Error in adminChangeUserPassword:", error);
     return apiErrorRes(
@@ -3182,7 +3182,7 @@ const getOtherProfile = async (req, res) => {
         isDisable: false,
       }),
     ]);
-    return apiSuccessRes(HTTP_STATUS.OK, res, "User Info", {
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "User Info", {
       _id: user._id,
       userName: user.userName,
       profileImage: user.profileImage,
@@ -3287,7 +3287,7 @@ const getFollowingList = async (req, res) => {
       });
     }
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Following list", result);
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Following list", result);
   } catch (error) {
     console.error("Error in getFollowingList:", error);
     return apiErrorRes(
@@ -3370,7 +3370,7 @@ const getFollowersList = async (req, res) => {
       });
     }
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Followers list", result);
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Followers list", result);
   } catch (error) {
     console.error("Error in getFollowersList:", error);
     return apiErrorRes(
@@ -3428,7 +3428,7 @@ const updatePassword = async (req, res) => {
     user.data.password = newPassword;
     await user?.data?.save();
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Password updated successfully");
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Password updated successfully");
   } catch (err) {
     console.error("updatePassword error:", err);
     return apiErrorRes(
@@ -3570,11 +3570,11 @@ const blockUser = async (req, res) => {
     const existingBlock = await BlockUser.findOne({ blockBy, userId });
     if (existingBlock) {
       await BlockUser.deleteOne({ _id: existingBlock._id });
-      return apiSuccessRes(HTTP_STATUS.OK, res, "User unblocked successfully.");
+      return apiSuccessRes(req,HTTP_STATUS.OK, res, "User unblocked successfully.");
     } else {
       const newBlock = new BlockUser({ blockBy, userId });
       await newBlock.save();
-      return apiSuccessRes(HTTP_STATUS.OK, res, "User blocked successfully.");
+      return apiSuccessRes(req,HTTP_STATUS.OK, res, "User blocked successfully.");
     }
   } catch (err) {
     console.error("updatePassword error:", err);
@@ -3645,7 +3645,7 @@ const getBlockedUsers = async (req, res) => {
       };
     });
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Blocked users fetched successfully",
@@ -3701,7 +3701,7 @@ const getUserNotificationSettings = async (req, res) => {
         }
       );
     }
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Notification List", user);
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Notification List", user);
   } catch (err) {
     return res
       .status(HTTP_STATUS.INTERNAL_SERVER_ERROR)
@@ -3742,7 +3742,7 @@ const updateUserNotificationSettings = async (req, res) => {
         .status(HTTP_STATUS.NOT_FOUND)
         .json(apiErrorRes("User not found"));
     }
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Notification settings updated successfully",

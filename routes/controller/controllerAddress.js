@@ -51,7 +51,7 @@ const createAddress = async (req, res) => {
         const address = new UserAddress(value);
         await address.save();
 
-        return apiSuccessRes(HTTP_STATUS.CREATED, res, "Address created", address);
+        return apiSuccessRes(req,HTTP_STATUS.CREATED, res, "Address created", address);
     } catch (err) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
     }
@@ -77,7 +77,7 @@ const getById = async (req, res) => {
             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Address not found");
         }
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Address details fetched", address);
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, "Address details fetched", address);
     } catch (err) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
     }
@@ -122,7 +122,7 @@ const updateAddress = async (req, res) => {
         Object.assign(address, value);
         await address.save();
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Address updated", address);
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, "Address updated", address);
     } catch (err) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
     }
@@ -152,7 +152,7 @@ const getList = async (req, res) => {
             UserAddress.countDocuments(filter)
         ]);
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Addresses fetched", {
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, "Addresses fetched", {
             total,
             pageNo,
             size,

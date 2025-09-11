@@ -119,7 +119,7 @@ const universalSearch = async (req, res) => {
             }
         }
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Search results", {
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, "Search results", {
             query: q,
             type,
             pageNo: parseInt(pageNo),
@@ -197,7 +197,7 @@ const searchProductsAPI = async (req, res) => {
             isLiked: false // Will be populated separately if needed
         }));
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Products found", {
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, "Products found", {
             query: q,
             pageNo: parseInt(pageNo),
             size: limit,
@@ -264,7 +264,7 @@ const searchThreadsAPI = async (req, res) => {
             _id: hit.objectID
         }));
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Threads found", {
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, "Threads found", {
             query: q,
             pageNo: parseInt(pageNo),
             size: limit,
@@ -306,7 +306,7 @@ const getSearchSuggestions = async (req, res) => {
         } = req.query;
 
         if (!q || q.length < 2) {
-            return apiSuccessRes(HTTP_STATUS.OK, res, "Suggestions", []);
+            return apiSuccessRes(req,HTTP_STATUS.OK, res, "Suggestions", []);
         }
 
         let suggestions = [];
@@ -409,7 +409,7 @@ const getSearchSuggestions = async (req, res) => {
             // suggestions = { products: productSuggestions, threads: threadSuggestions, users: userSuggestions };
         }
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Search suggestions", suggestions);
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, "Search suggestions", suggestions);
 
     } catch (error) {
         console.error('Search suggestions error:', error);
@@ -437,7 +437,7 @@ const trackProductView = async (req, res) => {
             await trackSearchHistory(userId, `viewed:${productId}`, 'product_view');
         }
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Product view tracked");
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, "Product view tracked");
 
     } catch (error) {
         console.error('Track product view error:', error);

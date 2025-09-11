@@ -74,7 +74,7 @@ const addShipping = async (req, res) => {
         await session.commitTransaction();
         session.endSession();
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, 'Shipping information saved', shipping);
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Shipping information saved', shipping);
 
     } catch (err) {
         await session.abortTransaction();

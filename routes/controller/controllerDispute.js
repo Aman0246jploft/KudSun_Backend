@@ -298,7 +298,7 @@ const createDispute = async (req, res) => {
 
     await saveNotification(disputeNotifications);
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.CREATED,
       res,
       "Dispute raised successfully",
@@ -446,7 +446,7 @@ const sellerRespond = async (req, res) => {
 
     await saveNotification(sellerResponseNotifications);
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Response recorded", dispute);
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Response recorded", dispute);
   } catch (err) {
     return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
   }
@@ -632,7 +632,7 @@ const adminDecision = async (req, res) => {
 
     await saveNotification(adminDecisionNotifications);
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Dispute resolved", dispute);
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Dispute resolved", dispute);
   } catch (err) {
     return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
   }
@@ -661,7 +661,7 @@ const updateStatus = async (req, res) => {
       actor: req.user.userId,
     });
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Status updated", dispute);
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Status updated", dispute);
   } catch (err) {
     return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
   }
@@ -709,7 +709,7 @@ const adminListAll = async (req, res) => {
       Dispute.countDocuments(filter),
     ]);
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "All disputes fetched", {
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "All disputes fetched", {
       pageNo,
       size,
       total,
@@ -785,7 +785,7 @@ const disputeByOrderId = async (req, res) => {
       history: groupedHistory,
     };
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Dispute details fetched successfully",

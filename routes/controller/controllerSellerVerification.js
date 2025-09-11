@@ -111,7 +111,7 @@ const create = async (req, res) => {
         //     is_Id_verified: false,
         // });
         
-        return apiSuccessRes(HTTP_STATUS.CREATED, res, 'Seller verification submitted successfully', result);
+        return apiSuccessRes(req,HTTP_STATUS.CREATED, res, 'Seller verification submitted successfully', result);
 
     } catch (err) {
         console.error('createSellerVerification error:', err);
@@ -223,7 +223,7 @@ const getSellerRequests = async (req, res) => {
                 .limit(limit)
         ]);
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, 'Seller requests fetched successfully', {
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Seller requests fetched successfully', {
             totalCount,
             pageNo: page,
             size: limit,

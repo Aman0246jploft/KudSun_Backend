@@ -178,7 +178,7 @@ const addThread = async (req, res) => {
         }
       }
     }
-    return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, saved);
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, saved);
   } catch (error) {
     return apiErrorRes(
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
@@ -313,7 +313,7 @@ const updateThread = async (req, res) => {
       }
     }
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, updated);
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, updated);
   } catch (error) {
     return apiErrorRes(
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
@@ -371,7 +371,7 @@ const deleteThread = async (req, res) => {
       }
     }
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       `${draftMode ? "Draft" : "Thread"} deleted successfully.`
@@ -417,7 +417,7 @@ const changeStatus = async (req, res) => {
     existing.isDisable = !existing.isDisable;
     await existing.save();
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       `${draftMode ? "Draft" : "Thread"} updated successfully.`
@@ -444,7 +444,7 @@ const trending = async (req, res) => {
     existing.isTrending = !existing.isTrending;
     await existing.save();
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, `Thread updated successfully.`);
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, `Thread updated successfully.`);
   } catch (error) {
     return apiErrorRes(
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
@@ -462,7 +462,7 @@ const updateAllThreadTrending = async (req, res) => {
     } = require("../services/serviceThreadTrending");
     const result = await updateAllThreadTrendingStatus();
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Thread trending status updated successfully",
@@ -534,7 +534,7 @@ const getThreadByUserId = async (req, res) => {
       },
     ]);
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       CONSTANTS_MSG.SUCCESS,
@@ -569,7 +569,7 @@ const closeThread = async (req, res) => {
     }
     thread.isClosed = !thread.isClosed;
     await thread.save();
-    return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, thread);
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, thread);
   } catch (error) {
     console.error(error);
     return apiErrorRes(
@@ -905,7 +905,7 @@ const addComment = async (req, res) => {
       }
     }
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, saved);
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, saved);
   } catch (error) {
     console.error("Error in addComment:", error);
     return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
@@ -980,7 +980,7 @@ const addComment = async (req, res) => {
 
 //             // If no users match, prevent product match
 //             if (filteredUserIds.length === 0) {
-//                 return apiSuccessRes(HTTP_STATUS.OK, res, 'No matching products found', {
+//                 return apiSuccessRes(req,HTTP_STATUS.OK, res, 'No matching products found', {
 //                     total: 0,
 //                     size,
 //                     products: []
@@ -1019,7 +1019,7 @@ const addComment = async (req, res) => {
 //             };
 //         }));
 
-//         return apiSuccessRes(HTTP_STATUS.OK, res, 'Associated products fetched successfully', {
+//         return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Associated products fetched successfully', {
 //             total,
 //             size,
 //             products: productWithBidInfo
@@ -1090,7 +1090,7 @@ const associatedProductByThreadId = async (req, res) => {
       const filteredUserIds = users.map((u) => u._id.toString());
 
       if (filteredUserIds.length === 0) {
-        return apiSuccessRes(
+        return apiSuccessRes(req,
           HTTP_STATUS.OK,
           res,
           "No matching products found",
@@ -1139,7 +1139,7 @@ const associatedProductByThreadId = async (req, res) => {
     );
 
     // Step 6: Send response (unchanged structure)
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Associated products fetched successfully",
@@ -1215,7 +1215,7 @@ const getThreadComments = async (req, res) => {
       totalReplies: replyCountMap[comment?._id.toString()] || 0,
     }));
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Comments fetched successfully", {
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Comments fetched successfully", {
       pageNo: page,
       size: limit,
       total: totalCount,
@@ -1291,7 +1291,7 @@ const getCommentByParentId = async (req, res) => {
       data: enrichedReplies,
     };
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Replies fetched successfully",
@@ -1363,7 +1363,7 @@ const getThreads = async (req, res) => {
     if (blockedUserIds.length > 0) {
       if (filters.userId) {
         if (blockedUserIds.includes(filters.userId.toString())) {
-          return apiSuccessRes(
+          return apiSuccessRes(req,
             HTTP_STATUS.OK,
             res,
             "Products fetched successfully",
@@ -1408,7 +1408,7 @@ const getThreads = async (req, res) => {
         !filters.userId ||
         (Array.isArray(filters.userId) && filters.userId.length === 0)
       ) {
-        return apiSuccessRes(
+        return apiSuccessRes(req,
           HTTP_STATUS.OK,
           res,
           "Products fetched successfully",
@@ -1600,7 +1600,7 @@ const getThreads = async (req, res) => {
       });
     }
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Products fetched successfully", {
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Products fetched successfully", {
       pageNo: page,
       size: limit,
       total: total,
@@ -2146,7 +2146,7 @@ const getThreadById = async (req, res) => {
       delete thread.categoryId.subCategories;
     }
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Thread fetched successfully", {
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Thread fetched successfully", {
       ...thread,
       totalFollowers: followerCount || 0,
       totalComments: commentCount || 0,
@@ -2206,7 +2206,7 @@ const getFollowedUsersThreads = async (req, res) => {
     const followedUserIds = follows.map((f) => f.userId);
 
     if (followedUserIds.length === 0) {
-      return apiSuccessRes(HTTP_STATUS.OK, res, "No followed users", {
+      return apiSuccessRes(req,HTTP_STATUS.OK, res, "No followed users", {
         pageNo: page,
         size: limit,
         total: 0,
@@ -2339,7 +2339,7 @@ const getFollowedUsersThreads = async (req, res) => {
 
     const total = await Thread.countDocuments(filters);
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Followed users' threads fetched successfully",
@@ -2384,7 +2384,7 @@ const getRecentFollowedUsers = async (req, res) => {
     const followedUserIds = activeFollowedUsers.map((user) => user?._id);
 
     if (!followedUserIds.length) {
-      return apiSuccessRes(HTTP_STATUS.OK, res, "No followed users.", {
+      return apiSuccessRes(req,HTTP_STATUS.OK, res, "No followed users.", {
         pageNo,
         size,
         total: 0,
@@ -2583,7 +2583,7 @@ const getRecentFollowedUsers = async (req, res) => {
       return user;
     });
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Recent followed users fetched successfully.",
@@ -2634,7 +2634,7 @@ const getDraftThreads = async (req, res) => {
       ThreadDraft.countDocuments(query),
     ]);
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, {
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, {
       total,
       pageNo,
       size,
@@ -2716,7 +2716,7 @@ const selectProductForAssociation = async (req, res) => {
       return prod;
     });
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Products fetched successfully", {
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Products fetched successfully", {
       products: finalProducts,
       total: totalCount,
       pageNo: parseInt(pageNo),

@@ -61,7 +61,7 @@ const create = async (req, res) => {
 
         const result = await AccountVerification.create(payload);
 
-        return apiSuccessRes(HTTP_STATUS.CREATED, res, 'Seller verification submitted successfully', result);
+        return apiSuccessRes(req,HTTP_STATUS.CREATED, res, 'Seller verification submitted successfully', result);
 
     } catch (err) {
         console.error('createSellerVerification error:', err);
@@ -87,7 +87,7 @@ const getVerificationIdList = async (req, res) => {
             SellerVerification.countDocuments({ isDeleted: false })
         ]);
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, 'Verification list fetched successfully', {
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Verification list fetched successfully', {
             verificiationList: data,
             total: totalCount,
             pageNo,
@@ -122,7 +122,7 @@ const changeVerificationStatus = async (req, res) => {
             is_Id_verified: status === 'Approved'
         });
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, `Verification status updated to ${status}`, verification);
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, `Verification status updated to ${status}`, verification);
     } catch (error) {
         console.error('changeVerificationStatus error:', error);
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Something went wrong');
@@ -178,7 +178,7 @@ const getMyVerificationList = async (req, res) => {
             .lean();
 
         if (!verification) {
-            return apiSuccessRes(
+            return apiSuccessRes(req,
                 HTTP_STATUS.OK,
                 res,
                 'No verification found',
@@ -186,7 +186,7 @@ const getMyVerificationList = async (req, res) => {
             );
         }
 
-        return apiSuccessRes(
+        return apiSuccessRes(req,
             HTTP_STATUS.OK,
             res,
             'My verification retrieved successfully',

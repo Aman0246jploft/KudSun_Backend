@@ -19,7 +19,7 @@ const { uploadImageCloudinary, deleteImageCloudinary } = require('../../utils/cl
 //             AppSetting.findOne({ key: "Term_Of_Service" }),
 //             AppSetting.findOne({ key: "Privacy_Policy" }),
 //         ]);
-//         return apiSuccessRes(HTTP_STATUS.OK, res, "Policy fetched successfully", { term, policy });
+//         return apiSuccessRes(req,HTTP_STATUS.OK, res, "Policy fetched successfully", { term, policy });
 //     } catch (error) {
 //         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
 //     }
@@ -37,7 +37,7 @@ const termAndPolicy = async (req, res) => {
       auctionRule: settings.find(setting => setting.key === "Auction_rules") || null,
     };
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Policy fetched successfully", result);
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Policy fetched successfully", result);
   } catch (error) {
     return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
   }
@@ -55,7 +55,7 @@ const auctionRule = async (req, res) => {
     const Auction_rules = allSettings.find(setting => setting.key === "Auction_rules");
 
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Auction_rules fetched successfully", { Auction_rules });
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Auction_rules fetched successfully", { Auction_rules });
   } catch (error) {
     return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
   }
@@ -92,7 +92,7 @@ const getFAQs = async (req, res) => {
       _id: faq?._id
     }));
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "FAQs fetched successfully", { faqs });
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "FAQs fetched successfully", { faqs });
   } catch (error) {
     return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
   }
@@ -107,7 +107,7 @@ const getVideo = async (req, res) => {
     const Auction_rules = allSettings.find(setting => setting.key === "11videoXYZ");
 
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "VideoUrl", Auction_rules);
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "VideoUrl", Auction_rules);
   } catch (error) {
     return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
   }
@@ -139,7 +139,7 @@ const updateVideo = async (req, res) => {
       { new: true, upsert: true }
     );
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Video updated successfully", updatedSetting);
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Video updated successfully", updatedSetting);
   } catch (error) {
     return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
   }

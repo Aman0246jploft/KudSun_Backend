@@ -33,7 +33,7 @@ const getList = async (req, res) => {
             data
         };
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, 'Bank list', obj);
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Bank list', obj);
 
     } catch (err) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);

@@ -35,7 +35,7 @@ const create = async (req, res) => {
             image: imageUrls
         });
 
-        return apiSuccessRes(HTTP_STATUS.CREATED, res, "Reported", newReport);
+        return apiSuccessRes(req,HTTP_STATUS.CREATED, res, "Reported", newReport);
     } catch (err) {
         console.error('Error creating report:', err);
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, CONSTANTS_MSG.INTERNAL_SERVER_ERROR);
@@ -74,7 +74,7 @@ const softDelete = async (req, res) => {
         report.isDisable = true;
         await report.save();
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, 'Report soft-deleted successfully', null);
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Report soft-deleted successfully', null);
     } catch (err) {
         console.error('Error during soft delete:', err);
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, CONSTANTS_MSG.INTERNAL_SERVER_ERROR);
@@ -109,7 +109,7 @@ const getReports = async (req, res) => {
             reports,
         };
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Reports fetched successfully", response);
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, "Reports fetched successfully", response);
     } catch (err) {
         console.error('Error fetching reports:', err);
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, CONSTANTS_MSG.INTERNAL_SERVER_ERROR);
@@ -148,7 +148,7 @@ const getReportsByUserId = async (req, res) => {
             reports,
         };
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Reports fetched successfully", response);
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, "Reports fetched successfully", response);
     } catch (err) {
         console.error('Error fetching reports by userId:', err);
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, CONSTANTS_MSG.INTERNAL_SERVER_ERROR);

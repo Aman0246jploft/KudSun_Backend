@@ -59,7 +59,7 @@ const list = async (req, res) => {
             Notification.countDocuments(filter)
         ]);
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, 'Notifications fetched successfully', {
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Notifications fetched successfully', {
             pageNo: page,
             size: limit,
             total,

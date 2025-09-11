@@ -25,7 +25,7 @@ const globalCrudController = {
 
       const modelData = await createDocument(model, payload);
       if (modelData.statusCode === CONSTANTS.SUCCESS)
-        return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, modelData.data);
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, modelData.data);
       return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, modelData.data, modelData.data);
     } catch (error) {
       return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error.message);
@@ -37,7 +37,7 @@ const globalCrudController = {
       const { id } = req.body;
       const modelData = await getDocumentById(model, id);
       if (modelData.statusCode === CONSTANTS.SUCCESS)
-        return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, modelData.data);
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, modelData.data);
 
       return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, CONSTANTS_MSG.NOT_FOUND, CONSTANTS.DATA_NULL);
     } catch (error) {
@@ -59,7 +59,7 @@ const globalCrudController = {
         }
 
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, modelData.data);
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, modelData.data);
       }
 
       return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, CONSTANTS_MSG.FAILED, CONSTANTS.DATA_NULL);
@@ -81,7 +81,7 @@ const globalCrudController = {
             console.error(`❌ Algolia soft delete error for user ${id}:`, err);
           }
         }
-        return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, modelData.data);
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, modelData.data);
       }
 
       return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, CONSTANTS_MSG.FAILED, CONSTANTS.DATA_NULL);
@@ -102,7 +102,7 @@ const globalCrudController = {
             console.error(`❌ Algolia soft delete error for user ${id}:`, err);
           }
         }
-        return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, modelData.data);
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, modelData.data);
       }
 
       return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, CONSTANTS_MSG.FAILED, CONSTANTS.DATA_NULL);
@@ -159,7 +159,7 @@ const globalCrudController = {
 
       const modelData = await getAllDocuments(model, options);
       if (modelData.statusCode === CONSTANTS.SUCCESS)
-        return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, modelData.data);
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, modelData.data);
 
       return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, CONSTANTS_MSG.FAILED, CONSTANTS.DATA_NULL);
     } catch (error) {
@@ -185,7 +185,7 @@ const globalCrudController = {
 
   //     const modelData = await getAllDocuments(model, options);
   //     if (modelData.statusCode === CONSTANTS.SUCCESS)
-  //       return apiSuccessRes(HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, modelData.data);
+  //       return apiSuccessRes(req,HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, modelData.data);
 
   //     return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, CONSTANTS_MSG.FAILED, CONSTANTS.DATA_NULL);
   //   } catch (error) {

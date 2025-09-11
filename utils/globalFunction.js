@@ -12,7 +12,7 @@ const resultDb = (statusCode, data = null) => {
   };
 }
 
-const apiSuccessRes = async(statusCode = 200, res, message = CONSTANTS.DATA_NULL, data = CONSTANTS.DATA_NULL, code = CONSTANTS.ERROR_CODE_ZERO, error = CONSTANTS.ERROR_FALSE, token, currentDate) => {
+const apiSuccessRes = async(req,statusCode = 200, res, message = CONSTANTS.DATA_NULL, data = CONSTANTS.DATA_NULL, code = CONSTANTS.ERROR_CODE_ZERO, error = CONSTANTS.ERROR_FALSE, token, currentDate) => {
 
 
 
@@ -41,7 +41,7 @@ const apiSuccessRes = async(statusCode = 200, res, message = CONSTANTS.DATA_NULL
   });
 }
 
-const apiErrorRes = async(statusCode = 200, res, message = CONSTANTS.DATA_NULL, data = CONSTANTS.DATA_NULL, code = CONSTANTS.ERROR_CODE_ONE, error = CONSTANTS.ERROR_TRUE) => {
+const apiErrorRes = async(req,statusCode = 200, res, message = CONSTANTS.DATA_NULL, data = CONSTANTS.DATA_NULL, code = CONSTANTS.ERROR_CODE_ONE, error = CONSTANTS.ERROR_TRUE) => {
 
 
     let messages = message;

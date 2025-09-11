@@ -23,7 +23,7 @@ const getListById = async (req, res) => {
       isDeleted: false,
       isDisable: false,
     }).sort({ value: 1 });
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Products fetched successfully",
@@ -47,7 +47,7 @@ const getParent = async (req, res) => {
       isDeleted: false,
       isDisable: false,
     }).sort({ value: 1 });
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Products fetched successfully",
@@ -94,7 +94,7 @@ const all = async (req, res) => {
       };
     });
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "All locations fetched successfully",
@@ -139,7 +139,7 @@ const update = async (req, res) => {
 
     await location.save();
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Location updated successfully",

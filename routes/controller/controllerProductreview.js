@@ -384,7 +384,7 @@ const createOrUpdateReview = async (req, res) => {
       // await saveNotification(reviewNotifications);
     }
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Review saved successfully", {
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Review saved successfully", {
       review,
     });
   } catch (err) {
@@ -475,7 +475,7 @@ const getUserReviews = async (req, res) => {
       updatedAt: review.updatedAt,
     }));
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "User reviews fetched successfully",
@@ -582,7 +582,7 @@ const getReviewsAboutUser = async (req, res) => {
       updatedAt: review.updatedAt,
     }));
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Reviews about user fetched successfully",
@@ -792,7 +792,7 @@ const getReviewersList = async (req, res) => {
       // }))
     }));
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Reviewers list fetched successfully",
@@ -1085,7 +1085,7 @@ const getProductReviews = async (req, res) => {
             sellerReviews: 0,
           };
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Product reviews fetched successfully",

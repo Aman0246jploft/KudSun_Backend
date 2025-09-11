@@ -39,7 +39,7 @@ const createAddress = async (req, res) => {
         const address = new UserLocation(value);
         await address.save();
 
-        return apiSuccessRes(HTTP_STATUS.CREATED, res, "Address created", address);
+        return apiSuccessRes(req,HTTP_STATUS.CREATED, res, "Address created", address);
     } catch (err) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
     }
@@ -84,7 +84,7 @@ const updateAddress = async (req, res) => {
         Object.assign(address, value);
         await address.save();
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Address updated", address);
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, "Address updated", address);
     } catch (err) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
     }
@@ -100,7 +100,7 @@ const getList = async (req, res) => {
             isDeleted: false
         }).sort({ createdAt: -1 });
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Address list fetched", addresses);
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, "Address list fetched", addresses);
     } catch (err) {
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
     }

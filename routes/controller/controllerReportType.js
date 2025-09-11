@@ -37,7 +37,7 @@ const getReports = async (req, res) => {
             data,
         };
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Reports fetched successfully", response);
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, "Reports fetched successfully", response);
     } catch (err) {
         console.error('Error fetching reports:', err);
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);

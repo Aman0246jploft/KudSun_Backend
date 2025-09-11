@@ -37,7 +37,7 @@ const create = async (req, res) => {
             ...obj
         });
         await contactUs.save();
-        return apiSuccessRes(HTTP_STATUS.CREATED, res, 'Message submitted successfully', { contactUs });
+        return apiSuccessRes(req,HTTP_STATUS.CREATED, res, 'Message submitted successfully', { contactUs });
     } catch (error) {   
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
@@ -77,7 +77,7 @@ const sendReply = async (req, res) => {
             await contactSubmission.save();
         }
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, 'Reply sent successfully', {
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Reply sent successfully', {
             emailMessageId: emailResult.messageId,
             sentTo: contactSubmission.contact
         });

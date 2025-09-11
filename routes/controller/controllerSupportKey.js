@@ -21,7 +21,7 @@ const all = async (req, res) => {
 
         const locations = await Supportkey.find({ isDeleted: false, isDisable: false }).sort({ order: 1 });
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "All locations fetched successfully", locations);
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, "All locations fetched successfully", locations);
 
     } catch (error) {
         console.error("all error:", error);

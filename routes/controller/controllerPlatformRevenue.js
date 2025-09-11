@@ -104,7 +104,7 @@ const getPlatformRevenue = async (req, res) => {
             }))
         };
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Platform revenue analytics fetched successfully", response);
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, "Platform revenue analytics fetched successfully", response);
     } catch (err) {
         console.error("Get platform revenue error:", err);
         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to fetch platform revenue");
@@ -155,7 +155,7 @@ const getRevenueTransactions = async (req, res) => {
             .limit(limit)
             .lean();
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Revenue transactions fetched successfully", {
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, "Revenue transactions fetched successfully", {
             pageNo: parseInt(pageNo),
             size: parseInt(size),
             total,
@@ -244,7 +244,7 @@ const getRevenueSummary = async (req, res) => {
             { $sort: { '_id.date': 1 } }
         ]);
 
-        return apiSuccessRes(HTTP_STATUS.OK, res, "Revenue summary fetched successfully", {
+        return apiSuccessRes(req,HTTP_STATUS.OK, res, "Revenue summary fetched successfully", {
             todayRevenue: todayRevenue[0]?.total || 0,
             monthlyRevenue: monthlyRevenue[0]?.total || 0,
             revenueByType: revenueByType.reduce((acc, curr) => {

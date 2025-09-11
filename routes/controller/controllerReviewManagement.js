@@ -245,7 +245,7 @@ const getAdminReviews = async (req, res) => {
     // Calculate pagination info
     const totalPages = Math.ceil(totalRecords / limitNum);
 
-    return apiSuccessRes(HTTP_STATUS.OK, res, "Reviews fetched successfully", {
+    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Reviews fetched successfully", {
       reviews,
       pagination: {
         page: pageNum,
@@ -403,7 +403,7 @@ const getAdminReviewDetails = async (req, res) => {
       return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Review not found");
     }
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Review details fetched successfully",
@@ -465,7 +465,7 @@ const deleteAdminReview = async (req, res) => {
 
       await session.commitTransaction();
 
-      return apiSuccessRes(
+      return apiSuccessRes(req,
         HTTP_STATUS.OK,
         res,
         "Review deleted successfully and ratings recalculated",
@@ -613,7 +613,7 @@ const getReviewFilterOptions = async (req, res) => {
       },
     ]);
 
-    return apiSuccessRes(
+    return apiSuccessRes(req,
       HTTP_STATUS.OK,
       res,
       "Filter options fetched successfully",
