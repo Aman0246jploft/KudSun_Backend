@@ -11,9 +11,45 @@ const resultDb = (statusCode, data = null) => {
   };
 }
 
-const apiSuccessRes = (statusCode = 200, res, message = CONSTANTS.DATA_NULL, data = CONSTANTS.DATA_NULL, code = CONSTANTS.ERROR_CODE_ZERO, error = CONSTANTS.ERROR_FALSE, token, currentDate) => {
-  return res.status(200 || statusCode).json({
-    message: message,
+// const apiSuccessRes = (statusCode = 200, res, message = CONSTANTS.DATA_NULL, data = CONSTANTS.DATA_NULL, code = CONSTANTS.ERROR_CODE_ZERO, error = CONSTANTS.ERROR_FALSE, token, currentDate) => {
+//   return res.status(200 || statusCode).json({
+//     message: message,
+//     responseCode: statusCode,
+//     // code: code,
+//     status: !error,
+//     data: data,
+//     token: token,
+//     currentDate
+//   });
+// }
+
+
+
+
+const apiSuccessRes = async (
+  statusCode = 200,
+  req,
+  res,
+  message = CONSTANTS.DATA_NULL,
+  data = CONSTANTS.DATA_NULL,
+  code = CONSTANTS.ERROR_CODE_ZERO,
+  error = CONSTANTS.ERROR_FALSE,
+  token,
+  currentDate
+) => {
+  let messages = message;
+
+  try {
+    if (req?.user?.userId) {
+      const lan = await getUserLanguage(req.user.userId); // fetch user language
+      messages = await translateText(message, lan);
+    }
+  } catch (err) {
+    console.error("Translation error:", err.message);
+  }
+
+  return res.status(statusCode || 200).json({
+    message: messages,
     responseCode: statusCode,
     // code: code,
     status: !error,
@@ -21,17 +57,54 @@ const apiSuccessRes = (statusCode = 200, res, message = CONSTANTS.DATA_NULL, dat
     token: token,
     currentDate
   });
-}
+};
 
-const apiErrorRes = (statusCode = 200, res, message = CONSTANTS.DATA_NULL, data = CONSTANTS.DATA_NULL, code = CONSTANTS.ERROR_CODE_ONE, error = CONSTANTS.ERROR_TRUE) => {
-  return res.status(200 || statusCode).json({
-    message: message,
+
+
+
+// const apiErrorRes = (statusCode = 200, res, message = CONSTANTS.DATA_NULL, data = CONSTANTS.DATA_NULL, code = CONSTANTS.ERROR_CODE_ONE, error = CONSTANTS.ERROR_TRUE) => {
+//   return res.status(200 || statusCode).json({
+//     message: message,
+//     responseCode: statusCode,
+//     // code: code,
+//     status: !error,
+//     data: data
+//   });
+// }
+
+
+
+const apiErrorRes = async (
+  statusCode = 200,
+  req,
+  res,
+  message = CONSTANTS.DATA_NULL,
+  data = CONSTANTS.DATA_NULL,
+  code = CONSTANTS.ERROR_CODE_ONE,
+  error = CONSTANTS.ERROR_TRUE
+) => {
+  let messages = message;
+
+  try {
+    if (req?.user?.userId) {
+      const lan = await getUserLanguage(req.user.userId);
+      messages = await translateText(message, lan);
+    }
+  } catch (err) {
+    console.error("Translation error:", err.message);
+  }
+
+  return res.status(statusCode || 200).json({
+    message: messages,
     responseCode: statusCode,
     // code: code,
     status: !error,
     data: data
   });
-}
+};
+
+
+
 
 function generateKey(length = CONSTANTS.VERIFICATION_TOKEN_LENGTH) {
   var key = "";
