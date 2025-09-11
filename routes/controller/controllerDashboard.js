@@ -102,7 +102,7 @@ const getMonthlyAnalytics = async (req, res) => {
         return apiSuccessRes(req,HTTP_STATUS.OK, res, "Monthly analytics fetched successfully", response);
     } catch (err) {
         console.error("Get monthly analytics error:", err);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to fetch monthly analytics");
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to fetch monthly analytics");
     }
 };
 
@@ -174,7 +174,7 @@ const getDashboardSummary = async (req, res) => {
         return apiSuccessRes(req,HTTP_STATUS.OK, res, "Dashboard summary fetched successfully", response);
     } catch (err) {
         console.error("Get dashboard summary error:", err);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to fetch dashboard summary");
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to fetch dashboard summary");
     }
 };
 
@@ -211,7 +211,7 @@ const getAvailableYears = async (req, res) => {
         });
     } catch (err) {
         console.error("Get available years error:", err);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to fetch available years");
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to fetch available years");
     }
 };
 

@@ -16,7 +16,7 @@ const create = async (req, res) => {
     try {
         const userId = req.user?.userId;
         if (!userId) {
-            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, 'Unauthorized');
+            return apiErrorRes(req,HTTP_STATUS.UNAUTHORIZED, res, 'Unauthorized');
         }
 
         const { legalFullName, idNumber } = req.body;
@@ -33,10 +33,10 @@ const create = async (req, res) => {
         // Case: existing record but no new docs
         if (existing) {
             if (existing.verificationStatus === 'Approved') {
-                return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'You are already verified');
+                return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'You are already verified');
             }
             if (existing.verificationStatus === 'Pending') {
-                return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Your verification is under process');
+                return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'Your verification is under process');
             }
         }
 
@@ -46,7 +46,7 @@ const create = async (req, res) => {
         // let idDocumentBackUrl = idBackFile ? await uploadImageCloudinary(idBackFile, 'seller-verification') : null;
 
         if (!idDocumentFrontUrl || !selfieWithIdUrl) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'All documents are required to submit verification');
+            return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'All documents are required to submit verification');
         }
 
         const payload = {
@@ -65,7 +65,7 @@ const create = async (req, res) => {
 
     } catch (err) {
         console.error('createSellerVerification error:', err);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Something went wrong');
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Something went wrong');
     }
 };
 
@@ -96,7 +96,7 @@ const getVerificationIdList = async (req, res) => {
         });
     } catch (err) {
         console.error('getAllVerifications error:', err);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Something went wrong');
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Something went wrong');
     }
 }
 
@@ -106,12 +106,12 @@ const changeVerificationStatus = async (req, res) => {
         const { status } = req.body; // 'Approved' or 'Rejected'
 
         if (!['Approved', 'Rejected'].includes(status)) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Invalid status');
+            return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'Invalid status');
         }
 
         const verification = await AccountVerification.findById(id);
         if (!verification) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Verification request not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Verification request not found');
         }
 
         verification.verificationStatus = status;
@@ -125,7 +125,7 @@ const changeVerificationStatus = async (req, res) => {
         return apiSuccessRes(req,HTTP_STATUS.OK, res, `Verification status updated to ${status}`, verification);
     } catch (error) {
         console.error('changeVerificationStatus error:', error);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Something went wrong');
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Something went wrong');
     }
 };
 
@@ -195,7 +195,7 @@ const getMyVerificationList = async (req, res) => {
 
     } catch (err) {
         console.error('getMyVerificationList error:', err);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Something went wrong');
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Something went wrong');
     }
 };
 

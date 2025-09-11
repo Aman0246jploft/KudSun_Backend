@@ -107,7 +107,7 @@ const getPlatformRevenue = async (req, res) => {
         return apiSuccessRes(req,HTTP_STATUS.OK, res, "Platform revenue analytics fetched successfully", response);
     } catch (err) {
         console.error("Get platform revenue error:", err);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to fetch platform revenue");
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to fetch platform revenue");
     }
 };
 
@@ -164,7 +164,7 @@ const getRevenueTransactions = async (req, res) => {
         });
     } catch (err) {
         console.error("Get revenue transactions error:", err);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to fetch revenue transactions");
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to fetch revenue transactions");
     }
 };
 
@@ -258,7 +258,7 @@ const getRevenueSummary = async (req, res) => {
         });
     } catch (err) {
         console.error("Get revenue summary error:", err);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to fetch revenue summary");
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || "Failed to fetch revenue summary");
     }
 };
 

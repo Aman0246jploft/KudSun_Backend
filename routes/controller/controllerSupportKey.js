@@ -25,7 +25,7 @@ const all = async (req, res) => {
 
     } catch (error) {
         console.error("all error:", error);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Something went wrong");
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Something went wrong");
     }
 };
 

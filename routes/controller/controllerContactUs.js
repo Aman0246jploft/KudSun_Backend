@@ -39,7 +39,7 @@ const create = async (req, res) => {
         await contactUs.save();
         return apiSuccessRes(req,HTTP_STATUS.CREATED, res, 'Message submitted successfully', { contactUs });
     } catch (error) {   
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
 
@@ -50,13 +50,13 @@ const sendReply = async (req, res) => {
         // Find the contact us submission
         const contactSubmission = await ContactUs.findById(contactUsId);
         if (!contactSubmission) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Contact submission not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Contact submission not found');
         }
 
         // Validate email format
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(contactSubmission.contact)) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Invalid email address in contact submission');
+            return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'Invalid email address in contact submission');
         }
 
         // Send email reply
@@ -68,7 +68,7 @@ const sendReply = async (req, res) => {
         });
 
         if (!emailResult.success) {
-            return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, `Failed to send email: ${emailResult.error}`);
+            return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, `Failed to send email: ${emailResult.error}`);
         }
 
         // Mark the contact submission as read if not already
@@ -82,7 +82,7 @@ const sendReply = async (req, res) => {
             sentTo: contactSubmission.contact
         });
     } catch (error) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
 

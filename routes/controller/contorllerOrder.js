@@ -133,7 +133,7 @@ const createOrder = async (req, res) => {
       const sellerIds = new Set();
 
       if (!Array.isArray(items) || items.length === 0) {
-        return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid order data");
+        return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Invalid order data");
       }
 
       const address = await UserAddress.findOne({
@@ -141,7 +141,7 @@ const createOrder = async (req, res) => {
         _id: toObjectId(addressId),
       });
       if (!address) {
-        return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Address not found");
+        return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "Address not found");
       }
 
       const activeOrderStatuses = [
@@ -170,7 +170,7 @@ const createOrder = async (req, res) => {
             }
           }
         }
-        return apiErrorRes(
+        return apiErrorRes(req,
           HTTP_STATUS.CONFLICT,
           res,
           `Order already placed for product(s): ${Array.from(
@@ -202,7 +202,7 @@ const createOrder = async (req, res) => {
 
         if (!product) {
           await session.abortTransaction();
-          return apiErrorRes(
+          return apiErrorRes(req,
             HTTP_STATUS.NOT_FOUND,
             res,
             `Product not found or unavailable: ${item.productId}`
@@ -211,7 +211,7 @@ const createOrder = async (req, res) => {
 
         const seller = await User.findOne({ _id: product.userId });
         if (!seller || seller.isDeleted || seller.isDisable) {
-          return apiErrorRes(
+          return apiErrorRes(req,
             HTTP_STATUS.BAD_REQUEST,
             res,
             `Seller of product ${product.title} is deleted or disabled`
@@ -222,7 +222,7 @@ const createOrder = async (req, res) => {
 
         if (product.userId.toString() === userId.toString()) {
           await session.abortTransaction();
-          return apiErrorRes(
+          return apiErrorRes(req,
             HTTP_STATUS.BAD_REQUEST,
             res,
             `You cannot purchase your own product: ${product.title}`
@@ -237,7 +237,7 @@ const createOrder = async (req, res) => {
           const { auctionSettings = {} } = product;
           if (auctionSettings.isBiddingOpen) {
             await session.abortTransaction();
-            return apiErrorRes(
+            return apiErrorRes(req,
               HTTP_STATUS.BAD_REQUEST,
               res,
               `Bidding is still open for: ${product.title}`
@@ -248,7 +248,7 @@ const createOrder = async (req, res) => {
             moment().isBefore(auctionSettings.biddingEndsAt)
           ) {
             await session.abortTransaction();
-            return apiErrorRes(
+            return apiErrorRes(req,
               HTTP_STATUS.BAD_REQUEST,
               res,
               `Bidding period hasn't ended yet for: ${product.title}`
@@ -262,7 +262,7 @@ const createOrder = async (req, res) => {
 
           if (!winningBid) {
             await session.abortTransaction();
-            return apiErrorRes(
+            return apiErrorRes(req,
               HTTP_STATUS.BAD_REQUEST,
               res,
               `You have not won the auction for: ${product.title}`
@@ -273,7 +273,7 @@ const createOrder = async (req, res) => {
             winningBid.amount < auctionSettings.reservePrice
           ) {
             await session.abortTransaction();
-            return apiErrorRes(
+            return apiErrorRes(req,
               HTTP_STATUS.BAD_REQUEST,
               res,
               `Winning bid for ${product.title} does not meet the reserve price`
@@ -447,7 +447,7 @@ const createOrder = async (req, res) => {
         continue; // Retry the transaction
       }
       console.error("Order creation error:", err);
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.INTERNAL_SERVER_ERROR,
         res,
         err.message || "Failed to place order"
@@ -860,7 +860,7 @@ const initiateBeamPayment = async (req, res) => {
     console.log("Order found:", order);
 
     if (!order) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.NOT_FOUND,
         res,
         "Order not found or already paid"
@@ -908,7 +908,7 @@ const initiateBeamPayment = async (req, res) => {
         beamResponse.error,
         beamResponse.details
       );
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Failed to create payment link",
@@ -917,7 +917,7 @@ const initiateBeamPayment = async (req, res) => {
     }
   } catch (error) {
     console.error("Beam payment initiation error:", error);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Failed to initiate payment"
@@ -1023,7 +1023,7 @@ const originalPaymentCallback = async (req, res) => {
 
   const { error, value } = schema.validate(req.body);
   if (error) {
-    return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, error.details[0].message);
+    return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, error.details[0].message);
   }
 
   console.log("value", value);
@@ -1041,12 +1041,12 @@ const originalPaymentCallback = async (req, res) => {
 
     if (!order) {
       await session.abortTransaction();
-      return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Order not found");
+      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "Order not found");
     }
 
     if (order.paymentStatus === PAYMENT_STATUS.COMPLETED) {
       await session.abortTransaction();
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Payment already completed"
@@ -1058,7 +1058,7 @@ const originalPaymentCallback = async (req, res) => {
       paymentStatus === PAYMENT_STATUS.COMPLETED
     ) {
       await session.abortTransaction();
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Payment cannot be marked as success after failure"
@@ -1243,7 +1243,7 @@ const originalPaymentCallback = async (req, res) => {
   } catch (err) {
     await session.abortTransaction();
     console.error("Payment callback error:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Failed to update payment status"
@@ -1382,7 +1382,7 @@ const getBoughtProducts = async (req, res) => {
   try {
     let userId = req.query.userId || req.user.userId;
     if (!userId) {
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "userId is required");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "userId is required");
     }
 
     const pageNo = Math.max(1, parseInt(req.query.pageNo) || 1);
@@ -1625,7 +1625,7 @@ const getBoughtProducts = async (req, res) => {
     );
   } catch (err) {
     console.error("Get Bought Product Error:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       err.message || "Failed to get bought products",
@@ -1647,7 +1647,7 @@ const previewOrder = async (req, res) => {
     }
 
     if (!Array.isArray(items) || items.length === 0) {
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid order items");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Invalid order items");
     }
     const address = await UserAddress.findOne({
       userId,
@@ -1659,7 +1659,7 @@ const previewOrder = async (req, res) => {
 
     // const address = await UserAddress.findOne({ userId, isActive: true, _id: toObjectId(addressId) });
     // if (!address) {
-    //     return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Address not found');
+    //     return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Address not found');
     // }
 
     const productIds = items.map((i) => toObjectId(i.productId));
@@ -1682,7 +1682,7 @@ const previewOrder = async (req, res) => {
         .lean();
 
       if (!product) {
-        return apiErrorRes(
+        return apiErrorRes(req,
           HTTP_STATUS.NOT_FOUND,
           res,
           `Product not found or unavailable: ${item.productId}`
@@ -1696,7 +1696,7 @@ const previewOrder = async (req, res) => {
         ])
         .lean();
       if (!seller || seller.isDeleted || seller.isDisable) {
-        return apiErrorRes(
+        return apiErrorRes(req,
           HTTP_STATUS.BAD_REQUEST,
           res,
           `Seller of product ${product.title} is deleted or disabled`
@@ -1704,7 +1704,7 @@ const previewOrder = async (req, res) => {
       }
 
       if (product.userId.toString() === userId.toString()) {
-        return apiErrorRes(
+        return apiErrorRes(req,
           HTTP_STATUS.BAD_REQUEST,
           res,
           `You cannot purchase your own product: ${product.title}`
@@ -1719,7 +1719,7 @@ const previewOrder = async (req, res) => {
         const { auctionSettings = {} } = product;
 
         if (auctionSettings.isBiddingOpen) {
-          return apiErrorRes(
+          return apiErrorRes(req,
             HTTP_STATUS.BAD_REQUEST,
             res,
             `Bidding is still open for: ${product.title}`
@@ -1730,7 +1730,7 @@ const previewOrder = async (req, res) => {
           auctionSettings.biddingEndsAt &&
           moment().isBefore(auctionSettings.biddingEndsAt)
         ) {
-          return apiErrorRes(
+          return apiErrorRes(req,
             HTTP_STATUS.BAD_REQUEST,
             res,
             `Bidding period hasn't ended yet for: ${product.title}`
@@ -1744,7 +1744,7 @@ const previewOrder = async (req, res) => {
         });
 
         if (!winningBid) {
-          return apiErrorRes(
+          return apiErrorRes(req,
             HTTP_STATUS.BAD_REQUEST,
             res,
             `You have not won the auction for: ${product.title}`
@@ -1755,7 +1755,7 @@ const previewOrder = async (req, res) => {
           auctionSettings.reservePrice &&
           winningBid.amount < auctionSettings.reservePrice
         ) {
-          return apiErrorRes(
+          return apiErrorRes(req,
             HTTP_STATUS.BAD_REQUEST,
             res,
             `Winning bid for ${product.title} does not meet the reserve price`
@@ -1836,7 +1836,7 @@ const previewOrder = async (req, res) => {
     });
   } catch (err) {
     console.error("Order preview error:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       err.message || "Failed to preview order"
@@ -1849,7 +1849,7 @@ const getSoldProducts = async (req, res) => {
   try {
     const sellerId = req.user?.userId;
     if (!sellerId) {
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Seller ID is required");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Seller ID is required");
     }
 
     const pageNo = Math.max(1, parseInt(req.query.pageNo) || 1);
@@ -2108,7 +2108,7 @@ const getSoldProducts = async (req, res) => {
     );
   } catch (err) {
     console.error("Get Sold Products Error:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       err.message || "Failed to get sold products",
@@ -2136,7 +2136,7 @@ const updateOrderStatusBySeller = async (req, res) => {
     let { status: newStatus } = req.body;
 
     if (!newStatus) {
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "status is Required");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "status is Required");
     }
 
     const order = await Order.findOne({ _id: orderId, sellerId })
@@ -2144,7 +2144,7 @@ const updateOrderStatusBySeller = async (req, res) => {
       .populate("userId");
 
     if (!order) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.NOT_FOUND,
         res,
         "Order not found for this seller"
@@ -2157,7 +2157,7 @@ const updateOrderStatusBySeller = async (req, res) => {
     const productImage = firstProduct?.productImages?.[0] || "";
 
     if (currentStatus === newStatus) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Order is already in this status"
@@ -2200,7 +2200,7 @@ const updateOrderStatusBySeller = async (req, res) => {
     }
 
     if (!allowedTransitions.includes(newStatus)) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         `Cannot move order from ${currentStatus} to ${newStatus}`
@@ -2210,7 +2210,7 @@ const updateOrderStatusBySeller = async (req, res) => {
     // console.log("hasNonLocalPickup",hasNonLocalPickup)
 
     if (newStatus === ORDER_STATUS.SHIPPED && !hasNonLocalPickup) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Shipping step not allowed for orders with only local‑pickup products"
@@ -2227,7 +2227,7 @@ const updateOrderStatusBySeller = async (req, res) => {
       };
 
       if (!carrierId) {
-        return apiErrorRes(
+        return apiErrorRes(req,
           HTTP_STATUS.BAD_REQUEST,
           res,
           "CarrierId is required for shipping"
@@ -2542,7 +2542,7 @@ const updateOrderStatusBySeller = async (req, res) => {
     }
   } catch (err) {
     console.error("Update order status error:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       err.message || "Failed to update order status"
@@ -2557,7 +2557,7 @@ const updateOrderStatusByBuyer = async (req, res) => {
     let { status: newStatus } = req.body;
 
     if (!newStatus) {
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Status is required");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Status is required");
     }
 
     const order = await Order.findOne({ _id: orderId, userId: buyerId })
@@ -2565,7 +2565,7 @@ const updateOrderStatusByBuyer = async (req, res) => {
       .populate("sellerId");
 
     if (!order) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.NOT_FOUND,
         res,
         "Order not found for this buyer"
@@ -2579,7 +2579,7 @@ const updateOrderStatusByBuyer = async (req, res) => {
     const currentStatus = order.status;
 
     if (currentStatus === newStatus) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Order is already in this status"
@@ -2601,7 +2601,7 @@ const updateOrderStatusByBuyer = async (req, res) => {
         ORDER_STATUS.RETURNED,
       ];
     } else {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Buyers can only update orders after they are shipped or delivered"
@@ -2609,7 +2609,7 @@ const updateOrderStatusByBuyer = async (req, res) => {
     }
 
     if (!allowedTransitions.includes(newStatus)) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         `Cannot move order from ${currentStatus} to ${newStatus}`
@@ -2881,7 +2881,7 @@ const updateOrderStatusByBuyer = async (req, res) => {
     });
   } catch (err) {
     console.error("Update order status by buyer error:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       err.message || "Failed to update order status"
@@ -2893,7 +2893,7 @@ const getOrderDetails = async (req, res) => {
   try {
     const { orderId } = req.params;
     if (!orderId) {
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "orderId is required");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "orderId is required");
     }
 
     // Fetch order with all necessary relations
@@ -2933,7 +2933,7 @@ const getOrderDetails = async (req, res) => {
       .lean();
 
     if (!order) {
-      return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Order not found");
+      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "Order not found");
     }
 
     // Shipping info
@@ -3166,7 +3166,7 @@ const getOrderDetails = async (req, res) => {
     );
   } catch (err) {
     console.error("Get order details error:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       err.message || "Failed to fetch order details"
@@ -3180,7 +3180,7 @@ const retryOrderPayment = async (req, res) => {
     const userId = req.user?.userId;
 
     if (!orderId) {
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Order ID is required");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Order ID is required");
     }
 
     // Find the order and validate
@@ -3191,7 +3191,7 @@ const retryOrderPayment = async (req, res) => {
     }).populate("items.productId");
 
     if (!order) {
-      return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Order not found");
+      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "Order not found");
     }
 
     // Check if payment can be retried
@@ -3200,7 +3200,7 @@ const retryOrderPayment = async (req, res) => {
         order.paymentStatus
       )
     ) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Payment retry is only allowed for pending or failed payments"
@@ -3209,7 +3209,7 @@ const retryOrderPayment = async (req, res) => {
 
     // Check if order is in valid status
     if (![ORDER_STATUS.PENDING, ORDER_STATUS.FAILED].includes(order.status)) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Payment retry is only allowed for pending or failed orders"
@@ -3225,7 +3225,7 @@ const retryOrderPayment = async (req, res) => {
       });
 
       if (!product || product.isSold) {
-        return apiErrorRes(
+        return apiErrorRes(req,
           HTTP_STATUS.BAD_REQUEST,
           res,
           `Product ${product?.title || "Unknown"} is no longer available`
@@ -3246,7 +3246,7 @@ const retryOrderPayment = async (req, res) => {
     });
   } catch (err) {
     console.error("Retry payment error:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       err.message || "Failed to process payment retry"
@@ -3259,7 +3259,7 @@ const confirmreciptReview = async (req, res) => {
     const { orderId } = req.params;
     const userId = req.user?.userId;
     if (!orderId) {
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Order ID is required");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Order ID is required");
     }
 
     const order = await Order.findOne({
@@ -3337,12 +3337,12 @@ const confirmreciptReview = async (req, res) => {
     };
 
     if (!order) {
-      return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Order not found");
+      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "Order not found");
     }
     return apiSuccessRes(req,HTTP_STATUS.OK, res, "Order details fetched", obj);
   } catch (err) {
     console.error("Retry payment error:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       err.message || "Failed to process payment retry"
@@ -3370,7 +3370,7 @@ const addrequest = async (req, res) => {
     const maxAmount = maxSetting ? Number(maxSetting.value) : Infinity;
 
     if (Number(amount) < minAmount) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         `Withdrawal amount cannot be less than ${minAmount}`
@@ -3378,7 +3378,7 @@ const addrequest = async (req, res) => {
     }
 
     if (Number(amount) > maxAmount) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         `Withdrawal amount cannot be more than ${maxAmount}`
@@ -3484,7 +3484,7 @@ const addrequest = async (req, res) => {
     // <-- Remove this line:
     // await session.abortTransaction();
 
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       err.message || "Failed to process withdrawal request"
@@ -3530,7 +3530,7 @@ const changeStatus = async (req, res) => {
 
     // Input validation
     if (!withdrawRequestId || !status) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "withdrawRequestId and status are required"
@@ -3538,7 +3538,7 @@ const changeStatus = async (req, res) => {
     }
 
     if (!["Approved", "Rejected"].includes(status)) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Invalid status. Must be 'Approved' or 'Rejected'"
@@ -3546,7 +3546,7 @@ const changeStatus = async (req, res) => {
     }
 
     if (notes && notes.length > 500) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Notes cannot exceed 500 characters"
@@ -3663,7 +3663,7 @@ const changeStatus = async (req, res) => {
     );
   } catch (err) {
     console.error("changeStatus error", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       err.message || "Failed to change withdrawal request status"
@@ -3707,7 +3707,7 @@ const getWithdrawalInfo = async (req, res) => {
       .select("walletBalance FreezWalletBalance")
       .lean();
     if (!user) {
-      return apiErrorRes(404, res, "User not found");
+      return apiErrorRes(req,404, res, "User not found");
     }
 
     // Fetch active withdrawal methods for the user (example: SellerBank collection)
@@ -3742,7 +3742,7 @@ const getWithdrawalInfo = async (req, res) => {
     });
   } catch (err) {
     console.error("getWithdrawalInfo error", err);
-    return apiErrorRes(500, res, "Failed to fetch withdrawal info");
+    return apiErrorRes(req,500, res, "Failed to fetch withdrawal info");
   }
 };
 
@@ -3794,7 +3794,7 @@ const getAllWithdrawRequests = async (req, res) => {
     });
   } catch (err) {
     console.error("getAllWithdrawRequests error", err);
-    return apiErrorRes(500, res, "Failed to fetch withdrawal requests");
+    return apiErrorRes(req,500, res, "Failed to fetch withdrawal requests");
   }
 };
 
@@ -4089,7 +4089,7 @@ const getAllTransactionsForAdmin = async (req, res) => {
     );
   } catch (err) {
     console.error("getAllTransactionsForAdmin error:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Failed to fetch transactions"
@@ -4101,7 +4101,7 @@ const getSellerPayoutCalculation = async (req, res) => {
   try {
     const { orderId } = req.params;
     if (!orderId) {
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Order ID is required");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Order ID is required");
     }
 
     // Find the order
@@ -4111,7 +4111,7 @@ const getSellerPayoutCalculation = async (req, res) => {
       .lean();
 
     if (!order) {
-      return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Order not found");
+      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "Order not found");
     }
 
     // Check for dispute information
@@ -4349,7 +4349,7 @@ const getSellerPayoutCalculation = async (req, res) => {
     );
   } catch (err) {
     console.error("getSellerPayoutCalculation error:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       err.message || "Failed to get payout calculation"
@@ -4607,7 +4607,7 @@ const getAdminFinancialDashboard = async (req, res) => {
     );
   } catch (err) {
     console.error("getAdminFinancialDashboard error:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Failed to fetch financial dashboard data"
@@ -4621,7 +4621,7 @@ const getProductFinancialDetails = async (req, res) => {
     const { includeHistory = true } = req.query;
 
     if (!productId) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Product ID is required"
@@ -4635,7 +4635,7 @@ const getProductFinancialDetails = async (req, res) => {
       .lean();
 
     if (!product) {
-      return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Product not found");
+      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "Product not found");
     }
 
     // Get all orders for this product
@@ -4843,7 +4843,7 @@ const getProductFinancialDetails = async (req, res) => {
     );
   } catch (err) {
     console.error("getProductFinancialDetails error:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Failed to fetch product financial details"
@@ -5069,7 +5069,7 @@ const getDetailedMoneyFlow = async (req, res) => {
     );
   } catch (err) {
     console.error("getDetailedMoneyFlow error:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Failed to fetch money flow details"
@@ -5141,7 +5141,7 @@ const cancelOrderByBuyer = async (req, res) => {
 
     // Input validation - UNCHANGED
     if (!buyerId) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.UNAUTHORIZED,
         res,
         "Authentication required"
@@ -5149,7 +5149,7 @@ const cancelOrderByBuyer = async (req, res) => {
     }
 
     if (!cancellationReason) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Cancellation reason is required"
@@ -5164,7 +5164,7 @@ const cancelOrderByBuyer = async (req, res) => {
     }).populate("items.productId");
 
     if (!order) {
-      return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Order not found");
+      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "Order not found");
     }
 
     const isBuyer = String(order.userId) === String(req.user?.userId);
@@ -5177,7 +5177,7 @@ const cancelOrderByBuyer = async (req, res) => {
       ORDER_STATUS.FAILED,
     ];
     if (terminalStatuses.includes(order.status)) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         `Order is already ${order.status}`
@@ -5191,7 +5191,7 @@ const cancelOrderByBuyer = async (req, res) => {
     ].includes(order.paymentStatus);
 
     if (!(isOrderPending || isUnpaidOrFailed)) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Only pending or unpaid/failed orders can be cancelled"
@@ -5253,7 +5253,7 @@ const cancelOrderByBuyer = async (req, res) => {
     }
 
     if (!canCancel) {
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, reason);
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, reason);
     }
 
     // ONLY CHANGE: Wrap the transaction in retry logic
@@ -5514,7 +5514,7 @@ const cancelOrderByBuyer = async (req, res) => {
     );
   } catch (err) {
     console.error("Cancel order by buyer error:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       err.message || "Failed to cancel order",

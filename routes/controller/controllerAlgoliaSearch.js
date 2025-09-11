@@ -129,7 +129,7 @@ const universalSearch = async (req, res) => {
 
     } catch (error) {
         console.error('Universal search error:', error);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Search failed", error.message);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Search failed", error.message);
     }
 };
 
@@ -210,7 +210,7 @@ const searchProductsAPI = async (req, res) => {
 
     } catch (error) {
         console.error('Product search error:', error);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Product search failed", error.message);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Product search failed", error.message);
     }
 };
 
@@ -277,7 +277,7 @@ const searchThreadsAPI = async (req, res) => {
 
     } catch (error) {
         console.error('Thread search error:', error);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Thread search failed", error.message);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Thread search failed", error.message);
     }
 };
 
@@ -413,7 +413,7 @@ const getSearchSuggestions = async (req, res) => {
 
     } catch (error) {
         console.error('Search suggestions error:', error);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to get suggestions", error.message);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to get suggestions", error.message);
     }
 };
 
@@ -426,7 +426,7 @@ const trackProductView = async (req, res) => {
         const userId = req.user?.userId;
 
         if (!productId) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Product ID is required");
+            return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Product ID is required");
         }
 
         // Here you can implement view tracking logic
@@ -441,7 +441,7 @@ const trackProductView = async (req, res) => {
 
     } catch (error) {
         console.error('Track product view error:', error);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to track view");
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to track view");
     }
 };
 

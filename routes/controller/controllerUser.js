@@ -147,7 +147,7 @@ const uploadfile = async (req, res) => {
         );
         // console.log("imageResult", imageResult)
         if (!imageResult) {
-          return apiErrorRes(
+          return apiErrorRes(req,
             HTTP_STATUS.INTERNAL_SERVER_ERROR,
             res,
             "Image upload failed"
@@ -163,7 +163,7 @@ const uploadfile = async (req, res) => {
       profileImageUrl
     );
   } catch (error) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       error.message,
@@ -186,7 +186,7 @@ const requestOtp = async (req, res) => {
   const existingUser = await User.findOne({ phoneNumber });
   if (existingUser) {
     if (existingUser.isDisable) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.FORBIDDEN,
         res,
         CONSTANTS_MSG.ACCOUNT_DISABLE
@@ -194,14 +194,14 @@ const requestOtp = async (req, res) => {
     }
 
     if (existingUser.isDeleted) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.UNPROCESSABLE_ENTITY,
         res,
         CONSTANTS_MSG.ACCOUNT_DELETED
       );
     }
 
-    return apiErrorRes(HTTP_STATUS.OK, res, "Phone number already registered", {
+    return apiErrorRes(req,HTTP_STATUS.OK, res, "Phone number already registered", {
       phoneNumber,
       step: existingUser.step || 5, // 5 or whatever means completed
     });
@@ -236,7 +236,7 @@ const verifyOtp = async (req, res) => {
 
   const tempUser = await TempUser.findOne({ phoneNumber });
   if (!tempUser || tempUser.tempOtp !== otp) {
-    return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Invalid OTP");
+    return apiErrorRes(req,HTTP_STATUS.UNAUTHORIZED, res, "Invalid OTP");
   }
 
   tempUser.step = 2;
@@ -252,7 +252,7 @@ const resendOtp = async (req, res) => {
   const { phoneNumber } = req.body;
 
   if (!phoneNumber) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.BAD_REQUEST,
       res,
       "Phone number is required"
@@ -262,7 +262,7 @@ const resendOtp = async (req, res) => {
   const tempUser = await TempUser.findOne({ phoneNumber });
 
   if (!tempUser) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.NOT_FOUND,
       res,
       "User not found for OTP resend"
@@ -270,7 +270,7 @@ const resendOtp = async (req, res) => {
   }
 
   if (tempUser.step >= 2) {
-    return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "OTP already verified");
+    return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "OTP already verified");
   }
 
   const newOtp =
@@ -280,7 +280,7 @@ const resendOtp = async (req, res) => {
   await tempUser.save();
   const smsResult = await sendOtpSMS(phoneNumber, newOtp);
   if (!smsResult.success) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Failed to resend OTP via SMS"
@@ -300,14 +300,14 @@ const saveEmailPassword = async (req, res) => {
 
   const tempUser = await TempUser.findOne({ phoneNumber });
   if (!tempUser || tempUser.step !== 2) {
-    return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "OTP not verified");
+    return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "OTP not verified");
   }
 
   const existingUser = await User.findOne({
     email: email.toLowerCase().trim(),
   });
   if (existingUser) {
-    return apiErrorRes(HTTP_STATUS.CONFLICT, res, "Email already in use");
+    return apiErrorRes(req,HTTP_STATUS.CONFLICT, res, "Email already in use");
   }
 
   tempUser.email = email.toLowerCase().trim();
@@ -326,7 +326,7 @@ const saveCategories = async (req, res) => {
 
   const tempUser = await TempUser.findOne({ phoneNumber });
   if (!tempUser || tempUser.step !== 3) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.BAD_REQUEST,
       res,
       "Complete previous step first"
@@ -346,7 +346,7 @@ const saveCategories = async (req, res) => {
 const getOnboardingStep = async (req, res) => {
   const { phoneNumber } = req.query;
   const user = await User.findOne({ phoneNumber });
-  if (!user) return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
+  if (!user) return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "User not found");
 
   return apiSuccessRes(req,HTTP_STATUS.OK, res, "Current onboarding step", {
     phoneNumber,
@@ -359,7 +359,7 @@ const completeRegistration = async (req, res) => {
 
   const tempUser = await TempUser.findOne({ phoneNumber });
   if (!tempUser || tempUser.step !== 4) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.BAD_REQUEST,
       res,
       "Incomplete registration steps"
@@ -371,7 +371,7 @@ const completeRegistration = async (req, res) => {
   });
 
   if (existingUser) {
-    return apiErrorRes(HTTP_STATUS.CONFLICT, res, "User already exists");
+    return apiErrorRes(req,HTTP_STATUS.CONFLICT, res, "User already exists");
   }
 
   let obj = {
@@ -423,7 +423,7 @@ const loginStepOne = async (req, res) => {
   try {
     const { identifier } = req.body; // email, phoneNumber, or userName
     if (!identifier) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Identifier is required"
@@ -459,18 +459,18 @@ const loginStepOne = async (req, res) => {
     const user = await User.findOne(query);
 
     if (!user) {
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "User not found");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "User not found");
     }
 
     if (user.isDisable) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.FORBIDDEN,
         res,
         CONSTANTS_MSG.ACCOUNT_DISABLE
       );
     }
     if (user.isDeleted) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.UNPROCESSABLE_ENTITY,
         res,
         CONSTANTS_MSG.ACCOUNT_DELETED
@@ -493,7 +493,7 @@ const loginStepOne = async (req, res) => {
     );
   } catch (error) {
     console.error("Login Step 1 error:", error);
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
   }
 };
 
@@ -501,7 +501,7 @@ const loginStepTwoPassword = async (req, res) => {
   try {
     const { identifier, password, fcmToken, loginWithCode } = req.body;
     if (!identifier) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Identifier is required"
@@ -509,7 +509,7 @@ const loginStepTwoPassword = async (req, res) => {
     }
 
     if (password && loginWithCode === "true") {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Password is required when loginWithCode is false"
@@ -534,17 +534,17 @@ const loginStepTwoPassword = async (req, res) => {
       ]);
 
     if (!user) {
-      return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
+      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "User not found");
     }
     if (user.isDisable) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.FORBIDDEN,
         res,
         CONSTANTS_MSG.ACCOUNT_DISABLE
       );
     }
     if (user.isDeleted) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.FORBIDDEN,
         res,
         CONSTANTS_MSG.ACCOUNT_DELETED
@@ -554,7 +554,7 @@ const loginStepTwoPassword = async (req, res) => {
     if (password && password !== "") {
       const isMatch = await verifyPassword(user.password, password);
       if (!isMatch) {
-        return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Incorrect password");
+        return apiErrorRes(req,HTTP_STATUS.UNAUTHORIZED, res, "Incorrect password");
       }
 
       if (fcmToken) {
@@ -606,7 +606,7 @@ const loginStepTwoPassword = async (req, res) => {
       if (isPhone) {
         const smsResult = await sendOtpSMS(identifier, otp);
         // if (!smsResult.success) {
-        //     return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to send OTP via SMS");
+        //     return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to send OTP via SMS");
         // }
         sentVia = "SMS";
       } else {
@@ -617,7 +617,7 @@ const loginStepTwoPassword = async (req, res) => {
           html: `<p>Your OTP code is: <strong>${otp}</strong></p>`,
         });
         // if (!emailResult.success) {
-        //     return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to send OTP via Email");
+        //     return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Failed to send OTP via Email");
         // }
         sentVia = "Email";
       }
@@ -627,20 +627,20 @@ const loginStepTwoPassword = async (req, res) => {
       return apiSuccessRes(req,HTTP_STATUS.OK, res, "OTP sent");
     }
 
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.BAD_REQUEST,
       res,
       "Provide either password or loginWithCode=true"
     );
   } catch (err) {
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
+    return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
   }
 };
 const loginStepThreeVerifyOtp = async (req, res) => {
   try {
     const { identifier, otp, fcmToken } = req.body;
     if (!identifier || !otp) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Identifier and OTP are required"
@@ -664,17 +664,17 @@ const loginStepThreeVerifyOtp = async (req, res) => {
         { path: "districtId", select: "value" },
       ]);
     if (!user) {
-      return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
+      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "User not found");
     }
     if (user.isDisable) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.FORBIDDEN,
         res,
         CONSTANTS_MSG.ACCOUNT_DISABLE
       );
     }
     if (user.isDeleted) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.UNPROCESSABLE_ENTITY,
         res,
         CONSTANTS_MSG.ACCOUNT_DELETED
@@ -682,11 +682,11 @@ const loginStepThreeVerifyOtp = async (req, res) => {
     }
 
     if (!user.loginOtp || user.loginOtp !== otp) {
-      return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Invalid OTP");
+      return apiErrorRes(req,HTTP_STATUS.UNAUTHORIZED, res, "Invalid OTP");
     }
 
     if (user.loginOtpExpiresAt < new Date()) {
-      return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "OTP expired");
+      return apiErrorRes(req,HTTP_STATUS.UNAUTHORIZED, res, "OTP expired");
     }
 
     if (fcmToken) {
@@ -733,14 +733,14 @@ const loginStepThreeVerifyOtp = async (req, res) => {
       }
     );
   } catch (err) {
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
+    return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
   }
 };
 const resendLoginOtp = async (req, res) => {
   try {
     const { identifier } = req.body;
     if (!identifier) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Identifier is required"
@@ -759,7 +759,7 @@ const resendLoginOtp = async (req, res) => {
 
     const user = await User.findOne(query);
     if (!user) {
-      return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
+      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "User not found");
     }
 
     const newOtp =
@@ -773,7 +773,7 @@ const resendLoginOtp = async (req, res) => {
 
     return apiSuccessRes(req,HTTP_STATUS.OK, res, "OTP resent successfully");
   } catch (err) {
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
+    return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
   }
 };
 
@@ -804,7 +804,7 @@ const appleSignIn = async (req, res) => {
 
     const { error, value } = schema.validate(body);
     if (error) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         error.details?.[0]?.message || "Invalid payload"
@@ -838,14 +838,14 @@ const appleSignIn = async (req, res) => {
 
       // Guard rails
       if (user.isDisable) {
-        return apiErrorRes(
+        return apiErrorRes(req,
           HTTP_STATUS.UNAUTHORIZED,
           res,
           CONSTANTS_MSG.ACCOUNT_DISABLE
         );
       }
       if (user.isDeleted) {
-        return apiErrorRes(
+        return apiErrorRes(req,
           HTTP_STATUS.UNAUTHORIZED,
           res,
           CONSTANTS_MSG.ACCOUNT_DELETED
@@ -946,7 +946,7 @@ const appleSignIn = async (req, res) => {
     );
   } catch (err) {
     console.error("💥 Social Login error:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Internal server error",
@@ -985,7 +985,7 @@ const googleSignIn = async (req, res) => {
 
     if (!accessToken) {
       console.log("❌ Missing Google access token");
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Google access token is required"
@@ -1004,7 +1004,7 @@ const googleSignIn = async (req, res) => {
         "❌ Failed to fetch user info from Google:",
         error.response?.data || error.message
       );
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.UNAUTHORIZED,
         res,
         "Invalid Google access token"
@@ -1015,7 +1015,7 @@ const googleSignIn = async (req, res) => {
 
     if (!email) {
       console.log("❌ Email not found in Google user info");
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Email not provided by Google"
@@ -1033,7 +1033,7 @@ const googleSignIn = async (req, res) => {
       console.log("🔍 Existing user found:", user._id.toString());
 
       if (user.isDisable) {
-        return apiErrorRes(
+        return apiErrorRes(req,
           HTTP_STATUS.UNAUTHORIZED,
           res,
           CONSTANTS_MSG.ACCOUNT_DISABLE
@@ -1041,7 +1041,7 @@ const googleSignIn = async (req, res) => {
       }
 
       if (user.isDeleted) {
-        return apiErrorRes(
+        return apiErrorRes(req,
           HTTP_STATUS.UNAUTHORIZED,
           res,
           CONSTANTS_MSG.ACCOUNT_DELETED
@@ -1136,7 +1136,7 @@ const googleSignIn = async (req, res) => {
     );
   } catch (error) {
     console.error("💥 Google Sign-In error:", error);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Internal server error",
@@ -1179,7 +1179,7 @@ const follow = async (req, res) => {
     let { userId } = req.body;
 
     if (String(followedBy) === String(userId)) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "You cannot follow yourself"
@@ -1267,7 +1267,7 @@ const follow = async (req, res) => {
       newFollow
     );
   } catch (error) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       error.message,
@@ -1304,7 +1304,7 @@ const threadlike = async (req, res) => {
       newFollow
     );
   } catch (error) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       error.message,
@@ -1341,7 +1341,7 @@ const productLike = async (req, res) => {
       newFollow
     );
   } catch (error) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       error.message,
@@ -1529,7 +1529,7 @@ const getLikedProducts = async (req, res) => {
       }
     );
   } catch (error) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       error.message,
@@ -1738,7 +1738,7 @@ const getLikedThreads = async (req, res) => {
       obj
     );
   } catch (error) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       error.message,
@@ -1751,7 +1751,7 @@ const requestResetOtp = async (req, res) => {
   try {
     const { phoneNumber } = req.body;
     if (!phoneNumber) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Phone number is required"
@@ -1760,7 +1760,7 @@ const requestResetOtp = async (req, res) => {
 
     const user = await User.findOne({ phoneNumber });
     if (!user) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.NOT_FOUND,
         res,
         "User with this phone number does not exist"
@@ -1778,14 +1778,14 @@ const requestResetOtp = async (req, res) => {
 
     return apiSuccessRes(req,HTTP_STATUS.OK, res, "OTP sent for password reset");
   } catch (error) {
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
   }
 };
 const verifyResetOtp = async (req, res) => {
   try {
     const { phoneNumber, otp } = req.body;
     if (!phoneNumber || !otp) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Phone number and OTP are required"
@@ -1795,7 +1795,7 @@ const verifyResetOtp = async (req, res) => {
     const redisData = await getKey(`reset:${phoneNumber}`);
 
     if (redisData.statusCode !== CONSTANTS.SUCCESS) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.UNAUTHORIZED,
         res,
         "OTP expired or invalid"
@@ -1805,7 +1805,7 @@ const verifyResetOtp = async (req, res) => {
     const { otp: storedOtp } = JSON.parse(redisData.data);
 
     if (otp !== storedOtp) {
-      return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Invalid OTP");
+      return apiErrorRes(req,HTTP_STATUS.UNAUTHORIZED, res, "Invalid OTP");
     }
 
     // Mark as verified for 10 minutes
@@ -1816,7 +1816,7 @@ const verifyResetOtp = async (req, res) => {
 
     return apiSuccessRes(req,HTTP_STATUS.OK, res, "OTP verified successfully");
   } catch (error) {
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
   }
 };
 const resetPassword = async (req, res) => {
@@ -1826,7 +1826,7 @@ const resetPassword = async (req, res) => {
     // ✅ Check if phoneNumber was verified
     const isVerified = await getKey(`reset-verified:${phoneNumber}`);
     if (isVerified.statusCode !== CONSTANTS.SUCCESS) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.UNAUTHORIZED,
         res,
         "OTP not verified or session expired"
@@ -1835,7 +1835,7 @@ const resetPassword = async (req, res) => {
 
     // ✅ Validate passwords
     if (!newPassword || !confirmPassword || newPassword !== confirmPassword) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "New password and confirm password must match"
@@ -1845,7 +1845,7 @@ const resetPassword = async (req, res) => {
     // ✅ Update password
     const user = await User.findOne({ phoneNumber });
     if (!user) {
-      return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
+      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "User not found");
     }
 
     user.password = newPassword;
@@ -1859,14 +1859,14 @@ const resetPassword = async (req, res) => {
       "Password has been reset successfully"
     );
   } catch (error) {
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
   }
 };
 const resendResetOtp = async (req, res) => {
   try {
     const { phoneNumber } = req.body;
     if (!phoneNumber) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Phone number is required"
@@ -1875,7 +1875,7 @@ const resendResetOtp = async (req, res) => {
 
     const user = await User.findOne({ phoneNumber });
     if (!user) {
-      return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
+      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "User not found");
     }
 
     const otp =
@@ -1889,7 +1889,7 @@ const resendResetOtp = async (req, res) => {
 
     return apiSuccessRes(req,HTTP_STATUS.OK, res, "OTP resent successfully");
   } catch (error) {
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
   }
 };
 
@@ -1900,13 +1900,13 @@ const requestResetOtpByEmail = async (req, res) => {
 
     if (!email) {
       console.warn(`[RESET OTP] Missing email`);
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Email is required");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Email is required");
     }
 
     const user = await User.findOne({ email });
     if (!user) {
       console.warn(`[RESET OTP] User not found with email: ${email}`);
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.NOT_FOUND,
         res,
         "User with this email does not exist"
@@ -1926,7 +1926,7 @@ const requestResetOtpByEmail = async (req, res) => {
     return apiSuccessRes(req,HTTP_STATUS.OK, res, "OTP sent for password reset");
   } catch (error) {
     console.error(`[RESET OTP] Error:`, error);
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
   }
 };
 
@@ -1937,7 +1937,7 @@ const verifyResetOtpByEmail = async (req, res) => {
 
     if (!email || !otp) {
       // console.warn(`[VERIFY OTP] Missing email or OTP`);
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Email and OTP are required"
@@ -1947,7 +1947,7 @@ const verifyResetOtpByEmail = async (req, res) => {
     const redisData = await getKey(`reset:${email}`);
     if (redisData.statusCode !== CONSTANTS.SUCCESS) {
       console.warn(`[VERIFY OTP] OTP not found or expired for email: ${email}`);
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.UNAUTHORIZED,
         res,
         "OTP expired or invalid"
@@ -1959,7 +1959,7 @@ const verifyResetOtpByEmail = async (req, res) => {
       console.warn(
         `[VERIFY OTP] Invalid OTP for ${email}. Provided: ${otp}, Expected: ${storedOtp}`
       );
-      return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Invalid OTP");
+      return apiErrorRes(req,HTTP_STATUS.UNAUTHORIZED, res, "Invalid OTP");
     }
 
     await setKeyWithTime(`reset-verified:${email}`, "true", 10 * 60);
@@ -1969,7 +1969,7 @@ const verifyResetOtpByEmail = async (req, res) => {
     return apiSuccessRes(req,HTTP_STATUS.OK, res, "OTP verified successfully");
   } catch (error) {
     console.error(`[VERIFY OTP] Error:`, error);
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
   }
 };
 
@@ -1983,7 +1983,7 @@ const resetPasswordByEmail = async (req, res) => {
 
     if (isVerified.statusCode !== CONSTANTS.SUCCESS) {
       console.warn(`[RESET PASSWORD] OTP not verified or expired for ${email}`);
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.UNAUTHORIZED,
         res,
         "OTP not verified or session expired"
@@ -1992,7 +1992,7 @@ const resetPasswordByEmail = async (req, res) => {
 
     if (!newPassword || !confirmPassword || newPassword !== confirmPassword) {
       console.warn(`[RESET PASSWORD] Passwords do not match or missing`);
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "New password and confirm password must match"
@@ -2002,7 +2002,7 @@ const resetPasswordByEmail = async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) {
       console.warn(`[RESET PASSWORD] User not found with email: ${email}`);
-      return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
+      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "User not found");
     }
 
     user.password = newPassword;
@@ -2017,7 +2017,7 @@ const resetPasswordByEmail = async (req, res) => {
     );
   } catch (error) {
     console.error(`[RESET PASSWORD] Error:`, error);
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
   }
 };
 
@@ -2028,13 +2028,13 @@ const resendResetOtpByEmail = async (req, res) => {
 
     if (!email) {
       console.warn(`[RESEND OTP] Missing email`);
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Email is required");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Email is required");
     }
 
     const user = await User.findOne({ email });
     if (!user) {
       console.warn(`[RESEND OTP] User not found for email: ${email}`);
-      return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
+      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "User not found");
     }
 
     const otp =
@@ -2050,7 +2050,7 @@ const resendResetOtpByEmail = async (req, res) => {
     return apiSuccessRes(req,HTTP_STATUS.OK, res, "OTP resent successfully");
   } catch (error) {
     console.error(`[RESEND OTP] Error:`, error);
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
   }
 };
 
@@ -2060,7 +2060,7 @@ const login = async (req, res) => {
     const userCheckEmail = await getDocumentByQuery(User, { email });
     if (userCheckEmail.statusCode === CONSTANTS.SUCCESS) {
       if (userCheckEmail.data.isDisable === true) {
-        return apiErrorRes(
+        return apiErrorRes(req,
           HTTP_STATUS.BAD_REQUEST,
           res,
           CONSTANTS_MSG.ACCOUNT_DISABLE,
@@ -2075,7 +2075,7 @@ const login = async (req, res) => {
       );
 
       if (!verifyPass) {
-        return apiErrorRes(
+        return apiErrorRes(req,
           HTTP_STATUS.UNAUTHORIZED,
           res,
           CONSTANTS_MSG.INVALID_PASSWORD
@@ -2110,7 +2110,7 @@ const login = async (req, res) => {
 
       return apiSuccessRes(req,HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, output);
     } else {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         CONSTANTS_MSG.EMAIL_NOTFOUND,
@@ -2118,7 +2118,7 @@ const login = async (req, res) => {
       );
     }
   } catch (error) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       error.message,
@@ -2133,7 +2133,7 @@ const loginAsGuest = async (req, res) => {
     const userCheckEmail = await getDocumentByQuery(User, { email });
     if (userCheckEmail.statusCode === CONSTANTS.SUCCESS) {
       if (userCheckEmail.data.isDisable === true) {
-        return apiErrorRes(
+        return apiErrorRes(req,
           HTTP_STATUS.BAD_REQUEST,
           res,
           CONSTANTS_MSG.ACCOUNT_DISABLE,
@@ -2148,7 +2148,7 @@ const loginAsGuest = async (req, res) => {
       );
 
       if (!verifyPass) {
-        return apiErrorRes(
+        return apiErrorRes(req,
           HTTP_STATUS.UNAUTHORIZED,
           res,
           CONSTANTS_MSG.INVALID_PASSWORD
@@ -2190,7 +2190,7 @@ const loginAsGuest = async (req, res) => {
         ...output,
       });
     } else {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         CONSTANTS_MSG.EMAIL_NOTFOUND,
@@ -2198,7 +2198,7 @@ const loginAsGuest = async (req, res) => {
       );
     }
   } catch (error) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       error.message,
@@ -2222,7 +2222,7 @@ const getProfile = async (req, res) => {
       ])
       .lean();
     if (!user) {
-      return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
+      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "User not found");
     }
 
     const [
@@ -2322,7 +2322,7 @@ const getProfile = async (req, res) => {
 
     return apiSuccessRes(req,HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, output);
   } catch (error) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Internal server error",
@@ -2340,7 +2340,7 @@ const updateProfile = async (req, res) => {
     if (userName && userName.trim() !== "") {
       userName = userName.trim().toLowerCase();
       if (userName.length < 3) {
-        return apiErrorRes(
+        return apiErrorRes(req,
           HTTP_STATUS.BAD_REQUEST,
           res,
           "Username must be at least 3 characters long."
@@ -2350,7 +2350,7 @@ const updateProfile = async (req, res) => {
       const usernameRegex = /^(?=.*[a-zA-Z])[a-zA-Z0-9@._]+$/;
 
       if (!usernameRegex.test(userName)) {
-        return apiErrorRes(
+        return apiErrorRes(req,
           HTTP_STATUS.BAD_REQUEST,
           res,
           "Username must contain at least one letter and only include letters, numbers, '.', '_', or '@'."
@@ -2361,7 +2361,7 @@ const updateProfile = async (req, res) => {
         _id: { $ne: userId },
       });
       if (existingUser) {
-        return apiErrorRes(
+        return apiErrorRes(req,
           HTTP_STATUS.CONFLICT,
           res,
           "Username is already in use."
@@ -2377,13 +2377,13 @@ const updateProfile = async (req, res) => {
         _id: { $ne: toObjectId(userId) },
       });
       if (userInfo.statusCode === CONSTANTS.SUCCESS) {
-        return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "email Already Exist");
+        return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "email Already Exist");
       }
     }
 
     // Check for existing phoneNumber
     if (phoneNumber && phoneNumber.trim() !== "") {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "phoneNumber Cannot be updated"
@@ -2435,7 +2435,7 @@ const updateProfile = async (req, res) => {
       updatedUser
     );
   } catch (error) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Internal server error",
@@ -2450,7 +2450,7 @@ const requestPhoneNumberUpdateOtp = async (req, res) => {
     const userId = req.user.userId;
 
     if (!phoneNumber) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Phone number is required"
@@ -2462,7 +2462,7 @@ const requestPhoneNumberUpdateOtp = async (req, res) => {
       existing.statusCode === CONSTANTS.SUCCESS &&
       existing.data._id.toString() !== userId
     ) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Phone number already in use"
@@ -2480,7 +2480,7 @@ const requestPhoneNumberUpdateOtp = async (req, res) => {
 
     return apiSuccessRes(req,HTTP_STATUS.OK, res, "OTP sent successfully");
   } catch (error) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Failed to send OTP",
@@ -2495,7 +2495,7 @@ const verifyPhoneNumberUpdateOtp = async (req, res) => {
     const userId = req.user.userId;
 
     if (!phoneNumber || !otp) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Phone number and OTP are required"
@@ -2506,7 +2506,7 @@ const verifyPhoneNumberUpdateOtp = async (req, res) => {
     const savedOtp = await getKey(redisKey);
 
     if (!savedOtp?.data) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "OTP expired or not requested"
@@ -2514,7 +2514,7 @@ const verifyPhoneNumberUpdateOtp = async (req, res) => {
     }
 
     if (savedOtp?.data !== otp) {
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid OTP");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Invalid OTP");
     }
 
     // Update phone number
@@ -2541,7 +2541,7 @@ const verifyPhoneNumberUpdateOtp = async (req, res) => {
       updatedUser
     );
   } catch (error) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Failed to verify OTP",
@@ -2556,7 +2556,7 @@ const resendPhoneNumberUpdateOtp = async (req, res) => {
     const userId = req.user.userId;
 
     if (!phoneNumber) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Phone number is required"
@@ -2572,7 +2572,7 @@ const resendPhoneNumberUpdateOtp = async (req, res) => {
     });
 
     if (existingUser.statusCode === CONSTANTS.SUCCESS) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Phone number already exists"
@@ -2583,7 +2583,7 @@ const resendPhoneNumberUpdateOtp = async (req, res) => {
     const previousOtp = await getKey(redisKey);
 
     if (!previousOtp) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "No OTP request found for this phone number. Please initiate phone number update first."
@@ -2602,7 +2602,7 @@ const resendPhoneNumberUpdateOtp = async (req, res) => {
 
     return apiSuccessRes(req,HTTP_STATUS.OK, res, "OTP resent successfully");
   } catch (error) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Failed to resend OTP",
@@ -2617,7 +2617,7 @@ const requestEmailUpdateOtp = async (req, res) => {
     const userId = req.user.userId;
 
     if (!email) {
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Email is required");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Email is required");
     }
 
     const existing = await getDocumentByQuery(User, {
@@ -2627,7 +2627,7 @@ const requestEmailUpdateOtp = async (req, res) => {
       existing.statusCode === CONSTANTS.SUCCESS &&
       existing.data._id.toString() !== userId
     ) {
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Email already in use");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Email already in use");
     }
 
     const otp =
@@ -2650,7 +2650,7 @@ const requestEmailUpdateOtp = async (req, res) => {
 
     return apiSuccessRes(req,HTTP_STATUS.OK, res, "OTP sent to email successfully");
   } catch (error) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Failed to send email OTP",
@@ -2665,7 +2665,7 @@ const verifyEmailUpdateOtp = async (req, res) => {
     const userId = req.user.userId;
 
     if (!email || !otp) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Email and OTP are required"
@@ -2676,7 +2676,7 @@ const verifyEmailUpdateOtp = async (req, res) => {
     const savedOtp = await getKey(redisKey);
 
     if (!savedOtp?.data) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "OTP expired or not requested"
@@ -2684,7 +2684,7 @@ const verifyEmailUpdateOtp = async (req, res) => {
     }
 
     if (savedOtp.data !== otp) {
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid OTP");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Invalid OTP");
     }
 
     // Update email
@@ -2710,7 +2710,7 @@ const verifyEmailUpdateOtp = async (req, res) => {
       updatedUser
     );
   } catch (error) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Failed to verify email OTP",
@@ -2724,7 +2724,7 @@ const resendEmailUpdateOtp = async (req, res) => {
     const userId = req.user.userId;
 
     if (!email) {
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Email is required");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Email is required");
     }
 
     const formattedEmail = email.toLowerCase();
@@ -2735,14 +2735,14 @@ const resendEmailUpdateOtp = async (req, res) => {
     });
 
     if (existingUser.statusCode === CONSTANTS.SUCCESS) {
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Email already exists");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Email already exists");
     }
 
     const redisKey = `verify-email-update:${userId}:${formattedEmail}`;
     const previousOtp = await getKey(redisKey);
 
     if (!previousOtp) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "No OTP request found for this email. Please initiate email update first."
@@ -2769,7 +2769,7 @@ const resendEmailUpdateOtp = async (req, res) => {
       "OTP resent to email successfully"
     );
   } catch (error) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Failed to resend email OTP",
@@ -2991,7 +2991,7 @@ const userList = async (req, res) => {
     });
   } catch (err) {
     console.error("Error in listUsers:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Failed to fetch user list",
@@ -3072,7 +3072,7 @@ const getDashboardSummary = async (req, res) => {
     );
   } catch (error) {
     console.error("getDashboardSummary error:", error);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Failed to fetch dashboard summary",
@@ -3086,7 +3086,7 @@ const adminChangeUserPassword = async (req, res) => {
     const { userId, newPassword } = req.body;
 
     if (!userId || !newPassword) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.NOT_FOUND,
         res,
         "User ID and new password are required"
@@ -3094,7 +3094,7 @@ const adminChangeUserPassword = async (req, res) => {
     }
 
     if (newPassword.length < 6) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Password must be at least 6 characters long"
@@ -3104,7 +3104,7 @@ const adminChangeUserPassword = async (req, res) => {
     const user = await User.findById(userId);
 
     if (!user) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.NOT_FOUND,
         res,
         "User not found",
@@ -3119,7 +3119,7 @@ const adminChangeUserPassword = async (req, res) => {
     return apiSuccessRes(req,HTTP_STATUS.OK, res, "Password updated successfully");
   } catch (error) {
     console.error("Error in adminChangeUserPassword:", error);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Failed to update password",
@@ -3133,7 +3133,7 @@ const getOtherProfile = async (req, res) => {
     const userId = req.params.id;
     const currentUser = req.user.userId;
     if (!mongoose.Types.ObjectId.isValid(userId)) {
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid userId");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Invalid userId");
     }
 
     // 1. Get user basic info
@@ -3144,7 +3144,7 @@ const getOtherProfile = async (req, res) => {
       ])
       .select("-password -otp -__v");
     if (!user) {
-      return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
+      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "User not found");
     }
 
     // 2. Get follower and following counts
@@ -3207,7 +3207,7 @@ const getOtherProfile = async (req, res) => {
     });
   } catch (error) {
     console.error("Error in adminChangeUserPassword:", error);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Failed to update password",
@@ -3222,7 +3222,7 @@ const getFollowingList = async (req, res) => {
     const currentUserId = req.user.userId;
 
     if (!mongoose.Types.ObjectId.isValid(targetUserId)) {
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid userId");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Invalid userId");
     }
 
     const followings = await Follow.find({
@@ -3290,7 +3290,7 @@ const getFollowingList = async (req, res) => {
     return apiSuccessRes(req,HTTP_STATUS.OK, res, "Following list", result);
   } catch (error) {
     console.error("Error in getFollowingList:", error);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Failed to fetch followings",
@@ -3305,7 +3305,7 @@ const getFollowersList = async (req, res) => {
     const currentUserId = req.user.userId;
 
     if (!mongoose.Types.ObjectId.isValid(targetUserId)) {
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid userId");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Invalid userId");
     }
 
     const followers = await Follow.find({
@@ -3373,7 +3373,7 @@ const getFollowersList = async (req, res) => {
     return apiSuccessRes(req,HTTP_STATUS.OK, res, "Followers list", result);
   } catch (error) {
     console.error("Error in getFollowersList:", error);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Failed to fetch followers",
@@ -3392,7 +3392,7 @@ const updatePassword = async (req, res) => {
 
     const { error, value } = schema.validate(req.body);
     if (error) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         error.details[0].message
@@ -3404,13 +3404,13 @@ const updatePassword = async (req, res) => {
 
     const user = await getDocumentByQuery(User, { _id: toObjectId(userId) });
     if (!user) {
-      return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "User not found");
+      return apiErrorRes(req,HTTP_STATUS.UNAUTHORIZED, res, "User not found");
     }
 
     // ✅ Continue with password verification
     const isMatch = await verifyPassword(user?.data?.password, oldPassword);
     if (!isMatch) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Old password is incorrect"
@@ -3418,7 +3418,7 @@ const updatePassword = async (req, res) => {
     }
 
     if (oldPassword === newPassword) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "New password must be different from old password"
@@ -3431,7 +3431,7 @@ const updatePassword = async (req, res) => {
     return apiSuccessRes(req,HTTP_STATUS.OK, res, "Password updated successfully");
   } catch (err) {
     console.error("updatePassword error:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Something went wrong"
@@ -3450,7 +3450,7 @@ const deleteAccount = async (req, res) => {
       isDeleted: false,
     });
     if (user.statusCode !== CONSTANTS.SUCCESS) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.NOT_FOUND,
         res,
         "User not found or already deleted"
@@ -3542,7 +3542,7 @@ const deleteAccount = async (req, res) => {
     });
   } catch (err) {
     console.error("deleteAccount error:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Something went wrong"
@@ -3578,7 +3578,7 @@ const blockUser = async (req, res) => {
     }
   } catch (err) {
     console.error("updatePassword error:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Something went wrong"
@@ -3591,7 +3591,7 @@ const getBlockedUsers = async (req, res) => {
     const blockBy = req.user.userId;
 
     if (!mongoose.Types.ObjectId.isValid(blockBy)) {
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid user ID.");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Invalid user ID.");
     }
 
     // Step 1: Get blocked users
@@ -3653,7 +3653,7 @@ const getBlockedUsers = async (req, res) => {
     );
   } catch (err) {
     console.error("getBlockedUsers error:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Something went wrong"
@@ -3671,7 +3671,7 @@ const getUserNotificationSettings = async (req, res) => {
     );
 
     if (!user) {
-      return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "User not found");
+      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "User not found");
     }
 
     // Check if any field is missing or undefined
@@ -3749,7 +3749,7 @@ const updateUserNotificationSettings = async (req, res) => {
       updatedUser
     );
   } catch (err) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       CONSTANTS_MSG.INTERNAL_SERVER_ERROR

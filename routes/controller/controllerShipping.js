@@ -21,33 +21,33 @@ const addShipping = async (req, res) => {
         if (!orderId || !carrierId) {
             await session.abortTransaction();
             session.endSession();
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'orderId and carrierId are required');
+            return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'orderId and carrierId are required');
         }
 
         if (!mongoose.Types.ObjectId.isValid(orderId)) {
             await session.abortTransaction();
             session.endSession();
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Invalid orderId');
+            return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'Invalid orderId');
         }
 
         if (!mongoose.Types.ObjectId.isValid(carrierId)) {
             await session.abortTransaction();
             session.endSession();
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Invalid carrierId');
+            return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'Invalid carrierId');
         }
 
         const order = await Order.findOne({ _id: orderId, isDeleted: false, isDisable: false }).session(session);
         if (!order) {
             await session.abortTransaction();
             session.endSession();
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Order not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Order not found');
         }
 
         const carrier = await Carrier.findById(carrierId).session(session);
         if (!carrier) {
             await session.abortTransaction();
             session.endSession();
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Carrier not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Carrier not found');
         }
 
         let shipping = await Shipping.findOne({ orderId }).session(session);
@@ -80,7 +80,7 @@ const addShipping = async (req, res) => {
         await session.abortTransaction();
         session.endSession();
         console.error('Add shipping error:', err);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || 'Failed to add shipping info');
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message || 'Failed to add shipping info');
     }
 };
 

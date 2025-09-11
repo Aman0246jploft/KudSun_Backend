@@ -31,7 +31,7 @@ const getListById = async (req, res) => {
     );
   } catch (error) {
     console.error("showAllProducts error:", error);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Something went wrong"
@@ -55,7 +55,7 @@ const getParent = async (req, res) => {
     );
   } catch (error) {
     console.error("showAllProducts error:", error);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Something went wrong"
@@ -102,7 +102,7 @@ const all = async (req, res) => {
     );
   } catch (error) {
     console.error("all error:", error);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Something went wrong"
@@ -115,7 +115,7 @@ const update = async (req, res) => {
     let { id } = req.body;
 
     if (!id) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Location ID is required"
@@ -124,7 +124,7 @@ const update = async (req, res) => {
 
     const location = await Location.findById(id);
     if (!location) {
-      return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Location not found");
+      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "Location not found");
     }
 
     if (req.body.value !== undefined) location.value = req.body.value;
@@ -147,7 +147,7 @@ const update = async (req, res) => {
     );
   } catch (error) {
     console.error("update error:", error);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Something went wrong"

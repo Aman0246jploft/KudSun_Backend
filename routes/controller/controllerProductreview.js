@@ -97,7 +97,7 @@ const createOrUpdateReview = async (req, res) => {
     }).lean();
 
     if (!order) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.FORBIDDEN,
         res,
         "You can only review products related to your completed orders."
@@ -111,7 +111,7 @@ const createOrUpdateReview = async (req, res) => {
     } else if (order.sellerId.toString() === userId) {
       raterRole = "seller"; // seller rates buyer
     } else {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.FORBIDDEN,
         res,
         "You are not authorized to rate this product/order."
@@ -389,7 +389,7 @@ const createOrUpdateReview = async (req, res) => {
     });
   } catch (err) {
     console.error("Create/Update Review Error:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Something went wrong"
@@ -488,7 +488,7 @@ const getUserReviews = async (req, res) => {
     );
   } catch (err) {
     console.error("Get User Reviews Error:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Something went wrong"
@@ -595,7 +595,7 @@ const getReviewsAboutUser = async (req, res) => {
     );
   } catch (err) {
     console.error("Get Reviews About User Error:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Something went wrong"
@@ -805,7 +805,7 @@ const getReviewersList = async (req, res) => {
     );
   } catch (err) {
     console.error("Get Reviewers List Error:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Something went wrong"
@@ -818,7 +818,7 @@ const getProductReviews = async (req, res) => {
     const { productId } = req.params;
 
     if (!productId) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Product ID is required"
@@ -880,7 +880,7 @@ const getProductReviews = async (req, res) => {
       .lean();
 
     if (!product) {
-      return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Product not found");
+      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "Product not found");
     }
 
     // Fetch paginated reviews for this product
@@ -1110,7 +1110,7 @@ const getProductReviews = async (req, res) => {
     );
   } catch (err) {
     console.error("Get Product Reviews Error:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Something went wrong"

@@ -10,7 +10,7 @@ const perApiLimiter = (maxRequests = 100) =>
         standardHeaders: true,
         legacyHeaders: false,
         handler: (req, res) => {
-            return apiErrorRes(
+            return apiErrorRes(req,
                 429,
                 res,
                 'Too many requests on this API, please try again after a minute.'

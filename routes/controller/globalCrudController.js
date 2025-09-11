@@ -26,9 +26,9 @@ const globalCrudController = {
       const modelData = await createDocument(model, payload);
       if (modelData.statusCode === CONSTANTS.SUCCESS)
         return apiSuccessRes(req,HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, modelData.data);
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, modelData.data, modelData.data);
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, modelData.data, modelData.data);
     } catch (error) {
-      return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error.message);
+      return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error.message);
     }
   },
 
@@ -39,9 +39,9 @@ const globalCrudController = {
       if (modelData.statusCode === CONSTANTS.SUCCESS)
         return apiSuccessRes(req,HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, modelData.data);
 
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, CONSTANTS_MSG.NOT_FOUND, CONSTANTS.DATA_NULL);
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, CONSTANTS_MSG.NOT_FOUND, CONSTANTS.DATA_NULL);
     } catch (error) {
-      return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error.message);
+      return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error.message);
     }
   },
 
@@ -62,9 +62,9 @@ const globalCrudController = {
         return apiSuccessRes(req,HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, modelData.data);
       }
 
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, CONSTANTS_MSG.FAILED, CONSTANTS.DATA_NULL);
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, CONSTANTS_MSG.FAILED, CONSTANTS.DATA_NULL);
     } catch (error) {
-      return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error.message);
+      return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error.message);
     }
   },
 
@@ -84,9 +84,9 @@ const globalCrudController = {
         return apiSuccessRes(req,HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, modelData.data);
       }
 
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, CONSTANTS_MSG.FAILED, CONSTANTS.DATA_NULL);
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, CONSTANTS_MSG.FAILED, CONSTANTS.DATA_NULL);
     } catch (error) {
-      return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error.message);
+      return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error.message);
     }
   },
 
@@ -105,9 +105,9 @@ const globalCrudController = {
         return apiSuccessRes(req,HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, modelData.data);
       }
 
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, CONSTANTS_MSG.FAILED, CONSTANTS.DATA_NULL);
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, CONSTANTS_MSG.FAILED, CONSTANTS.DATA_NULL);
     } catch (error) {
-      return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error.message);
+      return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error.message);
     }
   },
 
@@ -161,9 +161,9 @@ const globalCrudController = {
       if (modelData.statusCode === CONSTANTS.SUCCESS)
         return apiSuccessRes(req,HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, modelData.data);
 
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, CONSTANTS_MSG.FAILED, CONSTANTS.DATA_NULL);
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, CONSTANTS_MSG.FAILED, CONSTANTS.DATA_NULL);
     } catch (error) {
-      return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error.message);
+      return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error.message);
     }
   }
 
@@ -187,9 +187,9 @@ const globalCrudController = {
   //     if (modelData.statusCode === CONSTANTS.SUCCESS)
   //       return apiSuccessRes(req,HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, modelData.data);
 
-  //     return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, CONSTANTS_MSG.FAILED, CONSTANTS.DATA_NULL);
+  //     return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, CONSTANTS_MSG.FAILED, CONSTANTS.DATA_NULL);
   //   } catch (error) {
-  //     return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error.message);
+  //     return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message, error.message);
   //   }
   // }
 };

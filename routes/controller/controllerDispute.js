@@ -95,7 +95,7 @@ const emitSystemMessage = async (
 const createDispute = async (req, res) => {
   /* 1) validate input --------------------------------------------------- */
   const { value, error } = createDisputeSchema.validate(req.body);
-  if (error) return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, error.message);
+  if (error) return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, error.message);
   const { orderId, disputeType, description } = value;
 
   const session = await mongoose.startSession();
@@ -109,7 +109,7 @@ const createDispute = async (req, res) => {
     }).session(session);
     if (!order) {
       await session.abortTransaction();
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.NOT_FOUND,
         res,
         "Order not found for this buyer"
@@ -118,7 +118,7 @@ const createDispute = async (req, res) => {
 
     if (order.status === "completed") {
       await session.abortTransaction();
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Cannot raise dispute on a completed order"
@@ -134,7 +134,7 @@ const createDispute = async (req, res) => {
 
     if (!deliveredHistory) {
       await session.abortTransaction();
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Order has never been marked as delivered"
@@ -147,7 +147,7 @@ const createDispute = async (req, res) => {
 
     if (now - deliveredAt > THREE_DAYS_IN_MS) {
       await session.abortTransaction();
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         `Dispute can only be raised within ${process.env.DAY} days of delivery`
@@ -307,7 +307,7 @@ const createDispute = async (req, res) => {
   } catch (err) {
     cosnole.log("errerr",err)
     await session.abortTransaction();
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
+    return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
   } finally {
     session.endSession();
   }
@@ -316,7 +316,7 @@ const createDispute = async (req, res) => {
 /* -------------------- SELLER -------------------- */
 const sellerRespond = async (req, res) => {
   const { value, error } = sellerRespondSchema.validate(req.body);
-  if (error) return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, error.message);
+  if (error) return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, error.message);
   const { disputeId, responseType, description } = value;
 
   try {
@@ -327,7 +327,7 @@ const sellerRespond = async (req, res) => {
       isDeleted: false,
     });
     if (!dispute)
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.NOT_FOUND,
         res,
         "Dispute not found for this seller"
@@ -448,25 +448,25 @@ const sellerRespond = async (req, res) => {
 
     return apiSuccessRes(req,HTTP_STATUS.OK, res, "Response recorded", dispute);
   } catch (err) {
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
+    return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
   }
 };
 
 /* -------------------- ADMIN -------------------- */
 const adminDecision = async (req, res) => {
   const { value, error } = adminDecisionSchema.validate(req.body);
-  if (error) return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, error.message);
+  if (error) return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, error.message);
   const { disputeId, decision, decisionNote, disputeAmountPercent } = value;
 
   try {
     const dispute = await Dispute.findById(disputeId);
     if (!dispute)
-      return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Dispute not found");
+      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "Dispute not found");
 
     // Validate disputeAmountPercent only when decision is in favour of buyer
     if (decision === "BUYER" && disputeAmountPercent !== undefined) {
       if (disputeAmountPercent < 0 || disputeAmountPercent > 100) {
-        return apiErrorRes(
+        return apiErrorRes(req,
           HTTP_STATUS.BAD_REQUEST,
           res,
           "Dispute amount percent must be between 0 and 100"
@@ -634,14 +634,14 @@ const adminDecision = async (req, res) => {
 
     return apiSuccessRes(req,HTTP_STATUS.OK, res, "Dispute resolved", dispute);
   } catch (err) {
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
+    return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
   }
 };
 
 /** POST /dispute/admin/update-status */
 const updateStatus = async (req, res) => {
   const { value, error } = updateStatusSchema.validate(req.body);
-  if (error) return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, error.message);
+  if (error) return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, error.message);
   const { disputeId, status } = value;
 
   try {
@@ -651,7 +651,7 @@ const updateStatus = async (req, res) => {
       { new: true }
     );
     if (!dispute)
-      return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Dispute not found");
+      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "Dispute not found");
 
     await logHistory({
       disputeId,
@@ -663,7 +663,7 @@ const updateStatus = async (req, res) => {
 
     return apiSuccessRes(req,HTTP_STATUS.OK, res, "Status updated", dispute);
   } catch (err) {
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
+    return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
   }
 };
 
@@ -716,7 +716,7 @@ const adminListAll = async (req, res) => {
       disputes: items,
     });
   } catch (err) {
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
+    return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
   }
 };
 
@@ -725,7 +725,7 @@ const disputeByOrderId = async (req, res) => {
     const { orderId } = req.params;
 
     if (!orderId) {
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Order ID is required");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Order ID is required");
     }
 
     // Fetch dispute
@@ -751,7 +751,7 @@ const disputeByOrderId = async (req, res) => {
       .lean();
 
     if (!dispute) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.NOT_FOUND,
         res,
         "No dispute found for this order"
@@ -792,7 +792,7 @@ const disputeByOrderId = async (req, res) => {
       response
     );
   } catch (err) {
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
+    return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
   }
 };
 

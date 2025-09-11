@@ -69,7 +69,7 @@ const list = async (req, res) => {
 
     } catch (error) {
         console.error('Error fetching notifications:', error);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Failed to fetch notifications', error.message);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Failed to fetch notifications', error.message);
     }
 };
 

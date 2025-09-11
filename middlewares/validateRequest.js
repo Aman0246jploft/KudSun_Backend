@@ -8,7 +8,7 @@ const validateRequest = (schema) => (req, res, next) => {
   // if (error) {
   //   // Remove quotes from field names in error message
   //   const message = error.details[0].message.replace(/"/g, '');
-  //   return apiErrorRes(
+  //   return apiErrorRes(req,
   //     HTTP_STATUS.BAD_REQUEST,
   //     res,
   //     message
@@ -21,7 +21,7 @@ const validateRequest = (schema) => (req, res, next) => {
   console.log("error", error)
   if (error) {
     const message = error.details[0].message.replace(/"/g, '');
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.BAD_REQUEST,
       res,
       message

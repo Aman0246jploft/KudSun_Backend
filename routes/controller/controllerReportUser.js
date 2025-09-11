@@ -38,7 +38,7 @@ const create = async (req, res) => {
         return apiSuccessRes(req,HTTP_STATUS.CREATED, res, "Reported", newReport);
     } catch (err) {
         console.error('Error creating report:', err);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, CONSTANTS_MSG.INTERNAL_SERVER_ERROR);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, CONSTANTS_MSG.INTERNAL_SERVER_ERROR);
     }
 };
 
@@ -48,14 +48,14 @@ const softDelete = async (req, res) => {
         const reportId = req.params.id;
 
         if (!reportId) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Report ID is required');
+            return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'Report ID is required');
         }
 
         // Find the report
         const report = await ReportUser.findOne({ _id: reportId, isDisable: false });
 
         if (!report) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Report not found or already deleted');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Report not found or already deleted');
         }
 
         // Delete images from Cloudinary
@@ -77,7 +77,7 @@ const softDelete = async (req, res) => {
         return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Report soft-deleted successfully', null);
     } catch (err) {
         console.error('Error during soft delete:', err);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, CONSTANTS_MSG.INTERNAL_SERVER_ERROR);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, CONSTANTS_MSG.INTERNAL_SERVER_ERROR);
     }
 };
 
@@ -112,7 +112,7 @@ const getReports = async (req, res) => {
         return apiSuccessRes(req,HTTP_STATUS.OK, res, "Reports fetched successfully", response);
     } catch (err) {
         console.error('Error fetching reports:', err);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, CONSTANTS_MSG.INTERNAL_SERVER_ERROR);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, CONSTANTS_MSG.INTERNAL_SERVER_ERROR);
     }
 };
 
@@ -123,7 +123,7 @@ const getReportsByUserId = async (req, res) => {
         const { pageNo = 1, size = 10 } = req.query;
 
         if (!userId) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'User ID is required');
+            return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'User ID is required');
         }
 
         const page = parseInt(pageNo);
@@ -151,7 +151,7 @@ const getReportsByUserId = async (req, res) => {
         return apiSuccessRes(req,HTTP_STATUS.OK, res, "Reports fetched successfully", response);
     } catch (err) {
         console.error('Error fetching reports by userId:', err);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, CONSTANTS_MSG.INTERNAL_SERVER_ERROR);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, CONSTANTS_MSG.INTERNAL_SERVER_ERROR);
     }
 };
 

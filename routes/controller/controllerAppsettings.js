@@ -21,7 +21,7 @@ const { uploadImageCloudinary, deleteImageCloudinary } = require('../../utils/cl
 //         ]);
 //         return apiSuccessRes(req,HTTP_STATUS.OK, res, "Policy fetched successfully", { term, policy });
 //     } catch (error) {
-//         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+//         return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
 //     }
 // };
 
@@ -39,7 +39,7 @@ const termAndPolicy = async (req, res) => {
 
     return apiSuccessRes(req,HTTP_STATUS.OK, res, "Policy fetched successfully", result);
   } catch (error) {
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
   }
 };
 
@@ -57,7 +57,7 @@ const auctionRule = async (req, res) => {
 
     return apiSuccessRes(req,HTTP_STATUS.OK, res, "Auction_rules fetched successfully", { Auction_rules });
   } catch (error) {
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
   }
 };
 
@@ -94,7 +94,7 @@ const getFAQs = async (req, res) => {
 
     return apiSuccessRes(req,HTTP_STATUS.OK, res, "FAQs fetched successfully", { faqs });
   } catch (error) {
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
   }
 };
 
@@ -109,7 +109,7 @@ const getVideo = async (req, res) => {
 
     return apiSuccessRes(req,HTTP_STATUS.OK, res, "VideoUrl", Auction_rules);
   } catch (error) {
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
   }
 };
 
@@ -118,7 +118,7 @@ const updateVideo = async (req, res) => {
     const key = "11videoXYZ"; // Hardcoded key
 
     if (!req.file) {
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Video file is required.");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Video file is required.");
     }
 
     // Find existing setting
@@ -141,7 +141,7 @@ const updateVideo = async (req, res) => {
 
     return apiSuccessRes(req,HTTP_STATUS.OK, res, "Video updated successfully", updatedSetting);
   } catch (error) {
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
   }
 };
 

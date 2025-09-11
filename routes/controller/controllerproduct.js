@@ -142,7 +142,7 @@ const addSellerProduct = async (req, res) => {
             : req.body.specifics;
 
         if (typeof parsed !== "object" || Array.isArray(parsed)) {
-          return apiErrorRes(
+          return apiErrorRes(req,
             HTTP_STATUS.BAD_REQUEST,
             res,
             "Specifics must be a key-value object."
@@ -166,7 +166,7 @@ const addSellerProduct = async (req, res) => {
       }
     } catch (e) {
       console.error("❌ Error in specifics handling:", e);
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Invalid specifics format or processing failed."
@@ -193,7 +193,7 @@ const addSellerProduct = async (req, res) => {
             "❌ Failed to parse auctionSettings:",
             req.body.auctionSettings
           );
-          return apiErrorRes(
+          return apiErrorRes(req,
             HTTP_STATUS.BAD_REQUEST,
             res,
             "Invalid 'auctionSettings' JSON format."
@@ -216,7 +216,7 @@ const addSellerProduct = async (req, res) => {
           "❌ Missing startingPrice or reservePrice or biddingIncrementPrice in auctionSettings:",
           auctionSettings
         );
-        return apiErrorRes(
+        return apiErrorRes(req,
           HTTP_STATUS.BAD_REQUEST,
           res,
           "Auction settings are required when saleType is 'auction'"
@@ -234,7 +234,7 @@ const addSellerProduct = async (req, res) => {
 
         // Validate
         if (!biddingEndsAtDateTime.isValid) {
-          return apiErrorRes(
+          return apiErrorRes(req,
             HTTP_STATUS.BAD_REQUEST,
             res,
             "Invalid endDate or endTime with provided timeZone."
@@ -262,7 +262,7 @@ const addSellerProduct = async (req, res) => {
           });
         }
       } else {
-        return apiErrorRes(
+        return apiErrorRes(req,
           HTTP_STATUS.BAD_REQUEST,
           res,
           "Please provide either (endDate & endTime) or duration."
@@ -286,42 +286,42 @@ const addSellerProduct = async (req, res) => {
 
     // === Validate required fields ===
     if (!categoryId) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Missing required field: categoryId."
       );
     }
     if (!subCategoryId) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Missing required field: subCategoryId."
       );
     }
     if (!title) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Missing required field: title."
       );
     }
     if (!condition) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Missing required field: condition."
       );
     }
     if (!saleType) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Missing required field: saleType."
       );
     }
     if (!deliveryType) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Missing required field: deliveryType."
@@ -331,7 +331,7 @@ const addSellerProduct = async (req, res) => {
       (specifics !== null && !Array.isArray(specifics)) ||
       specifics?.length === 0
     ) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Missing or invalid field: specifics must be a non-empty array."
@@ -339,7 +339,7 @@ const addSellerProduct = async (req, res) => {
     }
 
     if (saleType === SALE_TYPE.FIXED && (!fixedPrice || isNaN(fixedPrice))) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Fixed price is required."
@@ -350,7 +350,7 @@ const addSellerProduct = async (req, res) => {
       deliveryType === DeliveryType.CHARGE_SHIPPING &&
       (shippingCharge == null || isNaN(shippingCharge))
     ) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Shipping charge required."
@@ -363,7 +363,7 @@ const addSellerProduct = async (req, res) => {
         const keys = ["parameterId", "parameterName", "valueId", "valueName"];
         for (const key of keys) {
           if (!spec[key]) {
-            return apiErrorRes(
+            return apiErrorRes(req,
               HTTP_STATUS.BAD_REQUEST,
               res,
               `Missing '${key}' in specifics.`
@@ -381,7 +381,7 @@ const addSellerProduct = async (req, res) => {
         try {
           imageArray = JSON.parse(imageArray);
         } catch (err) {
-          return apiErrorRes(
+          return apiErrorRes(req,
             400,
             res,
             "Invalid imageArray format. Must be a JSON stringified array of URLs."
@@ -480,7 +480,7 @@ const addSellerProduct = async (req, res) => {
     );
   } catch (error) {
     console.log(error);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       error.message,
@@ -500,7 +500,7 @@ const updateSellerProduct = async (req, res) => {
     const existingProduct = await Model.findById(productId);
 
     if (!existingProduct) {
-      return apiErrorRes(404, res, "Product not found");
+      return apiErrorRes(req,404, res, "Product not found");
     }
 
     // Prepare fields to update from req.body
@@ -538,7 +538,7 @@ const updateSellerProduct = async (req, res) => {
           typeof parsedSpecifics !== "object" ||
           Array.isArray(parsedSpecifics)
         ) {
-          return apiErrorRes(400, res, "Specifics must be a key-value object.");
+          return apiErrorRes(req,400, res, "Specifics must be a key-value object.");
         }
 
         processedSpecifics = [];
@@ -557,7 +557,7 @@ const updateSellerProduct = async (req, res) => {
         }
       } catch (err) {
         console.error("❌ Error processing specifics:", err);
-        return apiErrorRes(
+        return apiErrorRes(req,
           400,
           res,
           "Invalid specifics format or processing failed."
@@ -571,24 +571,24 @@ const updateSellerProduct = async (req, res) => {
         auctionSettings = JSON.parse(auctionSettings);
       }
     } catch (err) {
-      return apiErrorRes(400, res, "Invalid JSON in auctionSettings field.");
+      return apiErrorRes(req,400, res, "Invalid JSON in auctionSettings field.");
     }
     specifics = processedSpecifics ?? null;
 
     // Validate required fields ONLY for published (non-draft) products
     if (!isDraftUpdate) {
       if (!categoryId)
-        return apiErrorRes(400, res, "Missing required field: categoryId.");
+        return apiErrorRes(req,400, res, "Missing required field: categoryId.");
       if (!subCategoryId)
-        return apiErrorRes(400, res, "Missing required field: subCategoryId.");
+        return apiErrorRes(req,400, res, "Missing required field: subCategoryId.");
       if (!title)
-        return apiErrorRes(400, res, "Missing required field: title.");
+        return apiErrorRes(req,400, res, "Missing required field: title.");
       if (!condition)
-        return apiErrorRes(400, res, "Missing required field: condition.");
+        return apiErrorRes(req,400, res, "Missing required field: condition.");
       if (!saleType)
-        return apiErrorRes(400, res, "Missing required field: saleType.");
+        return apiErrorRes(req,400, res, "Missing required field: saleType.");
       if (!deliveryType)
-        return apiErrorRes(400, res, "Missing required field: deliveryType.");
+        return apiErrorRes(req,400, res, "Missing required field: deliveryType.");
 
       // Condition must be valid
 
@@ -596,7 +596,7 @@ const updateSellerProduct = async (req, res) => {
       // specifics is optional; validate only if provided
       if (req.body.specifics) {
         if (!Array.isArray(processedSpecifics)) {
-          return apiErrorRes(
+          return apiErrorRes(req,
             400,
             res,
             "Specifics must be an array if provided."
@@ -607,7 +607,7 @@ const updateSellerProduct = async (req, res) => {
           const keys = ["parameterId", "parameterName", "valueId", "valueName"];
           for (const key of keys) {
             if (!spec[key]) {
-              return apiErrorRes(400, res, `Missing '${key}' in specifics.`);
+              return apiErrorRes(req,400, res, `Missing '${key}' in specifics.`);
             }
           }
         }
@@ -621,7 +621,7 @@ const updateSellerProduct = async (req, res) => {
         saleType === SALE_TYPE.FIXED &&
         (fixedPrice == null || isNaN(fixedPrice))
       ) {
-        return apiErrorRes(
+        return apiErrorRes(req,
           400,
           res,
           "Fixed price is required and must be a number."
@@ -630,7 +630,7 @@ const updateSellerProduct = async (req, res) => {
 
       if (saleType === SALE_TYPE.AUCTION) {
         if (!auctionSettings) {
-          return apiErrorRes(400, res, "Auction settings are required.");
+          return apiErrorRes(req,400, res, "Auction settings are required.");
         }
         const {
           startingPrice,
@@ -647,7 +647,7 @@ const updateSellerProduct = async (req, res) => {
           reservePrice == null ||
           !biddingIncrementPrice
         ) {
-          return apiErrorRes(
+          return apiErrorRes(req,
             400,
             res,
             "Auction settings must include startingPrice , reservePrice and biddingIncrementPrice."
@@ -663,7 +663,7 @@ const updateSellerProduct = async (req, res) => {
             zone: auctionTimezone,
           });
           if (!biddingEndsAtDateTime.isValid) {
-            return apiErrorRes(400, res, "Invalid auction endDate or endTime.");
+            return apiErrorRes(req,400, res, "Invalid auction endDate or endTime.");
           }
         } else if (duration != null) {
           const now = DateTime.now().setZone(auctionTimezone);
@@ -685,7 +685,7 @@ const updateSellerProduct = async (req, res) => {
             });
           }
         } else {
-          return apiErrorRes(
+          return apiErrorRes(req,
             400,
             res,
             "Auction settings must include either (endDate & endTime) or duration."
@@ -715,7 +715,7 @@ const updateSellerProduct = async (req, res) => {
         deliveryType === DeliveryType.CHARGE_SHIPPING &&
         (shippingCharge == null || isNaN(shippingCharge))
       ) {
-        return apiErrorRes(
+        return apiErrorRes(req,
           400,
           res,
           "Shipping charge is required and must be a number when delivery type is shipping."
@@ -732,7 +732,7 @@ const updateSellerProduct = async (req, res) => {
         try {
           imageArray = JSON.parse(imageArray);
         } catch (err) {
-          return apiErrorRes(
+          return apiErrorRes(req,
             400,
             res,
             "Invalid imageArray format, must be JSON-parsable array."
@@ -748,7 +748,7 @@ const updateSellerProduct = async (req, res) => {
       );
 
       if (!Array.isArray(cleanBodyUrls)) {
-        return apiErrorRes(
+        return apiErrorRes(req,
           400,
           res,
           "imageArray must be an array of valid image URLs."
@@ -828,7 +828,7 @@ const updateSellerProduct = async (req, res) => {
     );
   } catch (error) {
     console.log(error);
-    return apiErrorRes(500, res, error.message, error);
+    return apiErrorRes(req,500, res, error.message, error);
   }
 };
 
@@ -843,11 +843,11 @@ const toggleProductDisable = async (req, res) => {
     const product = await Model.findById(productId);
 
     if (!product) {
-      return apiErrorRes(404, res, "Product not found");
+      return apiErrorRes(req,404, res, "Product not found");
     }
 
     if (typeof req.body.isDisable === "undefined") {
-      return apiErrorRes(400, res, "Missing isDisable field");
+      return apiErrorRes(req,400, res, "Missing isDisable field");
     }
 
     product.isDisable = !product.isDisable;
@@ -937,7 +937,7 @@ const toggleProductDisable = async (req, res) => {
       product
     );
   } catch (error) {
-    return apiErrorRes(500, res, error.message, error);
+    return apiErrorRes(req,500, res, error.message, error);
   }
 };
 
@@ -1321,7 +1321,7 @@ const showNormalProducts = async (req, res) => {
     });
   } catch (error) {
     console.error("showNormalProducts error:", error);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Something went wrong"
@@ -1925,7 +1925,7 @@ const showAuctionProducts = async (req, res) => {
     );
   } catch (error) {
     console.error("showAuctionProducts error:", error);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Something went wrong"
@@ -2043,7 +2043,7 @@ const getLimitedTimeDeals = async (req, res) => {
     );
   } catch (error) {
     console.error("getLimitedTimeDeals error:", error);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Something went wrong"
@@ -2531,7 +2531,7 @@ const fetchCombinedProducts = async (req, res) => {
     });
   } catch (error) {
     console.error("showAllProducts error:", error);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Something went wrong"
@@ -2754,7 +2754,7 @@ const fetchUserProducts = async (req, res) => {
     );
   } catch (error) {
     console.error("fetchUserProducts error:", error);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Something went wrong"
@@ -2767,7 +2767,7 @@ const createHistory = async (req, res) => {
   const { userId } = req.user;
 
   if (!searchQuery) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.BAD_REQUEST,
       res,
       "Search query is required"
@@ -2839,7 +2839,7 @@ const trackProductView = async (req, res) => {
     const { source = "search" } = req.query; // where they came from
 
     if (!productId) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Product ID is required"
@@ -2852,7 +2852,7 @@ const trackProductView = async (req, res) => {
       .lean();
 
     if (!product) {
-      return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Product not found");
+      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "Product not found");
     }
 
     // Track the product view
@@ -2875,7 +2875,7 @@ const trackProductView = async (req, res) => {
     return apiSuccessRes(req,HTTP_STATUS.OK, res, "Product view tracked");
   } catch (error) {
     console.error("Track product view error:", error);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Failed to track view"
@@ -2931,7 +2931,7 @@ const getViewHistory = async (req, res) => {
     });
   } catch (error) {
     console.error("Get view history error:", error);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Failed to fetch view history"
@@ -2951,7 +2951,7 @@ const clearAllHistory = async (req, res) => {
     return apiSuccessRes(req,HTTP_STATUS.OK, res, "All search history cleared");
   } catch (error) {
     console.error("clearAllHistory error:", error);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Internal server error"
@@ -2970,7 +2970,7 @@ const clearOneHistory = async (req, res) => {
     );
 
     if (!result) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.NOT_FOUND,
         res,
         "History not found or already deleted"
@@ -2980,7 +2980,7 @@ const clearOneHistory = async (req, res) => {
     return apiSuccessRes(req,HTTP_STATUS.OK, res, "Search history item deleted");
   } catch (error) {
     console.error("clearOneHistory error:", error);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Internal server error"
@@ -3013,7 +3013,7 @@ const getSearchHistory = async (req, res) => {
     });
   } catch (error) {
     console.error("getSearchHistory error:", error);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Internal server error"
@@ -3072,7 +3072,7 @@ const getProduct = async (req, res) => {
       .lean();
 
     if (!product) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.NOT_FOUND,
         res,
         "Product not found or unavailable."
@@ -3360,7 +3360,7 @@ const getProduct = async (req, res) => {
       product
     );
   } catch (error) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       error.message,
@@ -3658,7 +3658,7 @@ const addComment = async (req, res) => {
     return apiSuccessRes(req,HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, saved);
   } catch (error) {
     console.error("Error in addComment:", error);
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
   }
 };
 
@@ -3723,7 +3723,7 @@ const getProductComment = async (req, res) => {
     });
   } catch (err) {
     console.error("Error fetching product comments:", err);
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
+    return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
   }
 };
 
@@ -3735,7 +3735,7 @@ const getCommentByParentId = async (req, res) => {
     const skip = (page - 1) * limit;
 
     if (!mongoose.Types.ObjectId.isValid(parentId)) {
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid parentId");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Invalid parentId");
     }
 
     // Fetch replies (direct children) with author and products
@@ -3805,7 +3805,7 @@ const getCommentByParentId = async (req, res) => {
     );
   } catch (error) {
     console.error("Error in getCommentByParentId:", error);
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Server error");
+    return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Server error");
   }
 };
 
@@ -3850,7 +3850,7 @@ const getDraftProducts = async (req, res) => {
       }
     );
   } catch (error) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       error.message,
@@ -3866,7 +3866,7 @@ const deleteProduct = async (req, res) => {
     const roleIds = req.user?.roleId;
 
     if (!id) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Product ID is required."
@@ -3876,7 +3876,7 @@ const deleteProduct = async (req, res) => {
     // Find product and check existence
     const product = await SellProduct.findOne({ _id: id, isDeleted: false });
     if (!product) {
-      return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Product not found.");
+      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "Product not found.");
     }
 
     // Check if user is owner or super admin
@@ -3884,7 +3884,7 @@ const deleteProduct = async (req, res) => {
     const isSuperAdmin = roleIds === roleId.SUPER_ADMIN;
 
     if (!isOwner && !isSuperAdmin) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.FORBIDDEN,
         res,
         "You are not authorized to delete this product."
@@ -3920,7 +3920,7 @@ const deleteProduct = async (req, res) => {
 
     return apiSuccessRes(req,HTTP_STATUS.OK, res, "Product deleted successfully.");
   } catch (error) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       error.message,
@@ -3936,7 +3936,7 @@ const deleteProductDraft = async (req, res) => {
     const roleIds = req.user?.roleId;
 
     if (!id) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Product ID is required."
@@ -3949,7 +3949,7 @@ const deleteProductDraft = async (req, res) => {
       isDeleted: false,
     });
     if (!product) {
-      return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Product not found.");
+      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "Product not found.");
     }
 
     // Check if user is owner or super admin
@@ -3957,7 +3957,7 @@ const deleteProductDraft = async (req, res) => {
     const isSuperAdmin = roleIds === roleId.SUPER_ADMIN;
 
     if (!isOwner && !isSuperAdmin) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.FORBIDDEN,
         res,
         "You are not authorized to delete this product."
@@ -3993,7 +3993,7 @@ const deleteProductDraft = async (req, res) => {
 
     return apiSuccessRes(req,HTTP_STATUS.OK, res, "Product deleted successfully.");
   } catch (error) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       error.message,
@@ -4008,7 +4008,7 @@ const trending = async (req, res) => {
 
     const existing = await SellProduct.findById(id);
     if (!existing) {
-      return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, `Product not found.`);
+      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, `Product not found.`);
     }
 
     existing.isTrending = !existing.isTrending;
@@ -4016,7 +4016,7 @@ const trending = async (req, res) => {
 
     return apiSuccessRes(req,HTTP_STATUS.OK, res, `Product updated successfully.`);
   } catch (error) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       error.message,
@@ -4037,7 +4037,7 @@ const updateAllTrending = async (req, res) => {
       result
     );
   } catch (error) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       error.message,
@@ -4050,7 +4050,7 @@ const otherUserReview = async (req, res) => {
   try {
     const userId = req.query.userId;
     if (!userId) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "userId query param is required"
@@ -4097,7 +4097,7 @@ const otherUserReview = async (req, res) => {
       data: reviews,
     });
   } catch (error) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       error.message,
@@ -4359,7 +4359,7 @@ const getProductsWithDraft = async (req, res) => {
     );
   } catch (err) {
     console.error("Get products error:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       err.message || "Failed to fetch products"
@@ -4394,7 +4394,7 @@ const adminSearchProducts = async (req, res) => {
     return apiSuccessRes(req,HTTP_STATUS.OK, res, "Products found", products);
   } catch (error) {
     console.error("Admin product search error:", error);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Failed to search products"

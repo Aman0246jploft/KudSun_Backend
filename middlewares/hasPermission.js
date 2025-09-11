@@ -7,7 +7,7 @@ function hasPermission(requiredRoles) {
     if (requiredRoles.includes(roleId)) {
       next();
     } else {
-      return apiErrorRes(HTTP_STATUS.FORBIDDEN, res, "Forbidden!", null);
+      return apiErrorRes(req,HTTP_STATUS.FORBIDDEN, res, "Forbidden!", null);
     }
   };
 }

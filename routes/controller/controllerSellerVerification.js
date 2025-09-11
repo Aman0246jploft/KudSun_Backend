@@ -30,10 +30,10 @@ const create = async (req, res) => {
 
         if (existing) {
             if (existing.verificationStatus === 'Approved') {
-                return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'You are already verified');
+                return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'You are already verified');
             }
             if (existing.verificationStatus === 'Pending') {
-                return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'You already Applied wait for verification');
+                return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'You already Applied wait for verification');
             }
         }
 
@@ -46,7 +46,7 @@ const create = async (req, res) => {
         const selfieFile = req.files?.selfieWithId?.[0];
 
         if (!existing && (!idFrontFile || !selfieFile)) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Both ID Document Front and Selfie with ID are required');
+            return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'Both ID Document Front and Selfie with ID are required');
         }
 
         if (idFrontFile) {
@@ -58,13 +58,13 @@ const create = async (req, res) => {
         }
 
         if (!idDocumentFrontUrl || !selfieWithIdUrl) {
-            return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Image upload failed');
+            return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Image upload failed');
         }
 
         if (paymentPayoutMethod === SELLER_PAYOUT_METHOD.BANK_TRANSFER) {
 
             if (!existing && (!bankName || !accountNumber || !accountHolderName)) {
-                return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'All bank details and bank book image are required for Bank Transfer');
+                return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'All bank details and bank book image are required for Bank Transfer');
             }
 
 
@@ -98,7 +98,7 @@ const create = async (req, res) => {
         let result;
         if (existing) {
             if (existing.verificationStatus === 'Approved') {
-                return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'You are already verified');
+                return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'You are already verified');
             }
             result = await SellerVerification.findOneAndUpdate({ userId }, payload, { new: true });
         } else {
@@ -115,7 +115,7 @@ const create = async (req, res) => {
 
     } catch (err) {
         console.error('createSellerVerification error:', err);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Something went wrong');
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Something went wrong');
     }
 };
 
@@ -232,7 +232,7 @@ const getSellerRequests = async (req, res) => {
 
     } catch (err) {
         console.error('getSellerRequests error:', err);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Something went wrong');
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, 'Something went wrong');
     }
 };
 

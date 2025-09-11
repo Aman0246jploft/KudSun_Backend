@@ -90,7 +90,7 @@ const addThread = async (req, res) => {
 
     if (!draftMode) {
       if (!categoryId || !subCategoryId || !title) {
-        return apiErrorRes(
+        return apiErrorRes(req,
           HTTP_STATUS.BAD_REQUEST,
           res,
           "Missing required fields."
@@ -180,7 +180,7 @@ const addThread = async (req, res) => {
     }
     return apiSuccessRes(req,HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, saved);
   } catch (error) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       error.message,
@@ -210,7 +210,7 @@ const updateThread = async (req, res) => {
 
     const existing = await Model.findById(id);
     if (!existing) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.NOT_FOUND,
         res,
         `${draftMode ? "Draft" : "Thread"} not found.`
@@ -221,7 +221,7 @@ const updateThread = async (req, res) => {
       req.user.roleId !== roleId.SUPER_ADMIN &&
       existing.userId.toString() !== req.user.userId
     ) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.FORBIDDEN,
         res,
         "You are not authorized to update this thread."
@@ -230,7 +230,7 @@ const updateThread = async (req, res) => {
 
     if (!draftMode) {
       if (!categoryId || !subCategoryId || !title) {
-        return apiErrorRes(
+        return apiErrorRes(req,
           HTTP_STATUS.BAD_REQUEST,
           res,
           "Missing required fields for published thread."
@@ -315,7 +315,7 @@ const updateThread = async (req, res) => {
 
     return apiSuccessRes(req,HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, updated);
   } catch (error) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       error.message,
@@ -335,7 +335,7 @@ const deleteThread = async (req, res) => {
     const existing = await Model.findById(id);
     // console.log(existing)
     if (!existing) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.NOT_FOUND,
         res,
         `${draftMode ? "Draft" : "Thread"} not found.`
@@ -346,7 +346,7 @@ const deleteThread = async (req, res) => {
       req.user.roleId !== roleId.SUPER_ADMIN &&
       existing.userId.toString() !== req.user.userId
     ) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.FORBIDDEN,
         res,
         "You are not authorized to delete this thread."
@@ -377,7 +377,7 @@ const deleteThread = async (req, res) => {
       `${draftMode ? "Draft" : "Thread"} deleted successfully.`
     );
   } catch (error) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       error.message,
@@ -396,7 +396,7 @@ const changeStatus = async (req, res) => {
 
     const existing = await Model.findById(id);
     if (!existing) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.NOT_FOUND,
         res,
         `${draftMode ? "Draft" : "Thread"} not found.`
@@ -407,7 +407,7 @@ const changeStatus = async (req, res) => {
       req.user.roleId !== roleId.SUPER_ADMIN &&
       existing.userId.toString() !== req.user.userId
     ) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.FORBIDDEN,
         res,
         "You are not authorized to Change Status ."
@@ -423,7 +423,7 @@ const changeStatus = async (req, res) => {
       `${draftMode ? "Draft" : "Thread"} updated successfully.`
     );
   } catch (error) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       error.message,
@@ -438,7 +438,7 @@ const trending = async (req, res) => {
 
     const existing = await Thread.findById(id);
     if (!existing) {
-      return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, `Thread not found.`);
+      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, `Thread not found.`);
     }
 
     existing.isTrending = !existing.isTrending;
@@ -446,7 +446,7 @@ const trending = async (req, res) => {
 
     return apiSuccessRes(req,HTTP_STATUS.OK, res, `Thread updated successfully.`);
   } catch (error) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       error.message,
@@ -469,7 +469,7 @@ const updateAllThreadTrending = async (req, res) => {
       result
     );
   } catch (error) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       error.message,
@@ -483,7 +483,7 @@ const getThreadByUserId = async (req, res) => {
   try {
     const userId = req.body.userId || req.user.userId;
     if (!mongoose.Types.ObjectId.isValid(userId)) {
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid userId");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Invalid userId");
     }
 
     const page = parseInt(req.body.pageNo) || 1;
@@ -542,7 +542,7 @@ const getThreadByUserId = async (req, res) => {
     );
   } catch (error) {
     console.error(error);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       error.message,
@@ -560,7 +560,7 @@ const closeThread = async (req, res) => {
       userId: toObjectId(userId),
     });
     if (!thread) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.NOT_FOUND,
         res,
         CONSTANTS_MSG.THREAD_NOT_FOUND,
@@ -572,7 +572,7 @@ const closeThread = async (req, res) => {
     return apiSuccessRes(req,HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, thread);
   } catch (error) {
     console.error(error);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       error.message,
@@ -908,7 +908,7 @@ const addComment = async (req, res) => {
     return apiSuccessRes(req,HTTP_STATUS.OK, res, CONSTANTS_MSG.SUCCESS, saved);
   } catch (error) {
     console.error("Error in addComment:", error);
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
   }
 };
 
@@ -935,7 +935,7 @@ const addComment = async (req, res) => {
 //         const sortOrder = req.query.orderBy === 'asc' ? 1 : -1;
 
 //         if (!threadId || threadId.length !== 24) {
-//             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Invalid thread ID');
+//             return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'Invalid thread ID');
 //         }
 
 //         // Step 1: Get associated product IDs from thread comments
@@ -1026,7 +1026,7 @@ const addComment = async (req, res) => {
 //         });
 
 //     } catch (error) {
-//         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+//         return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
 //     }
 // };
 
@@ -1050,7 +1050,7 @@ const associatedProductByThreadId = async (req, res) => {
     const sortOrder = req.query.orderBy === "asc" ? 1 : -1;
 
     if (!threadId || threadId.length !== 24) {
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid thread ID");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Invalid thread ID");
     }
 
     // Step 1: Get associated product IDs from helper
@@ -1150,7 +1150,7 @@ const associatedProductByThreadId = async (req, res) => {
       }
     );
   } catch (error) {
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+    return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
   }
 };
 
@@ -1223,7 +1223,7 @@ const getThreadComments = async (req, res) => {
     });
   } catch (err) {
     console.error("Error fetching comments:", err);
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
+    return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
   }
 };
 
@@ -1235,7 +1235,7 @@ const getCommentByParentId = async (req, res) => {
     const skip = (page - 1) * limit;
 
     if (!mongoose.Types.ObjectId.isValid(parentId)) {
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid parentId");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Invalid parentId");
     }
 
     // Fetch replies (direct children) with author and products
@@ -1299,7 +1299,7 @@ const getCommentByParentId = async (req, res) => {
     );
   } catch (error) {
     console.error("Error in getCommentByParentId:", error);
-    return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Server error");
+    return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Server error");
   }
 };
 
@@ -1608,7 +1608,7 @@ const getThreads = async (req, res) => {
     });
   } catch (error) {
     console.error("Error in getThreads:", error);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Something went wrong"
@@ -1621,7 +1621,7 @@ const getThreadById = async (req, res) => {
   try {
     const { threadId } = req.params;
     if (!mongoose.Types.ObjectId.isValid(threadId)) {
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid thread ID");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Invalid thread ID");
     }
 
     const thread = await Thread.findOne({ _id: threadId, isDeleted: false })
@@ -1639,7 +1639,7 @@ const getThreadById = async (req, res) => {
       .lean();
 
     if (!thread) {
-      return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Thread not found");
+      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "Thread not found");
     }
 
     // Increment view count
@@ -2163,7 +2163,7 @@ const getThreadById = async (req, res) => {
     });
   } catch (error) {
     console.error("Error in getThreadById:", error);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Something went wrong"
@@ -2189,7 +2189,7 @@ const getFollowedUsersThreads = async (req, res) => {
     const currentUserId = req.user?.userId;
 
     if (!currentUserId) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.UNAUTHORIZED,
         res,
         "User not authenticated"
@@ -2352,7 +2352,7 @@ const getFollowedUsersThreads = async (req, res) => {
     );
   } catch (error) {
     console.error("Error in getFollowedUsersThreads:", error);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Something went wrong"
@@ -2596,7 +2596,7 @@ const getRecentFollowedUsers = async (req, res) => {
     );
   } catch (err) {
     console.error("Error in getRecentFollowedUsers:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Something went wrong"
@@ -2612,7 +2612,7 @@ const getDraftThreads = async (req, res) => {
     const size = parseInt(req.query.size) || 10;
 
     if (pageNo < 1 || size < 1) {
-      return apiErrorRes(
+      return apiErrorRes(req,
         HTTP_STATUS.BAD_REQUEST,
         res,
         "Invalid pageNo or size."
@@ -2641,7 +2641,7 @@ const getDraftThreads = async (req, res) => {
       drafts,
     });
   } catch (error) {
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       error.message,
@@ -2654,7 +2654,7 @@ const selectProductForAssociation = async (req, res) => {
   try {
     const userId = req.user?.userId;
     if (!userId) {
-      return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, "Unauthorized access");
+      return apiErrorRes(req,HTTP_STATUS.UNAUTHORIZED, res, "Unauthorized access");
     }
 
     const { pageNo = 1, size = 10, keyWord = "" } = req.query;
@@ -2724,7 +2724,7 @@ const selectProductForAssociation = async (req, res) => {
     });
   } catch (error) {
     console.error("Error in selectProductForAssociation:", error);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       "Something went wrong"

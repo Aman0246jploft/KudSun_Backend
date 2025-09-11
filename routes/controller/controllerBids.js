@@ -27,7 +27,7 @@ const placeBid = async (req, res) => {
         if (!product) {
             await session.abortTransaction();
             session.endSession();
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Product not found or not available');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Product not found or not available');
         }
 
         const { auctionSettings = {} } = product;
@@ -36,7 +36,7 @@ const placeBid = async (req, res) => {
         if (!biddingEndsAt) {
             await session.abortTransaction();
             session.endSession();
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Auction end time not properly set.");
+            return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Auction end time not properly set.");
         }
 
         const now = new Date(); // UTC
@@ -45,19 +45,19 @@ const placeBid = async (req, res) => {
         if (now >= auctionEnd) {
             await session.abortTransaction();
             session.endSession();
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "The auction has already ended. You cannot place a bid.");
+            return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "The auction has already ended. You cannot place a bid.");
         }
 
         if (String(product.userId) === String(userId)) {
             await session.abortTransaction();
             session.endSession();
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "You cannot bid on your own product");
+            return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "You cannot bid on your own product");
         }
 
         if (product.saleType !== SALE_TYPE.AUCTION) {
             await session.abortTransaction();
             session.endSession();
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Bids can only be placed on auction products');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Bids can only be placed on auction products');
         }
 
         const { startingPrice, biddingIncrementPrice, reservePrice } = auctionSettings;
@@ -65,7 +65,7 @@ const placeBid = async (req, res) => {
         if (startingPrice == null) {
             await session.abortTransaction();
             session.endSession();
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Product auction settings are incomplete');
+            return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'Product auction settings are incomplete');
         }
 
         const highestBid = await Bid.findOne({ productId }).sort({ amount: -1 }).session(session);
@@ -74,7 +74,7 @@ const placeBid = async (req, res) => {
         if (amount < minAllowed) {
             await session.abortTransaction();
             session.endSession();
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, `Your bid must be at least ${minAllowed}`);
+            return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, `Your bid must be at least ${minAllowed}`);
         }
 
         if (highestBid) {
@@ -159,7 +159,7 @@ const productBidList = async (req, res) => {
         // Check if product exists
         const product = await SellProduct.findOne({ _id: productId, isDeleted: false });
         if (!product) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Product not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Product not found');
         }
 
         // Get total count
@@ -290,7 +290,7 @@ const myBids = async (req, res) => {
         return apiSuccessRes(req,HTTP_STATUS.OK, res, "Your bids", result);
     } catch (err) {
         console.error("Error in myBids:", err);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Internal server error");
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Internal server error");
     }
 };
 
@@ -309,18 +309,18 @@ const getBidInfo = async (req, res) => {
 
         const product = await SellProduct.findOne({ _id: productId, isDeleted: false, isDisable: false }).lean();
         if (!product) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Product not found or not available');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Product not found or not available');
         }
 
         if (product.saleType !== SALE_TYPE.AUCTION) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'This product is not an auction type');
+            return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'This product is not an auction type');
         }
 
         const { auctionSettings = {} } = product;
         const { biddingEndsAt, startingPrice, biddingIncrementPrice } = auctionSettings;
 
         if (!biddingEndsAt || startingPrice == null) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Auction settings are incomplete');
+            return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'Auction settings are incomplete');
         }
 
         const auctionEnd = new Date(biddingEndsAt); // already UTC
@@ -358,7 +358,7 @@ const getBidInfo = async (req, res) => {
 
     } catch (err) {
         console.error("Error in getBidInfo:", err);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Internal server error");
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, "Internal server error");
     }
 };
 

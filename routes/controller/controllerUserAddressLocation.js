@@ -41,7 +41,7 @@ const createAddress = async (req, res) => {
 
         return apiSuccessRes(req,HTTP_STATUS.CREATED, res, "Address created", address);
     } catch (err) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
     }
 };
 
@@ -52,7 +52,7 @@ const updateAddress = async (req, res) => {
         const { id } = req.body;
 
         if (!id) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Address id is required");
+            return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Address id is required");
         }
 
         // Convert isActive string to boolean if needed (e.g., from form-data)
@@ -69,7 +69,7 @@ const updateAddress = async (req, res) => {
         });
 
         if (!address) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Address not found");
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "Address not found");
         }
 
         // If this update sets the address to active, deactivate all others
@@ -86,7 +86,7 @@ const updateAddress = async (req, res) => {
 
         return apiSuccessRes(req,HTTP_STATUS.OK, res, "Address updated", address);
     } catch (err) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
     }
 };
 
@@ -102,7 +102,7 @@ const getList = async (req, res) => {
 
         return apiSuccessRes(req,HTTP_STATUS.OK, res, "Address list fetched", addresses);
     } catch (err) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
     }
 };
 

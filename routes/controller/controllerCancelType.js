@@ -40,7 +40,7 @@ const getReports = async (req, res) => {
         return apiSuccessRes(req,HTTP_STATUS.OK, res, "Cancel Type fetched successfully", response);
     } catch (err) {
         console.error('Error fetching reports:', err);
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
     }
 };
 

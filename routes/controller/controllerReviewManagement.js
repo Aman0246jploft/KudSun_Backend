@@ -272,7 +272,7 @@ const getAdminReviews = async (req, res) => {
     });
   } catch (err) {
     console.error("getAdminReviews error:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       err.message || "Failed to fetch reviews"
@@ -286,7 +286,7 @@ const getAdminReviewDetails = async (req, res) => {
     const { reviewId } = req.params;
 
     if (!reviewId) {
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Review ID is required");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Review ID is required");
     }
 
     const review = await ProductReview.aggregate([
@@ -400,7 +400,7 @@ const getAdminReviewDetails = async (req, res) => {
     ]);
 
     if (!review || review.length === 0) {
-      return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Review not found");
+      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "Review not found");
     }
 
     return apiSuccessRes(req,
@@ -411,7 +411,7 @@ const getAdminReviewDetails = async (req, res) => {
     );
   } catch (err) {
     console.error("getAdminReviewDetails error:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       err.message || "Failed to fetch review details"
@@ -426,7 +426,7 @@ const deleteAdminReview = async (req, res) => {
     const { reason = "" } = req.body;
 
     if (!reviewId) {
-      return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Review ID is required");
+      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Review ID is required");
     }
 
     const session = await mongoose.startSession();
@@ -441,7 +441,7 @@ const deleteAdminReview = async (req, res) => {
 
       if (!review) {
         await session.abortTransaction();
-        return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, "Review not found");
+        return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "Review not found");
       }
 
       // Mark review as deleted
@@ -483,7 +483,7 @@ const deleteAdminReview = async (req, res) => {
     }
   } catch (err) {
     console.error("deleteAdminReview error:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       err.message || "Failed to delete review"
@@ -632,7 +632,7 @@ const getReviewFilterOptions = async (req, res) => {
     );
   } catch (err) {
     console.error("getReviewFilterOptions error:", err);
-    return apiErrorRes(
+    return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
       err.message || "Failed to fetch filter options"

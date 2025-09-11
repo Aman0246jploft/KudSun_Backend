@@ -26,7 +26,7 @@ const createOrUpdateCategory = async (req, res) => {
             // Update existing category
             const existingCategory = await Category.findOne({ _id, isDeleted: false });
             if (!existingCategory) {
-                return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Category not found');
+                return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Category not found');
             }
 
             // If name provided, check for duplicate and update
@@ -38,7 +38,7 @@ const createOrUpdateCategory = async (req, res) => {
                     _id: { $ne: _id }
                 });
                 if (duplicateCategory) {
-                    return apiErrorRes(HTTP_STATUS.CONFLICT, res, 'Category name already in use');
+                    return apiErrorRes(req,HTTP_STATUS.CONFLICT, res, 'Category name already in use');
                 }
                 existingCategory.name = normalizedName;
             }
@@ -59,13 +59,13 @@ const createOrUpdateCategory = async (req, res) => {
         } else {
             // Create new category
             if (!name) {
-                return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Category name is required');
+                return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'Category name is required');
             }
             const normalizedName = name.toLowerCase();
 
             const existing = await Category.findOne({ name: normalizedName, isDeleted: false });
             if (existing) {
-                return apiErrorRes(HTTP_STATUS.CONFLICT, res, 'Category already exists');
+                return apiErrorRes(req,HTTP_STATUS.CONFLICT, res, 'Category already exists');
             }
             const softDeleted = await Category.findOne({ name: normalizedName, isDeleted: true });
 
@@ -98,7 +98,7 @@ const createOrUpdateCategory = async (req, res) => {
             });
         }
     } catch (error) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
 
@@ -114,12 +114,12 @@ const addOrUpdateSubCategory = async (req, res) => {
         const imageFile = req.file;
 
         if (!name) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Subcategory name is required');
+            return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'Subcategory name is required');
         }
 
         const category = await Category.findById(categoryId);
         if (!category || category.isDeleted) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Category not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Category not found');
         }
 
         const lowerName = name.trim().toLowerCase();
@@ -135,7 +135,7 @@ const addOrUpdateSubCategory = async (req, res) => {
             // Update flow
             const subCategory = category.subCategories.id(subCategoryId);
             if (!subCategory) {
-                return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
+                return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
             }
 
 
@@ -151,7 +151,7 @@ const addOrUpdateSubCategory = async (req, res) => {
                 sub => sub._id.toString() !== subCategoryId && sub.name.toLowerCase() === lowerName
             );
             if (duplicate) {
-                return apiErrorRes(HTTP_STATUS.CONFLICT, res, 'Another subcategory with this name already exists');
+                return apiErrorRes(req,HTTP_STATUS.CONFLICT, res, 'Another subcategory with this name already exists');
             }
 
             // Update only provided fields
@@ -173,7 +173,7 @@ const addOrUpdateSubCategory = async (req, res) => {
             );
 
             if (existingSubCategory) {
-                return apiErrorRes(HTTP_STATUS.CONFLICT, res, 'Subcategory with this name already exists');
+                return apiErrorRes(req,HTTP_STATUS.CONFLICT, res, 'Subcategory with this name already exists');
             }
 
             const slug = category.subCategories.length + 1;
@@ -191,7 +191,7 @@ const addOrUpdateSubCategory = async (req, res) => {
             });
         }
     } catch (error) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
 
@@ -207,7 +207,7 @@ const addParameterToSubCategory = async (req, res) => {
         const roleId = req.user?.roleId;
 
         if (!key || !valuesRaw) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Key and values are required');
+            return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'Key and values are required');
         }
 
         // Normalize values to array
@@ -215,12 +215,12 @@ const addParameterToSubCategory = async (req, res) => {
 
         // Only admins can add/update parameters
         if (roleId !== 1) {
-            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, 'Only admin can add/update parameters');
+            return apiErrorRes(req,HTTP_STATUS.UNAUTHORIZED, res, 'Only admin can add/update parameters');
         }
 
         const category = await Category.findOne({ 'subCategories._id': subCategoryId, isDeleted: false });
         if (!category) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
         }
 
         const subCategory = category.subCategories.id(subCategoryId);
@@ -262,7 +262,7 @@ const addParameterToSubCategory = async (req, res) => {
         });
 
     } catch (error) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
 
@@ -276,23 +276,23 @@ const updateParameterForSubCategory = async (req, res) => {
 
 
         if (!newKey && !newValues) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Nothing to update');
+            return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'Nothing to update');
         }
 
         if (roleId !== 1) {
-            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, 'Only admin can update parameters');
+            return apiErrorRes(req,HTTP_STATUS.UNAUTHORIZED, res, 'Only admin can update parameters');
         }
 
         const category = await Category.findOne({ 'subCategories._id': subCategoryId, isDeleted: false });
         if (!category) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
         }
 
         const subCategory = category.subCategories.id(subCategoryId);
         const parameter = subCategory.parameters.find(p => p.key === paramKey.trim().toLowerCase());
 
         if (!parameter) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Parameter not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Parameter not found');
         }
 
         if (newKey) {
@@ -316,7 +316,7 @@ const updateParameterForSubCategory = async (req, res) => {
         });
 
     } catch (error) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
 
@@ -329,12 +329,12 @@ const deleteParameterFromSubCategory = async (req, res) => {
 
         const roleId = req.user?.roleId;
         if (roleId !== 1) {
-            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, 'Only admin can delete parameters');
+            return apiErrorRes(req,HTTP_STATUS.UNAUTHORIZED, res, 'Only admin can delete parameters');
         }
 
         const category = await Category.findOne({ 'subCategories._id': subCategoryId, isDeleted: false });
         if (!category) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
         }
 
         const subCategory = category.subCategories.id(subCategoryId);
@@ -342,7 +342,7 @@ const deleteParameterFromSubCategory = async (req, res) => {
         const parameterIndex = subCategory.parameters.findIndex(p => p.key === paramKeyTrimmed);
 
         if (parameterIndex === -1) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Parameter not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Parameter not found');
         }
 
         const parameter = subCategory.parameters[parameterIndex];
@@ -353,7 +353,7 @@ const deleteParameterFromSubCategory = async (req, res) => {
             parameter.values = parameter.values.filter(v => v.value !== valueTrimmed);
 
             if (parameter.values.length === initialLength) {
-                return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Value not found in parameter');
+                return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Value not found in parameter');
             }
 
             // If no values left, remove the entire parameter
@@ -372,7 +372,7 @@ const deleteParameterFromSubCategory = async (req, res) => {
         return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Parameter deleted successfully');
 
     } catch (error) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
 
@@ -386,7 +386,7 @@ const addParameterValue = async (req, res) => {
         const category = await getDocumentById(Category, categoryId);
 
         if (category.statusCode !== CONSTANTS.SUCCESS) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Category not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Category not found');
         }
 
         let categoryDoc = category.data;
@@ -394,20 +394,20 @@ const addParameterValue = async (req, res) => {
         // Find subcategory
         const subCat = categoryDoc.subCategories.find(sc => sc._id.toString() === subCategoryId);
         if (!subCat) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
         }
 
         // Find parameter
         const param = subCat.parameters.find(p => p._id.toString() === parameterKey);
 
         if (!param) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Parameter not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Parameter not found');
         }
 
         // Check for duplicate value
         const alreadyExists = param.values.some(v => v.value.toLowerCase() === value.toLowerCase());
         if (alreadyExists) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Value already exists');
+            return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'Value already exists');
         }
 
         // Add value
@@ -421,7 +421,7 @@ const addParameterValue = async (req, res) => {
 
         return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Value added successfully', param.values);
     } catch (error) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
 
@@ -435,7 +435,7 @@ const deleteParameterValue = async (req, res) => {
         // Validate category
         const category = await getDocumentById(Category, categoryId);
         if (category.statusCode !== CONSTANTS.SUCCESS) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Category not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Category not found');
         }
 
         let categoryDoc = category.data;
@@ -443,19 +443,19 @@ const deleteParameterValue = async (req, res) => {
         // Find subcategory
         const subCat = categoryDoc.subCategories.find(sc => sc._id.toString() === subCategoryId);
         if (!subCat) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
         }
 
         // Find parameter
         const param = subCat.parameters.find(p => p._id.toString() === parameterId);
         if (!param) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Parameter not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Parameter not found');
         }
 
         // Find index of the value to remove (case-insensitive match)
         const index = param.values.findIndex(v => v.value.toLowerCase() === value.toLowerCase());
         if (index === -1) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Value not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Value not found');
         }
 
         // Remove value
@@ -464,7 +464,7 @@ const deleteParameterValue = async (req, res) => {
 
         return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Value deleted successfully', param.values);
     } catch (error) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
 
@@ -508,7 +508,7 @@ const deleteParameterValue = async (req, res) => {
 //             data: enrichedCategories
 //         });
 //     } catch (error) {
-//         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+//         return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
 //     }
 // };
 
@@ -554,7 +554,7 @@ const listCategoryNames = async (req, res) => {
             data: enrichedCategories
         });
     } catch (error) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
 
@@ -612,7 +612,7 @@ const listCategories = async (req, res) => {
         });
 
     } catch (error) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
 
@@ -664,7 +664,7 @@ const listCategoriesForAdmin = async (req, res) => {
         });
 
     } catch (error) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
 
@@ -678,22 +678,22 @@ const approveParameterValueByAdmin = async (req, res) => {
 
         const category = await Category.findOne({ _id: categoryId, isDeleted: false });
         if (!category) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Category not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Category not found');
         }
 
         const subCat = category.subCategories.find(sc => sc._id.toString() === subCategoryId);
         if (!subCat) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
         }
 
         const param = subCat.parameters.find(p => p.key === parameterKey.toLowerCase());
         if (!param) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Parameter not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Parameter not found');
         }
 
         const paramValue = param.values.find(v => v.value === value.toLowerCase() && !v.isAddedByAdmin);
         if (!paramValue) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'User-added value not found or already approved');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'User-added value not found or already approved');
         }
 
         // Approve the value
@@ -705,7 +705,7 @@ const approveParameterValueByAdmin = async (req, res) => {
         return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Parameter value approved successfully', paramValue);
 
     } catch (error) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
 
@@ -714,7 +714,7 @@ const getSubCategoriesByCategoryId = async (req, res) => {
         const { categoryId } = req.params;
 
         if (!categoryId) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Category ID is required');
+            return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'Category ID is required');
         }
 
         const category = await Category.findOne(
@@ -723,7 +723,7 @@ const getSubCategoriesByCategoryId = async (req, res) => {
         );
 
         if (!category) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Category not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Category not found');
         }
 
         // Map only required subcategory fields
@@ -747,7 +747,7 @@ const getSubCategoriesByCategoryId = async (req, res) => {
         });
 
     } catch (error) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
 
@@ -757,7 +757,7 @@ const getSubCategoriesByCategoryId = async (req, res) => {
 //         const userId = req.user?.userId;  // assuming userId is set in req.user after auth
 
 //         if (!subCategoryId) {
-//             return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Subcategory ID is required');
+//             return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'Subcategory ID is required');
 //         }
 
 //         // Find the category containing the subcategory
@@ -767,7 +767,7 @@ const getSubCategoriesByCategoryId = async (req, res) => {
 //         );
 
 //         if (!category || !category.subCategories.length) {
-//             return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
+//             return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
 //         }
 
 //         const subCategory = category.subCategories[0];
@@ -792,7 +792,7 @@ const getSubCategoriesByCategoryId = async (req, res) => {
 //         });
 
 //     } catch (error) {
-//         return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+//         return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
 //     }
 // };
 
@@ -810,7 +810,7 @@ const getParametersBySubCategoryId = async (req, res) => {
         const isAdmin = false; // Assuming role is stored in JWT payload
 
         if (!subCategoryId) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Subcategory ID is required');
+            return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'Subcategory ID is required');
         }
 
         const category = await Category.findOne(
@@ -819,7 +819,7 @@ const getParametersBySubCategoryId = async (req, res) => {
         );
 
         if (!category || !category.subCategories.length) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
         }
 
         const subCategory = category.subCategories[0];
@@ -890,7 +890,7 @@ const getParametersBySubCategoryId = async (req, res) => {
         });
 
     } catch (error) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
 
@@ -905,12 +905,12 @@ const addUserParameterValue = async (req, res) => {
         const userId = req.user?.userId;
 
         if (!key || !values) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Key and values are required');
+            return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'Key and values are required');
         }
 
         const category = await Category.findOne({ 'subCategories._id': subCategoryId, isDeleted: false });
         if (!category) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
         }
 
         const subCategory = category.subCategories.id(subCategoryId);
@@ -921,7 +921,7 @@ const addUserParameterValue = async (req, res) => {
 
         const existingParam = subCategory.parameters.find(p => p.key === paramKey);
         if (!existingParam) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Parameter key not found in this subcategory');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Parameter key not found in this subcategory');
         }
 
         // Prevent duplicate insertion (check all existing values, not just current user)
@@ -948,7 +948,7 @@ const addUserParameterValue = async (req, res) => {
         });
 
     } catch (error) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
 
@@ -961,7 +961,7 @@ const addUserParameterAndValue = async (req, res) => {
         const userId = req.user?.userId;
 
         if (!subCategoryId || !key || !values) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Subcategory ID, key and values are required');
+            return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'Subcategory ID, key and values are required');
         }
 
         const paramKey = key.trim().toLowerCase();
@@ -969,17 +969,17 @@ const addUserParameterAndValue = async (req, res) => {
         const trimmedValues = incomingValues.map(v => v.trim().toLowerCase()).filter(Boolean);
 
         if (trimmedValues.length === 0) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'No valid values provided');
+            return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'No valid values provided');
         }
 
         const category = await Category.findOne({ 'subCategories._id': subCategoryId, isDeleted: false });
         if (!category) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
         }
 
         const subCategory = category.subCategories.id(subCategoryId);
         if (!subCategory) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found in category');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found in category');
         }
 
         let parameter = subCategory.parameters.find(p => p.key === paramKey);
@@ -1024,7 +1024,7 @@ const addUserParameterAndValue = async (req, res) => {
         });
 
     } catch (error) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
 
@@ -1040,16 +1040,16 @@ const acceptParameterValueByAdmin = async (req, res) => {
         const roleId = req.user?.roleId;
 
         if (roleId !== 1) {
-            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, 'Only admin can accept parameter values');
+            return apiErrorRes(req,HTTP_STATUS.UNAUTHORIZED, res, 'Only admin can accept parameter values');
         }
 
         if (!key || !value) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Parameter key and value are required');
+            return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'Parameter key and value are required');
         }
 
         const category = await Category.findOne({ 'subCategories._id': subCategoryId, isDeleted: false });
         if (!category) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
         }
 
         const subCategory = category.subCategories.id(subCategoryId);
@@ -1058,16 +1058,16 @@ const acceptParameterValueByAdmin = async (req, res) => {
 
         const parameter = subCategory.parameters.find(p => p.key === paramKey);
         if (!parameter) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Parameter key not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Parameter key not found');
         }
 
         const paramValueObj = parameter.values.find(v => v.value === targetValue);
         if (!paramValueObj) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Parameter value not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Parameter value not found');
         }
 
         if (paramValueObj.isAddedByAdmin) {
-            return apiErrorRes(HTTP_STATUS.CONFLICT, res, 'Parameter value is already accepted by admin');
+            return apiErrorRes(req,HTTP_STATUS.CONFLICT, res, 'Parameter value is already accepted by admin');
         }
 
         // Update the value as accepted by admin
@@ -1082,7 +1082,7 @@ const acceptParameterValueByAdmin = async (req, res) => {
         });
 
     } catch (error) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
 const rejectParameterValueByAdmin = async (req, res) => {
@@ -1093,16 +1093,16 @@ const rejectParameterValueByAdmin = async (req, res) => {
         const roleId = req.user?.roleId;
 
         if (roleId !== 1) {
-            return apiErrorRes(HTTP_STATUS.UNAUTHORIZED, res, 'Only admin can reject parameter values');
+            return apiErrorRes(req,HTTP_STATUS.UNAUTHORIZED, res, 'Only admin can reject parameter values');
         }
 
         if (!key || !value) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, 'Parameter key and value are required');
+            return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, 'Parameter key and value are required');
         }
 
         const category = await Category.findOne({ 'subCategories._id': subCategoryId, isDeleted: false });
         if (!category) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Subcategory not found');
         }
 
         const subCategory = category.subCategories.id(subCategoryId);
@@ -1111,7 +1111,7 @@ const rejectParameterValueByAdmin = async (req, res) => {
 
         const parameter = subCategory.parameters.find(p => p.key === paramKey);
         if (!parameter) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'Parameter key not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'Parameter key not found');
         }
 
         const index = parameter.values.findIndex(v =>
@@ -1119,7 +1119,7 @@ const rejectParameterValueByAdmin = async (req, res) => {
         );
 
         if (index === -1) {
-            return apiErrorRes(HTTP_STATUS.NOT_FOUND, res, 'User-added parameter value not found');
+            return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, 'User-added parameter value not found');
         }
 
         // Remove the value
@@ -1132,7 +1132,7 @@ const rejectParameterValueByAdmin = async (req, res) => {
         });
 
     } catch (error) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
 
@@ -1142,7 +1142,7 @@ const deleteCategory = async (req, res) => {
         const { id } = req.params;
 
         if (!mongoose.Types.ObjectId.isValid(id)) {
-            return apiErrorRes(HTTP_STATUS.BAD_REQUEST, res, "Invalid Category ID");
+            return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Invalid Category ID");
         }
 
         const category = await Category.findOne({ _id: id, isDeleted: false });
@@ -1150,7 +1150,7 @@ const deleteCategory = async (req, res) => {
 
 
         if (!category) {
-            return apiErrorRes(
+            return apiErrorRes(req,
                 HTTP_STATUS.NOT_FOUND,
                 res,
                 "Category not found or already deleted"
@@ -1171,7 +1171,7 @@ const deleteCategory = async (req, res) => {
 
         return apiSuccessRes(req,HTTP_STATUS.OK, res, "Category deleted successfully");
     } catch (error) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, error.message);
     }
 };
 

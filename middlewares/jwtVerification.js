@@ -85,7 +85,7 @@ function jwtVerification() {
             const token = authHeader.split(' ')[1];
             jwt.verify(token, process.env.JWT_SECRET_KEY, async (err, decoded) => {
                 if (err) {
-                    return apiErrorRes(
+                    return apiErrorRes(req,
                         HTTP_STATUS.FORBIDDEN,
                         res,
                         'Invalid or expired token',
@@ -101,7 +101,7 @@ function jwtVerification() {
                     // console.log(user)
 
                     if (!user || user.isDeleted || user.isDisable) {
-                        return apiErrorRes(
+                        return apiErrorRes(req,
                             HTTP_STATUS.FORBIDDEN,
                             res,
                             'User is disabled or not authorized',
@@ -114,7 +114,7 @@ function jwtVerification() {
                     req.user = decoded; // You can attach full user object here
                     next();
                 } catch (dbErr) {
-                    return apiErrorRes(
+                    return apiErrorRes(req,
                         HTTP_STATUS.INTERNAL_SERVER_ERROR,
                         res,
                         'Something went wrong',
@@ -129,7 +129,7 @@ function jwtVerification() {
                 // next();
             });
         } else {
-            return apiErrorRes(
+            return apiErrorRes(req,
                 HTTP_STATUS.UNAUTHORIZED,
                 res,
                 'Authorization token missing',

@@ -36,7 +36,7 @@ const getList = async (req, res) => {
         return apiSuccessRes(req,HTTP_STATUS.OK, res, 'Bank list', obj);
 
     } catch (err) {
-        return apiErrorRes(HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
+        return apiErrorRes(req,HTTP_STATUS.INTERNAL_SERVER_ERROR, res, err.message);
     }
 };
 

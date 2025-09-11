@@ -27,9 +27,6 @@ const apiSuccessRes = async(req,statusCode = 200, res, message = CONSTANTS.DATA_
     console.error("Translation error:", err.message);
   }
 
-
-
-
   return res.status(200 || statusCode).json({
     message: messages,
     responseCode: statusCode,
