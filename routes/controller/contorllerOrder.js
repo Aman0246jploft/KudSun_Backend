@@ -133,7 +133,7 @@ const createOrder = async (req, res) => {
       const sellerIds = new Set();
 
       if (!Array.isArray(items) || items.length === 0) {
-        return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Invalid order data");
+        return apiErrorRes(req, HTTP_STATUS.BAD_REQUEST, res, "Invalid order data");
       }
 
       const address = await UserAddress.findOne({
@@ -141,7 +141,7 @@ const createOrder = async (req, res) => {
         _id: toObjectId(addressId),
       });
       if (!address) {
-        return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "Address not found");
+        return apiErrorRes(req, HTTP_STATUS.NOT_FOUND, res, "Address not found");
       }
 
       const activeOrderStatuses = [
@@ -1023,7 +1023,7 @@ const originalPaymentCallback = async (req, res) => {
 
   const { error, value } = schema.validate(req.body);
   if (error) {
-    return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, error.details[0].message);
+    return apiErrorRes(req, HTTP_STATUS.BAD_REQUEST, res, error.details[0].message);
   }
 
   console.log("value", value);
@@ -1041,7 +1041,7 @@ const originalPaymentCallback = async (req, res) => {
 
     if (!order) {
       await session.abortTransaction();
-      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "Order not found");
+      return apiErrorRes(req, HTTP_STATUS.NOT_FOUND, res, "Order not found");
     }
 
     if (order.paymentStatus === PAYMENT_STATUS.COMPLETED) {
@@ -1235,7 +1235,7 @@ const originalPaymentCallback = async (req, res) => {
       await saveNotification(paymentNotifications);
     }
 
-    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Payment status updated", {
+    return apiSuccessRes(req, HTTP_STATUS.OK, res, "Payment status updated", {
       orderId: order._id,
       paymentStatus: order.paymentStatus,
       orderStatus: order.status,
@@ -1382,7 +1382,7 @@ const getBoughtProducts = async (req, res) => {
   try {
     let userId = req.query.userId || req.user.userId;
     if (!userId) {
-      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "userId is required");
+      return apiErrorRes(req, HTTP_STATUS.BAD_REQUEST, res, "userId is required");
     }
 
     const pageNo = Math.max(1, parseInt(req.query.pageNo) || 1);
@@ -1647,7 +1647,7 @@ const previewOrder = async (req, res) => {
     }
 
     if (!Array.isArray(items) || items.length === 0) {
-      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Invalid order items");
+      return apiErrorRes(req, HTTP_STATUS.BAD_REQUEST, res, "Invalid order items");
     }
     const address = await UserAddress.findOne({
       userId,
@@ -1823,7 +1823,7 @@ const previewOrder = async (req, res) => {
 
     const grandTotal = totalAmount + shippingCharge + buyerProtectionFee + tax;
 
-    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Order preview", {
+    return apiSuccessRes(req, HTTP_STATUS.OK, res, "Order preview", {
       items: previewItems,
       address,
       totalAmount,
@@ -1849,7 +1849,7 @@ const getSoldProducts = async (req, res) => {
   try {
     const sellerId = req.user?.userId;
     if (!sellerId) {
-      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Seller ID is required");
+      return apiErrorRes(req, HTTP_STATUS.BAD_REQUEST, res, "Seller ID is required");
     }
 
     const pageNo = Math.max(1, parseInt(req.query.pageNo) || 1);
@@ -2136,7 +2136,7 @@ const updateOrderStatusBySeller = async (req, res) => {
     let { status: newStatus } = req.body;
 
     if (!newStatus) {
-      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "status is Required");
+      return apiErrorRes(req, HTTP_STATUS.BAD_REQUEST, res, "status is Required");
     }
 
     const order = await Order.findOne({ _id: orderId, sellerId })
@@ -2291,7 +2291,7 @@ const updateOrderStatusBySeller = async (req, res) => {
       case ORDER_STATUS.CONFIRMED:
         messageTitle = "Order Confirmed";
         messageTheme = "success";
-        content="Your order has been successfully confirmed";
+        content = "Your order has been successfully confirmed";
         break;
       case ORDER_STATUS.SHIPPED:
         messageTitle = "Order Shipped";
@@ -2557,7 +2557,7 @@ const updateOrderStatusByBuyer = async (req, res) => {
     let { status: newStatus } = req.body;
 
     if (!newStatus) {
-      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Status is required");
+      return apiErrorRes(req, HTTP_STATUS.BAD_REQUEST, res, "Status is required");
     }
 
     const order = await Order.findOne({ _id: orderId, userId: buyerId })
@@ -2875,7 +2875,7 @@ const updateOrderStatusByBuyer = async (req, res) => {
         "Order marked as received. Thank you for confirming receipt!";
     }
 
-    return apiSuccessRes(req,HTTP_STATUS.OK, res, successMessage, {
+    return apiSuccessRes(req, HTTP_STATUS.OK, res, successMessage, {
       orderId: order._id,
       status: order.status,
     });
@@ -2893,7 +2893,7 @@ const getOrderDetails = async (req, res) => {
   try {
     const { orderId } = req.params;
     if (!orderId) {
-      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "orderId is required");
+      return apiErrorRes(req, HTTP_STATUS.BAD_REQUEST, res, "orderId is required");
     }
 
     // Fetch order with all necessary relations
@@ -2933,7 +2933,7 @@ const getOrderDetails = async (req, res) => {
       .lean();
 
     if (!order) {
-      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "Order not found");
+      return apiErrorRes(req, HTTP_STATUS.NOT_FOUND, res, "Order not found");
     }
 
     // Shipping info
@@ -3180,7 +3180,7 @@ const retryOrderPayment = async (req, res) => {
     const userId = req.user?.userId;
 
     if (!orderId) {
-      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Order ID is required");
+      return apiErrorRes(req, HTTP_STATUS.BAD_REQUEST, res, "Order ID is required");
     }
 
     // Find the order and validate
@@ -3191,7 +3191,7 @@ const retryOrderPayment = async (req, res) => {
     }).populate("items.productId");
 
     if (!order) {
-      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "Order not found");
+      return apiErrorRes(req, HTTP_STATUS.NOT_FOUND, res, "Order not found");
     }
 
     // Check if payment can be retried
@@ -3234,7 +3234,7 @@ const retryOrderPayment = async (req, res) => {
     }
 
     // Return order details needed for payment
-    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Order ready for payment retry", {
+    return apiSuccessRes(req, HTTP_STATUS.OK, res, "Order ready for payment retry", {
       orderId: order._id,
       amount: order.grandTotal,
       items: order.items.map((item) => ({
@@ -3259,7 +3259,7 @@ const confirmreciptReview = async (req, res) => {
     const { orderId } = req.params;
     const userId = req.user?.userId;
     if (!orderId) {
-      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Order ID is required");
+      return apiErrorRes(req, HTTP_STATUS.BAD_REQUEST, res, "Order ID is required");
     }
 
     const order = await Order.findOne({
@@ -3337,9 +3337,9 @@ const confirmreciptReview = async (req, res) => {
     };
 
     if (!order) {
-      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "Order not found");
+      return apiErrorRes(req, HTTP_STATUS.NOT_FOUND, res, "Order not found");
     }
-    return apiSuccessRes(req,HTTP_STATUS.OK, res, "Order details fetched", obj);
+    return apiSuccessRes(req, HTTP_STATUS.OK, res, "Order details fetched", obj);
   } catch (err) {
     console.error("Retry payment error:", err);
     return apiErrorRes(req,
@@ -3419,7 +3419,7 @@ const addrequest = async (req, res) => {
         }
       }
       // const totalDeduction = Number(amount) + Number(withdrawfee);
-      const totalDeduction = Number(amount) ;
+      const totalDeduction = Number(amount);
 
       // console.log("totalDeductiontotalDeduction", amount, withdrawfee, totalDeduction)
 
@@ -3584,10 +3584,15 @@ const changeStatus = async (req, res) => {
           calculatedFee = Number(withdrawRequest.withdrawfee);
         }
 
-        const totalRefund =
-          Number(withdrawRequest.amount) + Number(calculatedFee);
+        // const totalRefund =
+        //   Number(withdrawRequest.amount) + Number(calculatedFee);
+        // user.FreezWalletBalance -= Number(withdrawRequest.amount);
+        // user.walletBalance += totalRefund;
+
+        const totalRefund = Number(withdrawRequest.amount)
         user.FreezWalletBalance -= Number(withdrawRequest.amount);
         user.walletBalance += totalRefund;
+
       }
 
       await user.save({ session });
@@ -3709,7 +3714,7 @@ const getWithdrawalInfo = async (req, res) => {
       .select("walletBalance FreezWalletBalance")
       .lean();
     if (!user) {
-      return apiErrorRes(req,404, res, "User not found");
+      return apiErrorRes(req, 404, res, "User not found");
     }
 
     // Fetch active withdrawal methods for the user (example: SellerBank collection)
@@ -3734,7 +3739,7 @@ const getWithdrawalInfo = async (req, res) => {
       }
       : null;
 
-    return apiSuccessRes(req,200, res, "Withdrawal info fetched successfully", {
+    return apiSuccessRes(req, 200, res, "Withdrawal info fetched successfully", {
       walletBalance: Number(user.walletBalance),
       FreezWalletBalance: Number(user.FreezWalletBalance),
       withdrawalMethods,
@@ -3744,7 +3749,7 @@ const getWithdrawalInfo = async (req, res) => {
     });
   } catch (err) {
     console.error("getWithdrawalInfo error", err);
-    return apiErrorRes(req,500, res, "Failed to fetch withdrawal info");
+    return apiErrorRes(req, 500, res, "Failed to fetch withdrawal info");
   }
 };
 
@@ -3787,7 +3792,7 @@ const getAllWithdrawRequests = async (req, res) => {
       .limit(size)
       .lean();
 
-    return apiSuccessRes(req,200, res, "Withdrawal requests fetched successfully", {
+    return apiSuccessRes(req, 200, res, "Withdrawal requests fetched successfully", {
       pageNo,
       size,
       totalPages: Math.ceil(total / size),
@@ -3796,7 +3801,7 @@ const getAllWithdrawRequests = async (req, res) => {
     });
   } catch (err) {
     console.error("getAllWithdrawRequests error", err);
-    return apiErrorRes(req,500, res, "Failed to fetch withdrawal requests");
+    return apiErrorRes(req, 500, res, "Failed to fetch withdrawal requests");
   }
 };
 
@@ -4103,7 +4108,7 @@ const getSellerPayoutCalculation = async (req, res) => {
   try {
     const { orderId } = req.params;
     if (!orderId) {
-      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, "Order ID is required");
+      return apiErrorRes(req, HTTP_STATUS.BAD_REQUEST, res, "Order ID is required");
     }
 
     // Find the order
@@ -4113,7 +4118,7 @@ const getSellerPayoutCalculation = async (req, res) => {
       .lean();
 
     if (!order) {
-      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "Order not found");
+      return apiErrorRes(req, HTTP_STATUS.NOT_FOUND, res, "Order not found");
     }
 
     // Check for dispute information
@@ -4637,7 +4642,7 @@ const getProductFinancialDetails = async (req, res) => {
       .lean();
 
     if (!product) {
-      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "Product not found");
+      return apiErrorRes(req, HTTP_STATUS.NOT_FOUND, res, "Product not found");
     }
 
     // Get all orders for this product
@@ -5166,7 +5171,7 @@ const cancelOrderByBuyer = async (req, res) => {
     }).populate("items.productId");
 
     if (!order) {
-      return apiErrorRes(req,HTTP_STATUS.NOT_FOUND, res, "Order not found");
+      return apiErrorRes(req, HTTP_STATUS.NOT_FOUND, res, "Order not found");
     }
 
     const isBuyer = String(order.userId) === String(req.user?.userId);
@@ -5255,7 +5260,7 @@ const cancelOrderByBuyer = async (req, res) => {
     }
 
     if (!canCancel) {
-      return apiErrorRes(req,HTTP_STATUS.BAD_REQUEST, res, reason);
+      return apiErrorRes(req, HTTP_STATUS.BAD_REQUEST, res, reason);
     }
 
     // ONLY CHANGE: Wrap the transaction in retry logic
