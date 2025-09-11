@@ -3418,7 +3418,9 @@ const addrequest = async (req, res) => {
           withdrawfeeType = PRICING_TYPE.FIXED;
         }
       }
-      const totalDeduction = Number(amount) + Number(withdrawfee);
+      // const totalDeduction = Number(amount) + Number(withdrawfee);
+      const totalDeduction = Number(amount) ;
+
       // console.log("totalDeductiontotalDeduction", amount, withdrawfee, totalDeduction)
 
       if (totalDeduction > user.walletBalance) {
