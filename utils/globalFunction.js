@@ -2,6 +2,7 @@ const CONSTANTS = require('./constants');
 const bcrypt = require('bcryptjs');
 const { default: mongoose } = require('mongoose');
 const { BlockUser } = require('../db');
+const { getUserLanguage, translateText } = require('./translation');
 
 
 const resultDb = (statusCode, data = null) => {
@@ -23,9 +24,6 @@ const resultDb = (statusCode, data = null) => {
 //   });
 // }
 
-
-
-
 const apiSuccessRes = async (
   statusCode = 200,
   req,
@@ -41,7 +39,7 @@ const apiSuccessRes = async (
 
   try {
     if (req?.user?.userId) {
-      const lan = await getUserLanguage(req.user.userId); // fetch user language
+      const lan = await getUserLanguage(req.user.userId);
       messages = await translateText(message, lan);
     }
   } catch (err) {
@@ -51,16 +49,13 @@ const apiSuccessRes = async (
   return res.status(statusCode || 200).json({
     message: messages,
     responseCode: statusCode,
-    // code: code,
+    // code,
     status: !error,
-    data: data,
-    token: token,
-    currentDate
+    data,
+    token,
+    currentDate,
   });
 };
-
-
-
 
 // const apiErrorRes = (statusCode = 200, res, message = CONSTANTS.DATA_NULL, data = CONSTANTS.DATA_NULL, code = CONSTANTS.ERROR_CODE_ONE, error = CONSTANTS.ERROR_TRUE) => {
 //   return res.status(200 || statusCode).json({
@@ -86,6 +81,7 @@ const apiErrorRes = async (
   let messages = message;
 
   try {
+    // Only translate if req + userId exists
     if (req?.user?.userId) {
       const lan = await getUserLanguage(req.user.userId);
       messages = await translateText(message, lan);
@@ -97,12 +93,11 @@ const apiErrorRes = async (
   return res.status(statusCode || 200).json({
     message: messages,
     responseCode: statusCode,
-    // code: code,
+    code: code,
     status: !error,
     data: data
   });
 };
-
 
 
 
