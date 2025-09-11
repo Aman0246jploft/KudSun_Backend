@@ -3137,7 +3137,7 @@ const getProduct = async (req, res) => {
       );
 
       const bidders = allBids.map((bid) => {
-        const uid = bid.userId._id.toString();
+        const uid = bid?.userId?._id.toString();
         return {
           ...bid.userId, // populated user info
           bidAmount: bid.amount,
@@ -3360,6 +3360,7 @@ const getProduct = async (req, res) => {
       product
     );
   } catch (error) {
+    console.log("11111111",error)
     return apiErrorRes(req,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       res,
